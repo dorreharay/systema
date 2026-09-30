@@ -1,4 +1,4 @@
-import { Ionicons } from '@expo/vector-icons';
+import { ChevronDown, ChevronUp } from 'lucide-react-native';
 import { Pressable, Text, View } from 'react-native';
 
 import { useDropdown } from '@/hooks/use-dropdown';
@@ -32,7 +32,11 @@ export default function Dropdown<T extends string>({
         onPress={() => onOpenChange(!open)}
         className="h-full flex-row items-center gap-2 px-6 -mr-6">
         <Text className="font-sans text-sm font-medium text-[#000000]">{selected?.label}</Text>
-        <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={14} color="#636976" />
+        {open ? (
+          <ChevronUp size={14} color="#636976" />
+        ) : (
+          <ChevronDown size={14} color="#636976" />
+        )}
       </Pressable>
 
       {open && (

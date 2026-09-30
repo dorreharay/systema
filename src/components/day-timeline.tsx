@@ -1,4 +1,16 @@
-import { Ionicons } from '@expo/vector-icons';
+import {
+  ArrowUpDown,
+  Calendar,
+  ChevronDown,
+  ChevronRight,
+  ChevronUp,
+  Clock,
+  Search,
+  TriangleAlert,
+  User,
+  X,
+  Zap,
+} from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
 import {
   Modal,
@@ -463,7 +475,7 @@ function TimeSelect({ minutes, options, onChange }: TimeSelectProps) {
         <Text className="w-11 text-center font-sans text-sm text-[#000000]">
           {formatTime(Math.floor(minutes / 60), minutes % 60)}
         </Text>
-        <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={12} color="#636976" />
+        {open ? <ChevronUp size={12} color="#636976" /> : <ChevronDown size={12} color="#636976" />}
       </Pressable>
 
       {open && (
@@ -548,7 +560,7 @@ function SearchableSelect<T>({
             </Text>
           )}
         </View>
-        <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={14} color="#636976" />
+        {open ? <ChevronUp size={14} color="#636976" /> : <ChevronDown size={14} color="#636976" />}
       </Pressable>
 
       {open && !disabled && (
@@ -558,7 +570,7 @@ function SearchableSelect<T>({
           }`}
           style={dropUp ? { bottom: '100%' } : undefined}>
           <View className="flex-row items-center gap-2 border-b border-b-[#E1E1E1] px-3 py-2">
-            <Ionicons name="search-outline" size={14} color="#636976" />
+            <Search size={14} color="#636976" />
             <TextInput
               value={query}
               onChangeText={setQuery}
@@ -1014,7 +1026,7 @@ export default function DayTimeline({
           <Pressable
             onPress={() => onCalendarOpenChange(!calendarOpen)}
             className="cursor-pointer flex-row items-center gap-2 rounded-lg border-1 border-[#E1E1E1] bg-[#E1E1E133] px-4 py-2">
-            <Ionicons name="calendar-outline" size={16} color="#636976" />
+            <Calendar size={16} color="#636976" />
             <Text
               className="font-sans text-sm font-semibold capitalize text-black"
               numberOfLines={1}>
@@ -1048,7 +1060,7 @@ export default function DayTimeline({
         <Pressable
           onPress={handleOpenQuickBook}
           className="cursor-pointer flex-row items-center gap-2 rounded-lg bg-[#3C8D7A] px-4 py-2">
-          <Ionicons name="flash-outline" size={16} color="#FFFFFF" />
+          <Zap size={16} color="#FFFFFF" />
           <Text className="font-sans text-sm font-semibold text-white" numberOfLines={1}>
             Швидкий запис
           </Text>
@@ -1105,7 +1117,7 @@ export default function DayTimeline({
               className="absolute right-0 top-0 flex-row items-center gap-1 rounded-lg bg-white/90 px-2"
               style={{ height: COLUMN_HEADER_HEIGHT }}>
               <Text className="font-sans text-[11px] text-secondary">Далі</Text>
-              <Ionicons name="chevron-forward" size={12} color="#636976" />
+              <ChevronRight size={12} color="#636976" />
             </View>
           )}
         </View>
@@ -1263,14 +1275,14 @@ export default function DayTimeline({
           {slotForm && confirmDelete && (
             <Pressable onPress={() => {}} className="w-96 max-w-[90%] rounded-2xl bg-white p-5">
               <View className="mb-4 flex-row items-center gap-2">
-                <Ionicons name="warning-outline" size={20} color="#C24545" />
+                <TriangleAlert size={20} color="#C24545" />
                 <Text
                   className="flex-1 font-sans text-lg font-semibold text-[#000000]"
                   numberOfLines={1}>
                   Видалити запис?
                 </Text>
                 <Pressable onPress={handleModalClose} hitSlop={8} className="cursor-pointer">
-                  <Ionicons name="close" size={20} color="#636976" />
+                  <X size={20} color="#636976" />
                 </Pressable>
               </View>
 
@@ -1303,17 +1315,17 @@ export default function DayTimeline({
                   {slotForm.mode === 'create' ? 'Новий запис' : 'Редагування запису'}
                 </Text>
                 <Pressable onPress={handleModalClose} hitSlop={8} className="cursor-pointer">
-                  <Ionicons name="close" size={20} color="#636976" />
+                  <X size={20} color="#636976" />
                 </Pressable>
               </View>
 
               <View className="relative mb-4 gap-2">
                 <View className="flex-row items-center gap-2">
-                  <Ionicons name="person-outline" size={16} color="#636976" />
+                  <User size={16} color="#636976" />
                   <Text className="font-sans text-sm text-[#000000]">{slotForm.doctorLabel}</Text>
                 </View>
                 <View className="flex-row items-center gap-2">
-                  <Ionicons name="time-outline" size={16} color="#636976" />
+                  <Clock size={16} color="#636976" />
                   <View className="flex-row items-center gap-1">
                     <TimeSelect
                       minutes={slotForm.startMinutes}
@@ -1362,7 +1374,7 @@ export default function DayTimeline({
                       hitSlop={8}
                       accessibilityLabel="Пошук пацієнта за номером телефону"
                       className="cursor-pointer items-center justify-center rounded-lg border border-[#E1E1E1] p-2.5">
-                      <Ionicons name="search" size={16} color="#636976" />
+                      <Search size={16} color="#636976" />
                     </Pressable>
                   </View>
 
@@ -1462,12 +1474,12 @@ export default function DayTimeline({
           onPress={() => setQuickBookOpen(false)}>
           <Pressable onPress={() => {}} className="w-96 max-w-[90%] rounded-2xl bg-white p-5 pb-2">
             <View className="mb-4 flex-row items-center gap-2">
-              <Ionicons name="flash-outline" size={18} color="#3C8D7A" />
+              <Zap size={18} color="#3C8D7A" />
               <Text className="flex-1 font-sans text-lg font-semibold text-[#000000]" numberOfLines={1}>
                 Швидкий запис
               </Text>
               <Pressable onPress={() => setQuickBookOpen(false)} hitSlop={8} className="cursor-pointer">
-                <Ionicons name="close" size={20} color="#636976" />
+                <X size={20} color="#636976" />
               </Pressable>
             </View>
 
@@ -1682,14 +1694,14 @@ export default function DayTimeline({
           {moveConfirm && (
             <Pressable onPress={() => {}} className="w-96 max-w-[90%] rounded-2xl bg-white p-5">
               <View className="mb-4 flex-row items-center gap-2">
-                <Ionicons name="swap-vertical-outline" size={20} color="#3C8D7A" />
+                <ArrowUpDown size={20} color="#3C8D7A" />
                 <Text
                   className="flex-1 font-sans text-lg font-semibold text-[#000000]"
                   numberOfLines={1}>
                   Перемістити запис?
                 </Text>
                 <Pressable onPress={handleCancelMove} hitSlop={8} className="cursor-pointer">
-                  <Ionicons name="close" size={20} color="#636976" />
+                  <X size={20} color="#636976" />
                 </Pressable>
               </View>
 

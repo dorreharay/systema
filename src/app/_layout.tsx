@@ -1,9 +1,9 @@
 import '@/global.css';
 
-import { Ionicons } from '@expo/vector-icons';
 import { useFonts } from 'expo-font';
 import { Slot, usePathname } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
+import { Menu } from 'lucide-react-native';
 import { useCallback, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -64,7 +64,7 @@ export default function TabLayout() {
               onPress={() => setSidebarOpen((open) => !open)}
               hitSlop={8}
               className="md:hidden">
-              <Ionicons name="menu-outline" size={22} color="#000000" />
+              <Menu size={22} color="#000000" />
             </Pressable>
             <Text className="font-medium text-xl">{activeItem?.label ?? 'Systema'}</Text>
           </View>

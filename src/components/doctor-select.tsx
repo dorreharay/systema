@@ -1,4 +1,4 @@
-import { Ionicons } from '@expo/vector-icons';
+import { CheckSquare, ChevronDown, ChevronUp, Search, Square, XCircle } from 'lucide-react-native';
 import { useState } from 'react';
 import { Image, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 
@@ -130,19 +130,23 @@ export default function DoctorSelect({
 
         {!allSelected && (
           <Pressable className='w-6 h-full cursor-pointer items-center justify-center' onPress={() => { onToggleAll(); onOpenChange(false); }} hitSlop={6}>
-            <Ionicons name="close-circle" size={16} color="#636976" />
+            <XCircle size={16} color="#636976" />
           </Pressable>
         )}
 
         <Pressable className='w-6 h-full cursor-pointer items-center justify-center' onPress={() => onOpenChange(!open)} hitSlop={6}>
-          <Ionicons name={open ? 'chevron-up' : 'chevron-down'} size={14} color="#636976" />
+          {open ? (
+            <ChevronUp size={14} color="#636976" />
+          ) : (
+            <ChevronDown size={14} color="#636976" />
+          )}
         </Pressable>
       </View>
 
       {open && (
         <View className="absolute top-14 right-0 w-64 rounded-lg border border-[#E1E1E1] bg-white">
           <View className="flex-row items-center gap-2 border-b border-b-[#E1E1E1] px-3 py-3">
-            <Ionicons name="search-outline" size={14} color="#636976" />
+            <Search size={14} color="#636976" />
             <TextInput
               value={query}
               onChangeText={setQuery}
@@ -156,11 +160,11 @@ export default function DoctorSelect({
           <Pressable
             onPress={onToggleAll}
             className="cursor-pointer flex-row items-center gap-2 border-b border-b-[#E1E1E1] px-3 py-2 hover:bg-[#F1F4F5]">
-            <Ionicons
-              name={allSelected ? 'checkbox' : 'square-outline'}
-              size={18}
-              color={allSelected ? '#388098' : '#636976'}
-            />
+            {allSelected ? (
+              <CheckSquare size={18} color="#388098" />
+            ) : (
+              <Square size={18} color="#636976" />
+            )}
             <Avatar doctor={allDoctor} size={22} />
             <Text className="font-sans text-sm font-medium text-[#000000]" numberOfLines={1}>
               Всі лікарі
@@ -182,11 +186,11 @@ export default function DoctorSelect({
                     className={`cursor-pointer flex-row items-center gap-2 px-3 py-2 ${
                       selected ? 'bg-[#38809822]' : 'hover:bg-[#F1F4F5]'
                     }`}>
-                    <Ionicons
-                      name={selected ? 'checkbox' : 'square-outline'}
-                      size={18}
-                      color={selected ? '#388098' : '#636976'}
-                    />
+                    {selected ? (
+                      <CheckSquare size={18} color="#388098" />
+                    ) : (
+                      <Square size={18} color="#636976" />
+                    )}
                     <Avatar doctor={doctor} size={22} />
                     <View className="flex-1">
                       <Text className="font-sans text-sm text-[#000000]" numberOfLines={1}>

@@ -1,4 +1,4 @@
-import { Ionicons } from '@expo/vector-icons';
+import { ChevronLeft, ChevronRight } from 'lucide-react-native';
 import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
@@ -126,7 +126,7 @@ export default function MonthCalendar({
           onPress={goPrev}
           hitSlop={8}
           className={`cursor-pointer ${viewMode === 'week' ? 'opacity-0' : ''}`}>
-          <Ionicons name="chevron-back" size={16} color="#636976" />
+          <ChevronLeft size={16} color="#636976" />
         </Pressable>
         <Text className="font-sans text-base font-semibold capitalize text-[#000000]">
           {headerLabel}
@@ -135,7 +135,7 @@ export default function MonthCalendar({
           onPress={goNext}
           hitSlop={8}
           className={`cursor-pointer ${viewMode === 'week' ? 'opacity-0' : ''}`}>
-          <Ionicons name="chevron-forward" size={16} color="#636976" />
+          <ChevronRight size={16} color="#636976" />
         </Pressable>
       </View>
 

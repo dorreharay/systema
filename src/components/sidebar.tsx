@@ -1,5 +1,5 @@
-import { Ionicons } from '@expo/vector-icons';
 import { Link, usePathname } from 'expo-router';
+import { LayoutGrid, Mail, Search, Users } from 'lucide-react-native';
 import { useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 
@@ -9,14 +9,14 @@ export const SIDEBAR_SECTIONS = [
   {
     label: 'Головна',
     items: [
-      { label: 'Запис', icon: 'grid-outline', href: '/' },
+      { label: 'Запис', icon: LayoutGrid, href: '/' },
     ],
   },
   {
     label: 'Команда',
     items: [
-      { label: 'Лікарі', icon: 'people-outline', href: '/team' },
-      { label: 'Запрошення', icon: 'mail-outline', href: '/invites' },
+      { label: 'Лікарі', icon: Users, href: '/team' },
+      { label: 'Запрошення', icon: Mail, href: '/invites' },
     ],
   },
 ] as const;
@@ -39,7 +39,7 @@ export default function Sidebar() {
     <View className="h-full w-full gap-2 border-r-1 border-r-[#E1E1E1] bg-white pb-4 md:w-56">
       <View className="h-16 mb-3 px-7 border-b-1 border-b-[#E1E1E1]">
         <View className="flex-row items-center gap-3 h-full">
-          <Ionicons name="search-outline" size={18} color="#00000099" />
+          <Search size={18} color="#00000099" />
           <TextInput
             value={query}
             onChangeText={setQuery}
@@ -57,17 +57,14 @@ export default function Sidebar() {
           <View className="gap-1">
             {section.items.map((item) => {
               const active = pathname === item.href;
+              const Icon = item.icon;
               return (
                 <Link key={item.label} href={item.href} asChild>
                   <Pressable
                     className={`group/button
                       h-10 flex-row items-center gap-3 rounded-lg border-[1.5px] border-transparent px-4 duration-100
                       ${active ? 'bg-[#38809811]' : 'hover:bg-[#38809811]'}`}>
-                    <Ionicons
-                      name={item.icon}
-                      size={18}
-                      color={active ? '#388098' : INACTIVE_COLOR}
-                    />
+                    <Icon size={18} color={active ? '#388098' : INACTIVE_COLOR} />
                     <Text
                       className={`
                         font-sans text-md font-medium
