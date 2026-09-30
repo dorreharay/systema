@@ -1,9 +1,56 @@
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/preflight.css" layer(base);
+@import "tailwindcss/utilities.css";
+
+@import "nativewind/theme";
+
+@theme {
+  --color-light-blue: #dbedf3;
+  --color-light-black: #111111;
+  --color-light-black-hover: #232323;
+  --color-background-element: #f0f0f3;
+  --color-background-selected: #e0e1e6;
+  --color-secondary: #60646c;
+}
+
 :root {
-  --font-display:
-    Spline Sans, Inter, ui-sans-serif, system-ui, sans-serif, Apple Color Emoji, Segoe UI Emoji,
-    Segoe UI Symbol, Noto Color Emoji;
+  --font-sans:
+    'EuclidCircularA-Regular', ui-sans-serif, system-ui, sans-serif, Apple Color Emoji,
+    Segoe UI Emoji, Segoe UI Symbol, Noto Color Emoji;
   --font-mono:
     ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, Courier New, monospace;
   --font-rounded: 'SF Pro Rounded', 'Hiragino Maru Gothic ProN', Meiryo, 'MS PGothic', sans-serif;
   --font-serif: Georgia, 'Times New Roman', serif;
+}
+
+/* react-native-web renders <Text> with its own base class that sets an
+   explicit font-family, which beats inheriting --font-sans from an
+   ancestor. Target RNW's stable `dir="auto"` attribute (always present
+   on Text) so Euclid stays the default everywhere without needing
+   `font-sans` on every Text element. */
+[dir='auto'] {
+  font-family: var(--font-sans);
+}
+
+/* React Native ignores font-weight/font-style on custom (non-system) fonts —
+   only fontFamily changes the rendered glyphs. Map the weight/style
+   utilities to the matching Euclid file so font-medium, font-bold, italic,
+   etc. actually change what's drawn instead of silently no-op'ing. */
+.font-light {
+  font-family: 'EuclidCircularA-Light';
+}
+.font-normal {
+  font-family: 'EuclidCircularA-Regular';
+}
+.font-medium {
+  font-family: 'EuclidCircularA-Medium';
+}
+.font-semibold {
+  font-family: 'EuclidCircularA-SemiBold';
+}
+.font-bold {
+  font-family: 'EuclidCircularA-Bold';
+}
+.italic {
+  font-family: 'EuclidCircularA-Italic';
 }

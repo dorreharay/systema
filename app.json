@@ -10,9 +10,9 @@
     "ios": {
       "icon": "./assets/expo.icon"
     },
+    "backgroundColor": "transparent",
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
@@ -21,22 +21,42 @@
     },
     "web": {
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/favicon.png",
+      "bundler": "metro"
     },
     "plugins": [
       "expo-router",
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#208AEF",
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
+        }
+      ],
+      [
+        "expo-font",
+        {
+          "fonts": [
+            "./assets/fonts/EuclidCircularA-Light.ttf",
+            "./assets/fonts/EuclidCircularA-Regular.ttf",
+            "./assets/fonts/EuclidCircularA-Medium.ttf",
+            "./assets/fonts/EuclidCircularA-SemiBold.ttf",
+            "./assets/fonts/EuclidCircularA-Bold.ttf",
+            "./assets/fonts/EuclidCircularA-Italic.ttf"
+          ]
         }
       ]
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "1aa37823-550e-40e0-b9e8-909265bb86f7"
+      }
+    },
+    "owner": "dorreharay-team"
   }
 }
