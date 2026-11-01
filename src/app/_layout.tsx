@@ -11,12 +11,11 @@ SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
-    'EuclidCircularA-Light': require('@/assets/fonts/EuclidCircularA-Light.ttf'),
-    'EuclidCircularA-Regular': require('@/assets/fonts/EuclidCircularA-Regular.ttf'),
-    'EuclidCircularA-Medium': require('@/assets/fonts/EuclidCircularA-Medium.ttf'),
-    'EuclidCircularA-SemiBold': require('@/assets/fonts/EuclidCircularA-SemiBold.ttf'),
-    'EuclidCircularA-Bold': require('@/assets/fonts/EuclidCircularA-Bold.ttf'),
-    'EuclidCircularA-Italic': require('@/assets/fonts/EuclidCircularA-Italic.ttf'),
+    'FixelText-Light': require('@/assets/fonts/FixelText-Light.ttf'),
+    'FixelText-Regular': require('@/assets/fonts/FixelText-Regular.ttf'),
+    'FixelText-Medium': require('@/assets/fonts/FixelText-Medium.ttf'),
+    'FixelText-SemiBold': require('@/assets/fonts/FixelText-SemiBold.ttf'),
+    'FixelText-Bold': require('@/assets/fonts/FixelText-Bold.ttf'),
   });
 
   const onLayout = useCallback(() => {

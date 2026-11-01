@@ -37,12 +37,11 @@
         "expo-font",
         {
           "fonts": [
-            "./assets/fonts/EuclidCircularA-Light.ttf",
-            "./assets/fonts/EuclidCircularA-Regular.ttf",
-            "./assets/fonts/EuclidCircularA-Medium.ttf",
-            "./assets/fonts/EuclidCircularA-SemiBold.ttf",
-            "./assets/fonts/EuclidCircularA-Bold.ttf",
-            "./assets/fonts/EuclidCircularA-Italic.ttf"
+            "./assets/fonts/FixelText-Light.ttf",
+            "./assets/fonts/FixelText-Regular.ttf",
+            "./assets/fonts/FixelText-Medium.ttf",
+            "./assets/fonts/FixelText-SemiBold.ttf",
+            "./assets/fonts/FixelText-Bold.ttf"
           ]
         }
       ]
