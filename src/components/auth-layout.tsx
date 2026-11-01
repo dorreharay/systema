@@ -162,7 +162,7 @@ export default function AuthLayout({
       className="w-full max-w-sm gap-6 self-center"
       style={liftStyle}
       onLayout={handleBlockLayout}>
-      <Animated.View className="items-center justify-center gap-1" style={titleStyle}>
+      <Animated.View className="items-center justify-center gap-2" style={titleStyle}>
         <Text className="text-center text-2xl font-semibold text-white">{title}</Text>
         <Text className="text-center text-base text-white/80">{subtitle}</Text>
       </Animated.View>

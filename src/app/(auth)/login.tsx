@@ -34,8 +34,8 @@ export default function Login() {
 
   return (
     <AuthLayout
-      title="Увійдіть або зареєструйте ваш новий акаунт"
-      subtitle="Увійдіть, щоб продовжити"
+      title="Давно не бачились!"
+      subtitle="Введіть дані, щоб увійти до акаунта"
       backHref="/"
       centered
       footer={
