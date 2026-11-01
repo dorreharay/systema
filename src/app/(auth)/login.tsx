@@ -1,7 +1,8 @@
 import { useRef, useState } from 'react';
-import { View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
 import AuthLayout from '@/components/auth-layout';
+import AuthLink from '@/components/auth-link';
 import AuthSwitch from '@/components/auth-switch';
 import Button from '@/components/button';
 import TextField, { type TextFieldRef } from '@/components/text-field';
@@ -70,6 +71,16 @@ export default function Login() {
           returnKeyType="done"
           onSubmitEditing={submit}
         />
+        <View className="-mt-2 items-end">
+          <AuthLink href="/forgot-password" prefetch asChild>
+            <Pressable
+              accessibilityRole="link"
+              hitSlop={8}
+              className="min-h-10 justify-center active:opacity-70">
+              <Text className="font-medium text-white/80">Забули пароль?</Text>
+            </Pressable>
+          </AuthLink>
+        </View>
         <View className="pt-4">
           <Button title="Увійти" onPress={submit} />
         </View>

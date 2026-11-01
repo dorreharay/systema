@@ -1,5 +1,6 @@
 import type { Href } from 'expo-router';
 import { useFocusEffect } from 'expo-router';
+import { ArrowLeft } from 'lucide-react-native';
 import type { ReactNode } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { LayoutChangeEvent } from 'react-native';
@@ -20,6 +21,10 @@ import { HEADER_HEIGHT } from '@/components/app-header';
 import { AuthLeaveContext } from '@/components/auth-leave';
 import AuthLink from '@/components/auth-link';
 
+// Size of the round back button at the top left, in line with the logo.
+const BACK_BUTTON_SIZE = 44;
+// The logo's letters sit a little below the middle of the header row.
+const BACK_BUTTON_OFFSET = 4;
 // How far the content sits above the bottom edge, on top of the safe area.
 const CONTENT_LIFT = 56;
 // Space kept between the primary button and the top of the keyboard.
@@ -45,7 +50,7 @@ type AuthLayoutProps = {
   subtitle: string;
   children: ReactNode;
   footer: ReactNode;
-  // Adds a "Назад" button under the form.
+  // Adds a back button at the top left that returns to this route.
   backHref?: Href;
   // Centers the content on the screen instead of pinning it to the bottom.
   centered?: boolean;
@@ -167,19 +172,7 @@ export default function AuthLayout({
         <Text className="text-center text-base text-white/80">{subtitle}</Text>
       </Animated.View>
       <View onLayout={handleFormLayout}>{children}</View>
-      <View className="gap-2">
-        {footer}
-        {backHref ? (
-          <AuthLink className='mt-12' href={backHref} dismissTo asChild>
-            <Pressable
-              accessibilityRole="link"
-              hitSlop={8}
-              className="h-12 w-1/2 mx-auto items-center justify-center gap-1.5 rounded-lg active:opacity-70">
-              <Text className="font-medium text-white">Назад</Text>
-            </Pressable>
-          </AuthLink>
-        ) : null}
-      </View>
+      {footer}
     </Animated.View>
   );
 
@@ -207,6 +200,21 @@ export default function AuthLayout({
             </View>
           </View>
         )}
+        {backHref ? (
+          <View
+            className="absolute left-4"
+            style={{ top: insets.top + (HEADER_HEIGHT - BACK_BUTTON_SIZE) / 2 + BACK_BUTTON_OFFSET }}>
+            <AuthLink href={backHref} dismissTo asChild>
+              <Pressable
+                accessibilityRole="link"
+                accessibilityLabel="Назад"
+                hitSlop={8}
+                className="h-11 w-11 items-center justify-center rounded-full bg-white/10 active:bg-white/20">
+                <ArrowLeft size={22} color="#ffffff" />
+              </Pressable>
+            </AuthLink>
+          </View>
+        ) : null}
       </Animated.View>
     </AuthLeaveContext>
   );
