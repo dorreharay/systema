@@ -8,9 +8,11 @@
     "scheme": "systema",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon"
+      "icon": "./assets/expo.icon",
+      "bundleIdentifier": "com.dorreharay.systema",
+      "appleTeamId": "SGMN4DGZ42"
     },
-    "backgroundColor": "transparent",
+    "backgroundColor": "#0b1210",
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -26,25 +28,24 @@
     },
     "plugins": [
       "expo-router",
-      [
-        "expo-splash-screen",
-        {
-          "image": "./assets/images/splash-icon.png",
-          "imageWidth": 76
-        }
-      ],
+      "expo-splash-screen",
       [
         "expo-font",
         {
           "fonts": [
-            "./assets/fonts/FixelText-Light.ttf",
-            "./assets/fonts/FixelText-Regular.ttf",
-            "./assets/fonts/FixelText-Medium.ttf",
-            "./assets/fonts/FixelText-SemiBold.ttf",
-            "./assets/fonts/FixelText-Bold.ttf"
+            "./assets/fonts/EuclidCircularA-Light.ttf",
+            "./assets/fonts/EuclidCircularA-Regular.ttf",
+            "./assets/fonts/EuclidCircularA-Medium.ttf",
+            "./assets/fonts/EuclidCircularA-SemiBold.ttf",
+            "./assets/fonts/EuclidCircularA-Bold.ttf",
+            "./assets/fonts/EuclidCircularA-Italic.ttf",
+            "./assets/fonts/FixelStylistic-Bold.ttf"
           ]
         }
-      ]
+      ],
+      "expo-image",
+      "expo-status-bar",
+      "expo-web-browser"
     ],
     "experiments": {
       "typedRoutes": true,

@@ -5,6 +5,8 @@
 @import "nativewind/theme";
 
 @theme {
+  --color-background: #FFFFFF;
+  --color-primary: #173c32;
   --color-light-blue: #dbedf3;
   --color-light-black: #111111;
   --color-light-black-hover: #232323;
@@ -15,7 +17,7 @@
 
 :root {
   --font-sans:
-    'FixelText-Regular', ui-sans-serif, system-ui, sans-serif, Apple Color Emoji,
+    'EuclidCircularA-Regular', ui-sans-serif, system-ui, sans-serif, Apple Color Emoji,
     Segoe UI Emoji, Segoe UI Symbol, Noto Color Emoji;
   --font-mono:
     ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, Courier New, monospace;
@@ -26,28 +28,34 @@
 /* react-native-web renders <Text> with its own base class that sets an
    explicit font-family, which beats inheriting --font-sans from an
    ancestor. Target RNW's stable `dir="auto"` attribute (always present
-   on Text) so Fixel stays the default everywhere without needing
-   `font-sans` on every Text element. */
+   on Text) so Euclid stays the default everywhere without needing
+   `font-sans` on every Text element. Every weight is its own file, so the
+   browser must not fake bold on top of the semibold/bold ones. */
 [dir='auto'] {
   font-family: var(--font-sans);
+  font-synthesis: none;
 }
 
 /* React Native ignores font-weight on custom (non-system) fonts — only
    fontFamily changes the rendered glyphs. Map the weight utilities to the
-   matching Fixel Text file so font-medium, font-bold, etc. actually change
-   what's drawn instead of silently no-op'ing. */
+   matching Euclid file so font-medium, font-bold, italic, etc. actually
+   change what's drawn instead of silently no-op'ing. Only the logo uses
+   FixelStylistic-Bold (Fixel with every stylistic set applied). */
 .font-light {
-  font-family: 'FixelText-Light';
+  font-family: 'EuclidCircularA-Light';
 }
 .font-normal {
-  font-family: 'FixelText-Regular';
+  font-family: 'EuclidCircularA-Regular';
 }
 .font-medium {
-  font-family: 'FixelText-Medium';
+  font-family: 'EuclidCircularA-Medium';
 }
 .font-semibold {
-  font-family: 'FixelText-SemiBold';
+  font-family: 'EuclidCircularA-SemiBold';
 }
 .font-bold {
-  font-family: 'FixelText-Bold';
+  font-family: 'EuclidCircularA-Bold';
+}
+.italic {
+  font-family: 'EuclidCircularA-Italic';
 }

@@ -7,15 +7,19 @@ import { useCallback } from 'react';
 import { View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
+import AppHeader from '@/components/app-header';
+
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
-    'FixelText-Light': require('@/assets/fonts/FixelText-Light.ttf'),
-    'FixelText-Regular': require('@/assets/fonts/FixelText-Regular.ttf'),
-    'FixelText-Medium': require('@/assets/fonts/FixelText-Medium.ttf'),
-    'FixelText-SemiBold': require('@/assets/fonts/FixelText-SemiBold.ttf'),
-    'FixelText-Bold': require('@/assets/fonts/FixelText-Bold.ttf'),
+    'EuclidCircularA-Light': require('@/assets/fonts/EuclidCircularA-Light.ttf'),
+    'EuclidCircularA-Regular': require('@/assets/fonts/EuclidCircularA-Regular.ttf'),
+    'EuclidCircularA-Medium': require('@/assets/fonts/EuclidCircularA-Medium.ttf'),
+    'EuclidCircularA-SemiBold': require('@/assets/fonts/EuclidCircularA-SemiBold.ttf'),
+    'EuclidCircularA-Bold': require('@/assets/fonts/EuclidCircularA-Bold.ttf'),
+    'EuclidCircularA-Italic': require('@/assets/fonts/EuclidCircularA-Italic.ttf'),
+    'FixelStylistic-Bold': require('@/assets/fonts/FixelStylistic-Bold.ttf'),
   });
 
   const onLayout = useCallback(() => {
@@ -30,7 +34,8 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <View onLayout={onLayout} className="h-full w-full font-sans">
+      <View onLayout={onLayout} className="h-full w-full bg-background font-sans">
+        <AppHeader />
         <Slot />
       </View>
     </GestureHandlerRootView>
