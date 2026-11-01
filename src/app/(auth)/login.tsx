@@ -1,3 +1,4 @@
+import { useLocalSearchParams } from 'expo-router';
 import { useRef, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
@@ -5,14 +6,22 @@ import AuthLayout from '@/components/auth-layout';
 import AuthLink from '@/components/auth-link';
 import AuthSwitch from '@/components/auth-switch';
 import Button from '@/components/button';
+import FormMessage from '@/components/form-message';
 import TextField, { type TextFieldRef } from '@/components/text-field';
+import { useAuth } from '@/lib/auth';
+import { describeAuthError } from '@/lib/auth-errors';
 import { validateEmail, validateRequiredPassword } from '@/lib/validation';
 
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
+  const [formError, setFormError] = useState<string>();
+  const [submitting, setSubmitting] = useState(false);
   const passwordRef = useRef<TextFieldRef>(null);
+  const { signIn } = useAuth();
+  // The password reset screen sends people here with ?reset=1 once the new password is saved.
+  const { reset } = useLocalSearchParams<{ reset?: string }>();
 
   const changeEmail = (value: string) => {
     setEmail(value);
@@ -24,13 +33,25 @@ export default function Login() {
     setErrors((current) => ({ ...current, password: undefined }));
   };
 
-  const submit = () => {
+  const submit = async () => {
+    if (submitting) {
+      return;
+    }
     const next = { email: validateEmail(email), password: validateRequiredPassword(password) };
     setErrors(next);
+    setFormError(undefined);
     if (next.email || next.password) {
       return;
     }
-    // The sign-in request goes here once the auth API exists.
+
+    setSubmitting(true);
+    try {
+      // On success the root layout moves a signed-in user to the app: nothing to navigate to here.
+      await signIn(email.trim(), password);
+    } catch (error) {
+      setFormError(describeAuthError(error));
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -43,6 +64,9 @@ export default function Login() {
         <AuthSwitch question="Немає акаунта?" action="Зареєструватися" href="/register" replace />
       }>
       <View className="gap-4">
+        {reset === '1' ? (
+          <FormMessage tone="success" message="Пароль змінено. Увійдіть з новим паролем." />
+        ) : null}
         <TextField
           label="Email"
           value={email}
@@ -81,8 +105,9 @@ export default function Login() {
             </Pressable>
           </AuthLink>
         </View>
+        {formError ? <FormMessage message={formError} /> : null}
         <View className="pt-4">
-          <Button title="Увійти" onPress={submit} />
+          <Button title="Увійти" onPress={submit} loading={submitting} />
         </View>
       </View>
     </AuthLayout>

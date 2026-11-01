@@ -5,27 +5,45 @@ import { useAuthRouter } from '@/components/auth-leave';
 import AuthLayout from '@/components/auth-layout';
 import AuthSwitch from '@/components/auth-switch';
 import Button from '@/components/button';
+import FormMessage from '@/components/form-message';
 import TextField from '@/components/text-field';
+import { useAuth } from '@/lib/auth';
+import { describeAuthError } from '@/lib/auth-errors';
 import { validateEmail } from '@/lib/validation';
 
 function ForgotPasswordForm() {
   const { replace } = useAuthRouter();
   const [email, setEmail] = useState('');
   const [error, setError] = useState<string>();
+  const [formError, setFormError] = useState<string>();
+  const [submitting, setSubmitting] = useState(false);
+  const { requestPasswordReset } = useAuth();
 
   const changeEmail = (value: string) => {
     setEmail(value);
     setError(undefined);
   };
 
-  const submit = () => {
+  const submit = async () => {
+    if (submitting) {
+      return;
+    }
     const next = validateEmail(email);
     setError(next);
+    setFormError(undefined);
     if (next) {
       return;
     }
-    // The reset request goes here once the auth API exists.
-    replace({ pathname: '/check-email', params: { email: email.trim() } });
+
+    setSubmitting(true);
+    try {
+      await requestPasswordReset(email.trim());
+      replace({ pathname: '/check-email', params: { email: email.trim() } });
+    } catch (failure) {
+      setFormError(describeAuthError(failure));
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -43,8 +61,9 @@ function ForgotPasswordForm() {
         returnKeyType="send"
         onSubmitEditing={submit}
       />
+      {formError ? <FormMessage message={formError} /> : null}
       <View className="pt-4">
-        <Button title="Надіслати посилання" onPress={submit} />
+        <Button title="Надіслати посилання" onPress={submit} loading={submitting} />
       </View>
     </View>
   );

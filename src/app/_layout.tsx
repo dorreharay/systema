@@ -1,13 +1,14 @@
 import '@/global.css';
 
 import { useFonts } from 'expo-font';
-import { Slot } from 'expo-router';
+import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { useCallback } from 'react';
+import { useEffect } from 'react';
 import { View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import AppHeader from '@/components/app-header';
+import { AuthProvider, useAuth } from '@/lib/auth';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -22,22 +23,52 @@ export default function RootLayout() {
     'FixelStylistic-Bold': require('@/assets/fonts/FixelStylistic-Bold.ttf'),
   });
 
-  const onLayout = useCallback(() => {
-    if (fontsLoaded) {
-      SplashScreen.hideAsync();
-    }
-  }, [fontsLoaded]);
-
   if (!fontsLoaded) {
     return null;
   }
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <View onLayout={onLayout} className="h-full w-full bg-background font-sans">
-        <AppHeader />
-        <Slot />
-      </View>
+      <AuthProvider>
+        <RootNavigator />
+      </AuthProvider>
     </GestureHandlerRootView>
+  );
+}
+
+function RootNavigator() {
+  const { status } = useAuth();
+  const signedIn = status === 'signedIn';
+  const ready = status !== 'loading';
+
+  // The splash screen stays until the saved session has been checked, so the first screen is the
+  // right one and the sign-in screens do not flash for someone who is signed in.
+  useEffect(() => {
+    if (ready) {
+      SplashScreen.hideAsync();
+    }
+  }, [ready]);
+
+  if (!ready) {
+    return null;
+  }
+
+  return (
+    <View className="h-full w-full bg-background font-sans">
+      <AppHeader />
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          animation: 'none',
+          contentStyle: { backgroundColor: '#0b1210' },
+        }}>
+        <Stack.Protected guard={!signedIn} redirectTo="/home">
+          <Stack.Screen name="(auth)" />
+        </Stack.Protected>
+        <Stack.Protected guard={signedIn} redirectTo="/">
+          <Stack.Screen name="(app)" />
+        </Stack.Protected>
+      </Stack>
+    </View>
   );
 }

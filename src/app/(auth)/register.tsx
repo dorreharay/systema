@@ -4,7 +4,10 @@ import { View } from 'react-native';
 import AuthLayout from '@/components/auth-layout';
 import AuthSwitch from '@/components/auth-switch';
 import Button from '@/components/button';
+import FormMessage from '@/components/form-message';
 import TextField, { type TextFieldRef } from '@/components/text-field';
+import { useAuth } from '@/lib/auth';
+import { describeAuthError, isApiError } from '@/lib/auth-errors';
 import {
   MIN_PASSWORD_LENGTH,
   validateEmail,
@@ -21,8 +24,11 @@ export default function Register() {
     password?: string;
     confirmation?: string;
   }>({});
+  const [formError, setFormError] = useState<string>();
+  const [submitting, setSubmitting] = useState(false);
   const passwordRef = useRef<TextFieldRef>(null);
   const confirmationRef = useRef<TextFieldRef>(null);
+  const { signUp } = useAuth();
 
   const changeEmail = (value: string) => {
     setEmail(value);
@@ -39,17 +45,33 @@ export default function Register() {
     setErrors((current) => ({ ...current, confirmation: undefined }));
   };
 
-  const submit = () => {
+  const submit = async () => {
+    if (submitting) {
+      return;
+    }
     const next = {
       email: validateEmail(email),
       password: validateNewPassword(password),
       confirmation: validatePasswordConfirmation(password, confirmation),
     };
     setErrors(next);
+    setFormError(undefined);
     if (next.email || next.password || next.confirmation) {
       return;
     }
-    // The sign-up request goes here once the auth API exists.
+
+    setSubmitting(true);
+    try {
+      // The account is created and signed in at once; the root layout then moves to the app.
+      await signUp(email.trim(), password);
+    } catch (error) {
+      if (isApiError(error, 'email_taken')) {
+        setErrors((current) => ({ ...current, email: describeAuthError(error) }));
+      } else {
+        setFormError(describeAuthError(error));
+      }
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -103,8 +125,9 @@ export default function Register() {
           returnKeyType="done"
           onSubmitEditing={submit}
         />
+        {formError ? <FormMessage message={formError} /> : null}
         <View className="pt-4">
-          <Button title="Зареєструватися" onPress={submit} />
+          <Button title="Зареєструватися" onPress={submit} loading={submitting} />
         </View>
       </View>
     </AuthLayout>
