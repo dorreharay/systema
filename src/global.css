@@ -13,6 +13,18 @@
   --color-background-element: #f0f0f3;
   --color-background-selected: #e0e1e6;
   --color-secondary: #60646c;
+  /* The signed-in app: a light page, white cards with a hairline border, one accent (primary). */
+  --color-surface: #f4f5f6;
+  --color-line: #e3e5e8;
+  --color-ink: #12171c;
+  --color-muted: #667085;
+  --color-primary-soft: #e6efeb;
+  --color-danger: #d92d20;
+  /* The dark band under the pages (the navigation) and the light pill on it. */
+  --color-chrome: #1A1A1A;
+  --color-chrome-pill: #f1f1ee;
+  /* The margin of a page: the space between its content and the edge of the screen (22 pt). */
+  --spacing-page: 1.375rem;
 }
 
 :root {

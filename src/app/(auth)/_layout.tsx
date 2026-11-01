@@ -1,4 +1,5 @@
 import { DefaultTheme, Stack, ThemeProvider } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import { View } from 'react-native';
 
 import AuthBackground from '@/components/auth-background';
@@ -16,6 +17,7 @@ const TRANSPARENT_THEME = {
 export default function AuthGroupLayout() {
   return (
     <View className="flex-1">
+      <StatusBar style="light" />
       <AuthBackground />
       <AuthScrim />
       <ThemeProvider value={TRANSPARENT_THEME}>

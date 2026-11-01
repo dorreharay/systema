@@ -20,6 +20,7 @@ import { scheduleOnRN } from 'react-native-worklets';
 import { HEADER_HEIGHT } from '@/components/app-header';
 import { AuthLeaveContext } from '@/components/auth-leave';
 import AuthLink from '@/components/auth-link';
+import { useI18n } from '@/lib/i18n';
 
 // Size of the round back button at the top left, in line with the logo.
 const BACK_BUTTON_SIZE = 44;
@@ -66,6 +67,7 @@ export default function AuthLayout({
   backHref,
   centered = false,
 }: AuthLayoutProps) {
+  const { t } = useI18n();
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
   const headerSpace = insets.top + HEADER_HEIGHT;
@@ -207,7 +209,7 @@ export default function AuthLayout({
             <AuthLink href={backHref} dismissTo asChild>
               <Pressable
                 accessibilityRole="link"
-                accessibilityLabel="Назад"
+                accessibilityLabel={t('back')}
                 hitSlop={8}
                 className="h-11 w-11 items-center justify-center rounded-full bg-white/10 active:bg-white/20">
                 <ArrowLeft size={22} color="#ffffff" />

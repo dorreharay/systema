@@ -4,12 +4,15 @@ import { z } from 'zod';
 import { config } from '../config.js';
 import { db } from '../db/index.js';
 import { users } from '../db/schema.js';
+import { isValidTimeZone } from '../utils/dates.js';
+import { createDefaultServices } from '../utils/defaults.js';
 import { requireAuth } from '../middleware/auth.js';
 import { authLimiter } from '../middleware/rateLimit.js';
 import { validateBody } from '../middleware/validate.js';
 import { sendEmailsBestEffort } from '../utils/email.js';
 import { passwordResetEmail } from '../utils/emailTemplates.js';
 import { HttpError } from '../utils/http.js';
+import { optionalText } from '../utils/validators.js';
 import { hashPassword, newPasswordSchema, verifyAgainstDecoy, verifyPassword } from '../utils/password.js';
 import { clearSessionCookie, setSessionCookie, signToken } from '../utils/session.js';
 import { createToken, hashToken } from '../utils/tokens.js';
@@ -33,7 +36,26 @@ const loginSchema = z.object({
   email: emailSchema,
   password: z.string({ error: 'Password is required' }).min(1, 'Password is required'),
 });
-const profileSchema = z.object({ full_name: z.string().trim().max(100) });
+const LANGUAGES = ['en', 'uk'];
+const profileSchema = z
+  .object({
+    full_name: z.string().trim().max(100),
+    workshop_name: optionalText(100),
+    currency: z
+      .string()
+      .trim()
+      .toUpperCase()
+      .regex(/^[A-Z]{3}$/, 'Use a 3-letter currency code'),
+    tension_unit: z.enum(['kg', 'lbs'], 'Choose kg or lbs'),
+    timezone: z.string().refine(isValidTimeZone, 'Unknown time zone'),
+    language: z.enum(LANGUAGES, 'Unsupported language'),
+    notifications_enabled: z.boolean(),
+    setup_completed: z.literal(true),
+  })
+  .partial()
+  .refine((profile) => Object.values(profile).some((value) => value !== undefined), {
+    message: 'Nothing to change',
+  });
 const forgotPasswordSchema = z.object({ email: emailSchema });
 const resetPasswordSchema = z.object({
   token: z.string({ error: 'Token is required' }).min(1, 'Token is required'),
@@ -56,12 +78,17 @@ router.post('/register', authLimiter, validateBody(registerSchema), async (req, 
   const [existing] = await db.select({ id: users.id }).from(users).where(eq(users.email, email)).limit(1);
   if (existing) throw emailTaken();
 
+  const password_hash = await hashPassword(password);
   let user;
   try {
-    [user] = await db
-      .insert(users)
-      .values({ email, full_name: full_name || null, password_hash: await hashPassword(password) })
-      .returning();
+    user = await db.transaction(async (tx) => {
+      const [created] = await tx
+        .insert(users)
+        .values({ email, full_name: full_name || null, password_hash })
+        .returning();
+      await createDefaultServices(tx, created.id);
+      return created;
+    });
   } catch (err) {
     // Two sign-ups with the same address at the same moment: the database settles which one wins.
     if (err?.code === UNIQUE_VIOLATION || err?.cause?.code === UNIQUE_VIOLATION) throw emailTaken();
@@ -104,9 +131,14 @@ router.get('/me', requireAuth, (req, res) => {
 
 // PATCH /api/auth/me
 router.patch('/me', requireAuth, validateBody(profileSchema), async (req, res) => {
+  const { setup_completed, full_name, ...rest } = req.body;
   const [updated] = await db
     .update(users)
-    .set({ full_name: req.body.full_name || null })
+    .set({
+      ...rest,
+      ...(full_name !== undefined && { full_name: full_name || null }),
+      ...(setup_completed && !req.user.setup_completed_at && { setup_completed_at: new Date() }),
+    })
     .where(eq(users.id, req.user.id))
     .returning();
   res.json(toPublicUser(updated));

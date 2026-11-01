@@ -10,11 +10,21 @@ export const validateBody = (schema) => (req, res, next) => {
     req.body = result.data;
     return next();
   }
+  next(validationError(result.error));
+};
 
+function validationError(error) {
   const fields = {};
-  for (const issue of result.error.issues) {
+  for (const issue of error.issues) {
     const field = issue.path.join('.') || 'body';
     fields[field] ??= issue.message;
   }
-  next(new HttpError(400, Object.values(fields)[0], { code: 'validation_error', fields }));
-};
+  return new HttpError(400, Object.values(fields)[0], { code: 'validation_error', fields });
+}
+
+/** The same for a query string, inside a route: returns the parsed value or throws the 400. */
+export function parseQuery(schema, query) {
+  const result = schema.safeParse(query ?? {});
+  if (!result.success) throw validationError(result.error);
+  return result.data;
+}

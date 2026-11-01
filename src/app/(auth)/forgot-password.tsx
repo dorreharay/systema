@@ -8,10 +8,12 @@ import Button from '@/components/button';
 import FormMessage from '@/components/form-message';
 import TextField from '@/components/text-field';
 import { useAuth } from '@/lib/auth';
-import { describeAuthError } from '@/lib/auth-errors';
+import { describeError } from '@/lib/errors';
+import { useI18n } from '@/lib/i18n';
 import { validateEmail } from '@/lib/validation';
 
 function ForgotPasswordForm() {
+  const { t } = useI18n();
   const { replace } = useAuthRouter();
   const [email, setEmail] = useState('');
   const [error, setError] = useState<string>();
@@ -28,10 +30,10 @@ function ForgotPasswordForm() {
     if (submitting) {
       return;
     }
-    const next = validateEmail(email);
-    setError(next);
+    const key = validateEmail(email);
+    setError(key && t(key));
     setFormError(undefined);
-    if (next) {
+    if (key) {
       return;
     }
 
@@ -40,7 +42,7 @@ function ForgotPasswordForm() {
       await requestPasswordReset(email.trim());
       replace({ pathname: '/check-email', params: { email: email.trim() } });
     } catch (failure) {
-      setFormError(describeAuthError(failure));
+      setFormError(describeError(failure, t));
     } finally {
       setSubmitting(false);
     }
@@ -49,7 +51,7 @@ function ForgotPasswordForm() {
   return (
     <View className="gap-4">
       <TextField
-        label="Email"
+        label={t('field_email')}
         value={email}
         onChangeText={changeEmail}
         error={error}
@@ -63,20 +65,21 @@ function ForgotPasswordForm() {
       />
       {formError ? <FormMessage message={formError} /> : null}
       <View className="pt-4">
-        <Button title="Надіслати посилання" onPress={submit} loading={submitting} />
+        <Button title={t('send_reset_link')} onPress={submit} loading={submitting} />
       </View>
     </View>
   );
 }
 
 export default function ForgotPassword() {
+  const { t } = useI18n();
   return (
     <AuthLayout
-      title="Забули пароль?"
-      subtitle="Надішлемо вам посилання для зміни пароля"
+      title={t('forgot_title')}
+      subtitle={t('forgot_subtitle')}
       backHref="/login"
       centered
-      footer={<AuthSwitch question="Згадали пароль?" action="Увійти" href="/login" dismissTo />}>
+      footer={<AuthSwitch question={t('auth_remembered')} action={t('sign_in')} href="/login" dismissTo />}>
       <ForgotPasswordForm />
     </AuthLayout>
   );

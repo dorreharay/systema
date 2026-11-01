@@ -12,7 +12,7 @@ type AuthSwitchProps = {
   dismissTo?: boolean;
 };
 
-// "Немає акаунта? Зареєструватися" row. The link has a tap area much larger than its text.
+// A row like "Don't have an account? Sign Up". The link has a tap area much larger than its text.
 export default function AuthSwitch({ question, action, href, replace, dismissTo }: AuthSwitchProps) {
   return (
     <View className="flex-row items-center justify-center">

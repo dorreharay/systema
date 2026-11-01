@@ -5,6 +5,8 @@ import { useEffect, useRef, useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { styled } from 'react-native-css';
 
+import { useI18n } from '@/lib/i18n';
+
 const FieldBlur = styled(BlurView);
 
 export type TextFieldRef = ComponentRef<typeof TextInput>;
@@ -27,6 +29,7 @@ export default function TextField({
   secureTextEntry,
   ...props
 }: TextFieldProps) {
+  const { t } = useI18n();
   const [focused, setFocused] = useState(false);
   const [revealed, setRevealed] = useState(false);
   const isPassword = !!secureTextEntry;
@@ -98,7 +101,7 @@ export default function TextField({
         {isPassword ? (
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel={revealed ? 'Сховати пароль' : 'Показати пароль'}
+            accessibilityLabel={revealed ? t('password_hide') : t('password_show')}
             hitSlop={8}
             className="absolute bottom-0 right-0 top-0 w-12 items-center justify-center active:opacity-60"
             onPress={toggleRevealed}>

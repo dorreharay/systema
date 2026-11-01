@@ -25,7 +25,7 @@ backend/
     bootstrap.js          creates the first admin when there are no users
     db/                   schema.js, index.js (pool + drizzle), migrate.js
     middleware/           auth (requireAuth, requireRole), validate, rateLimit, error
-    routes/               auth.js: one file per resource
+    routes/               one file per resource: auth, clients, rackets, strings, services, orders, photos, dashboard
     utils/                http (HttpError), password, tokens, session, email, emailTemplates, emailFailure
     scripts/seed.js
   drizzle/                generated SQL migrations (commit them)
@@ -85,7 +85,7 @@ Every error is `{ "error": "message", "code"?: "machine_reason", "fields"?: { "f
 | `POST` | `/api/auth/login` | `{ email, password }` → `{ user, token }`, 401 `invalid_credentials` |
 | `POST` | `/api/auth/logout` | clears the cookie |
 | `GET` | `/api/auth/me` | the signed-in user |
-| `PATCH` | `/api/auth/me` | `{ full_name }` |
+| `PATCH` | `/api/auth/me` | any of `full_name`, `workshop_name`, `currency` (ISO code), `tension_unit` (`kg`/`lbs`), `timezone` (IANA), `language` (`en`/`uk`), `notifications_enabled`, `setup_completed: true` → the user |
 | `POST` | `/api/auth/forgot-password` | `{ email }` → always `{ ok: true }`; emails a link when the address has an account |
 | `POST` | `/api/auth/reset-password` | `{ token, password }`; the token works once, for 60 minutes |
 
@@ -95,6 +95,38 @@ and sends `Authorization: Bearer <token>`.
 
 Changing a password with a reset link ends every session opened before.
 Register, login, forgot-password and reset-password are limited to 20 attempts per IP and 15 minutes.
+
+### Stringing: clients, rackets, strings, services, orders
+
+Everything below needs a signed-in user and only ever shows that user's own data (another user's id is a
+404, never a 403). Lists answer `{ items }`; a mistake in a body is a 400 with `fields`. JSON is
+snake_case. Deleting a client, racket or string hides it from lists and pickers but keeps it for the
+orders that used it (an old order never loses its history); an order is deleted for real.
+
+| | | |
+|---|---|---|
+| `GET` `POST` | `/api/clients` | `?q=` searches name and phone. A client needs only a `name`; `phone`, `email`, `notes` are optional. Each has `rackets_count`, `orders_count`, `last_order_date` |
+| `GET` `PATCH` `DELETE` | `/api/clients/:id` | `GET` adds the client's `rackets` and `orders` (history) |
+| `GET` `POST` | `/api/rackets` | `?q=` (brand, model, owner) and `?client_id=`. `{ client_id, brand, model, notes? }`. Each has `orders_count` and `last_setup`: how it was last strung, to prefill a new order |
+| `GET` `PATCH` `DELETE` | `/api/rackets/:id` | `GET` adds the racket's `orders`, newest first |
+| `GET` `POST` | `/api/strings` | the stringer's catalog. `?q=` (brand, model). `{ brand, model, gauge?, type, default_price? }`, `type`: `polyester`, `multifilament`, `synthetic_gut`, `natural_gut`, `other` |
+| `GET` `PATCH` `DELETE` | `/api/strings/:id` | |
+| `GET` `POST` | `/api/services` | what the stringer charges for: `{ name, price?, kind: labor\|extra, active }`. New accounts start with Stringing Labor, Grip Replacement and Overgrip Installation, without prices |
+| `PATCH` | `/api/services/:id` | `active: false` archives a service (it is no longer offered on new orders), `true` brings it back |
+| `GET` `POST` | `/api/orders` | `?status=` (`received`, `in_progress`, `ready`, `completed`, or `active` for the first three), `?q=` (customer, racket, string, `#number`), `?client_id=`, `?racket_id=`, `?limit=&offset=` → `{ items, has_more }`. The queue is by due date, then finished orders, newest first |
+| `GET` `PATCH` `DELETE` | `/api/orders/:id` | `GET` adds `services` and `photos`. `PATCH` takes any field of an order plus `status` and `is_paid`; `services` replaces the whole list |
+| `POST` | `/api/orders/:id/photos` | the body is the image (JPEG, PNG, WebP or HEIC, up to 8 MB, up to 10 per order); the type is read from the bytes |
+| `GET` `DELETE` | `/api/photos/:id` | the image itself (cached by the app: a photo never changes) / remove it |
+| `GET` | `/api/dashboard` | `active_orders`, `ready_for_pickup`, `completed_this_month` (the stringer's month, in their time zone) and the next orders `active` by due date |
+
+An order needs a `client_id` and a `racket_id` of that client and nothing else. **Tension is always in
+kilograms** (`main_tension`, `cross_tension`, 5 to 60); `tension_unit` in the profile only changes how the
+app shows and types it, so a change of unit never touches an old order. The setup (string names, tension,
+knots, prices) is copied into the order: editing the catalog later does not rewrite old orders.
+`total` is labor + strings + extra services, worked out by the server on every save (null while nothing
+has a price). Orders are numbered 1, 2, 3... for each stringer. Payment (`is_paid`) is independent of the
+status. Strings the customer brings (`customer_strings`) have no catalog string and no price; a hybrid
+(`hybrid`) has a second string for the crosses.
 
 ### Adding a resource
 
@@ -147,5 +179,6 @@ token is kept in the keychain (`expo-secure-store`; `localStorage` on the web bu
 
 ## Not included
 
-Left out because nothing in the app needs them yet: file uploads (`multer`), AI calls
+Left out because nothing in the app needs them yet: a file store for photos (they are kept in PostgreSQL,
+which is enough for a stringer's few photos per order; move them to S3 if that grows), AI calls
 (`@anthropic-ai/sdk`), and Restorus' CI pipeline and Terraform, which belong to its AWS account.

@@ -202,9 +202,27 @@ export class Client {
     return { status: res.status, data, headers: res.headers };
   }
 
+  /** A request whose body is raw bytes, and whose answer is returned as bytes too. */
+  async rawRequest(method, path, body, contentType) {
+    const cookie = [...this.cookies].map(([name, value]) => `${name}=${value}`).join('; ');
+    const res = await fetch(this.base + path, {
+      method,
+      headers: {
+        ...(contentType && { 'content-type': contentType }),
+        ...(cookie && { cookie }),
+        ...(this.token && { authorization: `Bearer ${this.token}` }),
+      },
+      body,
+    });
+    const bytes = Buffer.from(await res.arrayBuffer());
+    const isJson = (res.headers.get('content-type') || '').includes('json');
+    return { status: res.status, data: isJson ? JSON.parse(bytes.toString()) : bytes, headers: res.headers };
+  }
+
   get = (path, headers) => this.request('GET', path, undefined, headers);
   post = (path, body = {}, headers) => this.request('POST', path, body, headers);
   patch = (path, body = {}, headers) => this.request('PATCH', path, body, headers);
+  delete = (path, headers) => this.request('DELETE', path, undefined, headers);
 }
 
 export function assertTrue(value, message) {

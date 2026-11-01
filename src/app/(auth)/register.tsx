@@ -7,7 +7,8 @@ import Button from '@/components/button';
 import FormMessage from '@/components/form-message';
 import TextField, { type TextFieldRef } from '@/components/text-field';
 import { useAuth } from '@/lib/auth';
-import { describeAuthError, isApiError } from '@/lib/auth-errors';
+import { describeError, isApiError } from '@/lib/errors';
+import { useI18n } from '@/lib/i18n';
 import {
   MIN_PASSWORD_LENGTH,
   validateEmail,
@@ -16,6 +17,7 @@ import {
 } from '@/lib/validation';
 
 export default function Register() {
+  const { t } = useI18n();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmation, setConfirmation] = useState('');
@@ -49,14 +51,18 @@ export default function Register() {
     if (submitting) {
       return;
     }
-    const next = {
+    const keys = {
       email: validateEmail(email),
       password: validateNewPassword(password),
       confirmation: validatePasswordConfirmation(password, confirmation),
     };
-    setErrors(next);
+    setErrors({
+      email: keys.email && t(keys.email),
+      password: keys.password && t(keys.password, { min: MIN_PASSWORD_LENGTH }),
+      confirmation: keys.confirmation && t(keys.confirmation),
+    });
     setFormError(undefined);
-    if (next.email || next.password || next.confirmation) {
+    if (keys.email || keys.password || keys.confirmation) {
       return;
     }
 
@@ -66,9 +72,9 @@ export default function Register() {
       await signUp(email.trim(), password);
     } catch (error) {
       if (isApiError(error, 'email_taken')) {
-        setErrors((current) => ({ ...current, email: describeAuthError(error) }));
+        setErrors((current) => ({ ...current, email: describeError(error, t) }));
       } else {
-        setFormError(describeAuthError(error));
+        setFormError(describeError(error, t));
       }
       setSubmitting(false);
     }
@@ -76,14 +82,14 @@ export default function Register() {
 
   return (
     <AuthLayout
-      title="Реєстрація"
-      subtitle="Створіть акаунт, щоб почати"
+      title={t('register_title')}
+      subtitle={t('register_subtitle')}
       backHref="/"
       centered
-      footer={<AuthSwitch question="Вже є акаунт?" action="Увійти" href="/login" replace />}>
+      footer={<AuthSwitch question={t('auth_have_account')} action={t('sign_in')} href="/login" replace />}>
       <View className="gap-4">
         <TextField
-          label="Email"
+          label={t('field_email')}
           value={email}
           onChangeText={changeEmail}
           error={errors.email}
@@ -98,11 +104,11 @@ export default function Register() {
         />
         <TextField
           ref={passwordRef}
-          label="Пароль"
+          label={t('field_password')}
           value={password}
           onChangeText={changePassword}
           error={errors.password}
-          placeholder={`Мінімум ${MIN_PASSWORD_LENGTH} символів`}
+          placeholder={t('password_placeholder_min', { min: MIN_PASSWORD_LENGTH })}
           secureTextEntry
           autoCapitalize="none"
           autoComplete="new-password"
@@ -113,11 +119,11 @@ export default function Register() {
         />
         <TextField
           ref={confirmationRef}
-          label="Підтвердіть пароль"
+          label={t('field_confirm_password')}
           value={confirmation}
           onChangeText={changeConfirmation}
           error={errors.confirmation}
-          placeholder="Повторіть пароль"
+          placeholder={t('confirm_password_placeholder')}
           secureTextEntry
           autoCapitalize="none"
           autoComplete="new-password"
@@ -127,7 +133,7 @@ export default function Register() {
         />
         {formError ? <FormMessage message={formError} /> : null}
         <View className="pt-4">
-          <Button title="Зареєструватися" onPress={submit} loading={submitting} />
+          <Button title={t('create_account')} onPress={submit} loading={submitting} />
         </View>
       </View>
     </AuthLayout>

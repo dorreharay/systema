@@ -3,6 +3,8 @@ import { Platform, TurboModuleRegistry } from 'react-native';
 
 const API_PORT = 4000;
 const REQUEST_TIMEOUT_MS = 10_000;
+// A photo is several megabytes, which a phone on a slow connection takes a while to send.
+const UPLOAD_TIMEOUT_MS = 60_000;
 
 /** The machine that runs Metro. `undefined` when the app was not loaded from one. */
 function devServerHost() {
@@ -67,17 +69,16 @@ export class ApiError extends Error {
   }
 }
 
-type RequestOptions = {
-  method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
-  body?: unknown;
+type SendOptions = {
+  method: 'GET' | 'POST' | 'PATCH' | 'DELETE';
+  headers?: Record<string, string>;
+  body?: BodyInit;
   token?: string | null;
-  timeoutMs?: number;
+  timeoutMs: number;
 };
 
-export async function api<T>(
-  path: string,
-  { method = 'GET', body, token, timeoutMs = REQUEST_TIMEOUT_MS }: RequestOptions = {}
-): Promise<T> {
+/** Sends the request and throws an `ApiError` for anything but a success. */
+async function send(path: string, { method, headers, body, token, timeoutMs }: SendOptions) {
   // Outside the try below: a missing address is a mistake in the setup, not a lost connection.
   const url = `${apiUrl()}${path}`;
   const controller = new AbortController();
@@ -87,11 +88,8 @@ export async function api<T>(
   try {
     response = await fetch(url, {
       method,
-      headers: {
-        ...(body !== undefined && { 'Content-Type': 'application/json' }),
-        ...(token && { Authorization: `Bearer ${token}` }),
-      },
-      body: body === undefined ? undefined : JSON.stringify(body),
+      headers: { ...headers, ...(token && { Authorization: `Bearer ${token}` }) },
+      body,
       signal: controller.signal,
     });
   } catch (error) {
@@ -103,9 +101,48 @@ export async function api<T>(
     clearTimeout(timer);
   }
 
-  const data = await response.json().catch(() => undefined);
   if (!response.ok) {
+    const data = await response.json().catch(() => undefined);
     throw new ApiError(response.status, data?.error ?? response.statusText, data?.code, data?.fields);
   }
-  return data as T;
+  return response;
+}
+
+export type RequestOptions = {
+  method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
+  body?: unknown;
+  token?: string | null;
+  timeoutMs?: number;
+};
+
+export async function api<T>(
+  path: string,
+  { method = 'GET', body, token, timeoutMs = REQUEST_TIMEOUT_MS }: RequestOptions = {}
+): Promise<T> {
+  const response = await send(path, {
+    method,
+    headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body),
+    token,
+    timeoutMs,
+  });
+  return (await response.json().catch(() => undefined)) as T;
+}
+
+/** Sends a file as the body of a POST, and returns the JSON the server answers with. */
+export async function apiUpload<T>(path: string, file: Blob, contentType: string, token?: string | null) {
+  const response = await send(path, {
+    method: 'POST',
+    headers: { 'Content-Type': contentType },
+    body: file,
+    token,
+    timeoutMs: UPLOAD_TIMEOUT_MS,
+  });
+  return (await response.json()) as T;
+}
+
+/** Fetches a file the API serves (an order photo needs the token, so an <Image> cannot load it). */
+export async function apiBlob(path: string, token?: string | null) {
+  const response = await send(path, { method: 'GET', token, timeoutMs: UPLOAD_TIMEOUT_MS });
+  return response.blob();
 }

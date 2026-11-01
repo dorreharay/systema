@@ -9,7 +9,8 @@ import Button from '@/components/button';
 import FormMessage from '@/components/form-message';
 import TextField, { type TextFieldRef } from '@/components/text-field';
 import { useAuth } from '@/lib/auth';
-import { describeAuthError } from '@/lib/auth-errors';
+import { describeError } from '@/lib/errors';
+import { useI18n } from '@/lib/i18n';
 import {
   MIN_PASSWORD_LENGTH,
   validateNewPassword,
@@ -17,6 +18,7 @@ import {
 } from '@/lib/validation';
 
 function ResetPasswordForm() {
+  const { t } = useI18n();
   const { token } = useLocalSearchParams<{ token?: string }>();
   const { replace } = useAuthRouter();
   const { resetPassword } = useAuth();
@@ -41,13 +43,16 @@ function ResetPasswordForm() {
     if (submitting) {
       return;
     }
-    const next = {
+    const keys = {
       password: validateNewPassword(password),
       confirmation: validatePasswordConfirmation(password, confirmation),
     };
-    setErrors(next);
+    setErrors({
+      password: keys.password && t(keys.password, { min: MIN_PASSWORD_LENGTH }),
+      confirmation: keys.confirmation && t(keys.confirmation),
+    });
     setFormError(undefined);
-    if (next.password || next.confirmation) {
+    if (keys.password || keys.confirmation) {
       return;
     }
 
@@ -56,7 +61,7 @@ function ResetPasswordForm() {
       await resetPassword(token ?? '', password);
       replace({ pathname: '/login', params: { reset: '1' } });
     } catch (failure) {
-      setFormError(describeAuthError(failure));
+      setFormError(describeError(failure, t));
     } finally {
       setSubmitting(false);
     }
@@ -65,11 +70,11 @@ function ResetPasswordForm() {
   return (
     <View className="gap-4">
       <TextField
-        label="Новий пароль"
+        label={t('field_new_password')}
         value={password}
         onChangeText={changePassword}
         error={errors.password}
-        placeholder={`Мінімум ${MIN_PASSWORD_LENGTH} символів`}
+        placeholder={t('password_placeholder_min', { min: MIN_PASSWORD_LENGTH })}
         secureTextEntry
         autoCapitalize="none"
         autoComplete="new-password"
@@ -80,11 +85,11 @@ function ResetPasswordForm() {
       />
       <TextField
         ref={confirmationRef}
-        label="Підтвердіть пароль"
+        label={t('field_confirm_password')}
         value={confirmation}
         onChangeText={changeConfirmation}
         error={errors.confirmation}
-        placeholder="Повторіть пароль"
+        placeholder={t('confirm_password_placeholder')}
         secureTextEntry
         autoCapitalize="none"
         autoComplete="new-password"
@@ -94,7 +99,7 @@ function ResetPasswordForm() {
       />
       {formError ? <FormMessage message={formError} /> : null}
       <View className="pt-4">
-        <Button title="Змінити пароль" onPress={submit} loading={submitting} />
+        <Button title={t('change_password')} onPress={submit} loading={submitting} />
       </View>
     </View>
   );
@@ -102,12 +107,13 @@ function ResetPasswordForm() {
 
 // Opened from the link in the password reset email: /reset-password?token=...
 export default function ResetPassword() {
+  const { t } = useI18n();
   return (
     <AuthLayout
-      title="Новий пароль"
-      subtitle="Придумайте пароль, яким будете входити"
+      title={t('reset_title')}
+      subtitle={t('reset_subtitle')}
       centered
-      footer={<AuthSwitch question="Не вдалося?" action="Запросити нове посилання" href="/forgot-password" replace />}>
+      footer={<AuthSwitch question={t('reset_failed')} action={t('reset_request_new')} href="/forgot-password" replace />}>
       <ResetPasswordForm />
     </AuthLayout>
   );

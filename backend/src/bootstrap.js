@@ -9,6 +9,7 @@
 import { config } from './config.js';
 import { db } from './db/index.js';
 import { users } from './db/schema.js';
+import { createDefaultServices } from './utils/defaults.js';
 import { hashPassword } from './utils/password.js';
 
 export async function bootstrapAdmin() {
@@ -18,11 +19,13 @@ export async function bootstrapAdmin() {
   const existing = await db.select({ id: users.id }).from(users).limit(1);
   if (existing.length > 0) return;
 
-  await db.insert(users).values({
-    email,
-    full_name: name,
-    password_hash: await hashPassword(password),
-    role: 'admin',
+  const password_hash = await hashPassword(password);
+  await db.transaction(async (tx) => {
+    const [admin] = await tx
+      .insert(users)
+      .values({ email, full_name: name, password_hash, role: 'admin' })
+      .returning({ id: users.id });
+    await createDefaultServices(tx, admin.id);
   });
   console.log(`[bootstrap] Created the first admin: ${email}`);
 }

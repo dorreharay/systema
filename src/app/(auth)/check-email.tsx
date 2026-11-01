@@ -7,9 +7,11 @@ import AuthLink from '@/components/auth-link';
 import Button from '@/components/button';
 import FormMessage from '@/components/form-message';
 import { useAuth } from '@/lib/auth';
-import { describeAuthError } from '@/lib/auth-errors';
+import { describeError } from '@/lib/errors';
+import { useI18n } from '@/lib/i18n';
 
 function ResendRow({ email }: { email?: string }) {
+  const { t } = useI18n();
   const { requestPasswordReset } = useAuth();
   const [resent, setResent] = useState(false);
   const [sending, setSending] = useState(false);
@@ -25,7 +27,7 @@ function ResendRow({ email }: { email?: string }) {
       await requestPasswordReset(email);
       setResent(true);
     } catch (failure) {
-      setError(describeAuthError(failure));
+      setError(describeError(failure, t));
     } finally {
       setSending(false);
     }
@@ -35,7 +37,7 @@ function ResendRow({ email }: { email?: string }) {
     <View className="items-center">
       <View className="min-h-12 flex-row items-center justify-center">
         <Text className="font-normal text-white/80">
-          {resent ? 'Лист надіслано повторно' : 'Не отримали лист?'}
+          {resent ? t('resend_done') : t('resend_question')}
         </Text>
         {resent || !email ? null : (
           <Pressable
@@ -45,7 +47,7 @@ function ResendRow({ email }: { email?: string }) {
             className="min-h-12 justify-center px-2.5 active:opacity-70"
             onPress={resend}>
             <Text className="font-medium text-white">
-              {sending ? 'Надсилаємо…' : 'Надіслати ще раз'}
+              {sending ? t('resend_sending') : t('resend_action')}
             </Text>
           </Pressable>
         )}
@@ -56,17 +58,18 @@ function ResendRow({ email }: { email?: string }) {
 }
 
 export default function CheckEmail() {
+  const { t } = useI18n();
   const { email } = useLocalSearchParams<{ email?: string }>();
 
   return (
     <AuthLayout
-      title="Перевірте пошту"
-      subtitle={`Ми надіслали посилання для відновлення пароля на ${email || 'вашу пошту'}`}
+      title={t('check_email_title')}
+      subtitle={t('check_email_subtitle', { email: email || t('check_email_your') })}
       backHref="/login"
       centered
       footer={<ResendRow email={email} />}>
       <AuthLink href="/login" dismissTo asChild>
-        <Button title="Повернутися до входу" />
+        <Button title={t('back_to_sign_in')} />
       </AuthLink>
     </AuthLayout>
   );
