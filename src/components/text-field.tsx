@@ -1,7 +1,8 @@
 import { BlurView } from 'expo-blur';
 import type { ComponentProps, ComponentRef, Ref } from 'react';
-import { useState } from 'react';
-import { Text, TextInput, View } from 'react-native';
+import { Eye, EyeOff } from 'lucide-react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Pressable, Text, TextInput, View } from 'react-native';
 import { styled } from 'react-native-css';
 
 const FieldBlur = styled(BlurView);
@@ -15,9 +16,49 @@ type TextFieldProps = ComponentProps<typeof TextInput> & {
 };
 
 // The field is frosted glass: the photo behind it is blurred and lightened a little, and the
-// border shows the focus and error states.
-export default function TextField({ label, error, onFocus, onBlur, ...props }: TextFieldProps) {
+// border shows the focus and error states. A password field has an eye at the right that shows
+// what was typed.
+export default function TextField({
+  ref,
+  label,
+  error,
+  onFocus,
+  onBlur,
+  secureTextEntry,
+  ...props
+}: TextFieldProps) {
   const [focused, setFocused] = useState(false);
+  const [revealed, setRevealed] = useState(false);
+  const isPassword = !!secureTextEntry;
+  const inputRef = useRef<TextFieldRef | null>(null);
+  const refocus = useRef(false);
+
+  // The parent's ref (to move to the next field) and this component's own.
+  const setRefs = (node: TextFieldRef | null) => {
+    inputRef.current = node;
+    if (typeof ref === 'function') {
+      ref(node);
+    } else if (ref) {
+      ref.current = node;
+    }
+  };
+
+  // iOS clears what was typed when a field becomes secure while it is being edited, on the next
+  // key. So a field that has the keyboard leaves it, changes, and takes it back.
+  const toggleRevealed = () => {
+    if (inputRef.current?.isFocused()) {
+      refocus.current = true;
+      inputRef.current.blur();
+    }
+    setRevealed((value) => !value);
+  };
+
+  useEffect(() => {
+    if (refocus.current) {
+      refocus.current = false;
+      inputRef.current?.focus();
+    }
+  }, [revealed]);
 
   return (
     <View className="gap-1.5">
@@ -33,13 +74,17 @@ export default function TextField({ label, error, onFocus, onBlur, ...props }: T
         />
         <View className="absolute inset-0 bg-white/10" />
         <TextInput
+          ref={setRefs}
           accessibilityLabel={label}
           placeholderTextColor="rgba(255, 255, 255, 0.55)"
           selectionColor="#ffffff"
           keyboardAppearance="dark"
           autoCorrect={false}
           spellCheck={false}
-          className="absolute inset-0 px-4 ios:pb-1 text-[1.125rem] font-normal text-white outline-none"
+          className={`absolute inset-0 pl-4 ios:pb-1 text-[1.125rem] font-normal text-white outline-none ${
+            isPassword ? 'pr-12' : 'pr-4'
+          }`}
+          secureTextEntry={isPassword && !revealed}
           onFocus={(event) => {
             setFocused(true);
             onFocus?.(event);
@@ -50,6 +95,20 @@ export default function TextField({ label, error, onFocus, onBlur, ...props }: T
           }}
           {...props}
         />
+        {isPassword ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={revealed ? 'Сховати пароль' : 'Показати пароль'}
+            hitSlop={8}
+            className="absolute bottom-0 right-0 top-0 w-12 items-center justify-center active:opacity-60"
+            onPress={toggleRevealed}>
+            {revealed ? (
+              <EyeOff size={20} color="rgba(255, 255, 255, 0.8)" />
+            ) : (
+              <Eye size={20} color="rgba(255, 255, 255, 0.8)" />
+            )}
+          </Pressable>
+        ) : null}
       </View>
       {error ? <Text className="text-md text-red-300">{error}</Text> : null}
     </View>
