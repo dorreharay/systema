@@ -68,7 +68,7 @@ export default function Setup() {
   return (
     <Screen>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1">
-        <ScrollView
+        <ScrollView bounces={false} overScrollMode="never"
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
           contentContainerClassName="gap-6 px-page pb-8 pt-6">

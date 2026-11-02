@@ -13,7 +13,7 @@ type ChipsProps<T extends string> = {
 /** A row of filters that scrolls sideways; the chosen one is filled with the accent color. */
 export function FilterChips<T extends string>({ options, value, onChange }: ChipsProps<T>) {
   return (
-    <ScrollView
+    <ScrollView bounces={false} overScrollMode="never"
       horizontal
       showsHorizontalScrollIndicator={false}
       contentContainerClassName="gap-2 px-page"
@@ -28,7 +28,7 @@ export function FilterChips<T extends string>({ options, value, onChange }: Chip
             hitSlop={{ top: 4, bottom: 4 }}
             onPress={() => onChange(option.value)}
             className={`min-h-10 justify-center rounded-lg border px-4 ${
-              selected ? 'border-primary bg-primary' : 'border-line bg-white active:bg-surface'
+              selected ? 'border-primary bg-primary active:bg-primary' : 'border-line bg-white active:bg-surface'
             }`}>
             <Text className={`text-[15px] font-medium ${selected ? 'text-white' : 'text-ink'}`}>
               {option.label}

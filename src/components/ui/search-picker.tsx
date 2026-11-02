@@ -111,7 +111,7 @@ function PickerBody<T>({
       {error && items.length === 0 ? (
         <ErrorState error={error} onRetry={onRetry ?? (() => onQueryChange(query))} />
       ) : (
-        <FlatList
+        <FlatList bounces={false} overScrollMode="never"
           data={items}
           keyExtractor={keyOf}
           keyboardShouldPersistTaps="handled"

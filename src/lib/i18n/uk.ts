@@ -222,7 +222,7 @@ export const uk: Record<keyof typeof en, string> & Record<string, string> = {
   mark_unpaid: "Позначити несплаченим",
   payment_marked_paid: "Позначено сплаченим",
   payment_marked_unpaid: "Позначено несплаченим",
-  action_start: "Почати",
+  action_start: "Відправити в роботу",
   action_ready: "Замовлення готове",
   action_complete: "Видати замовлення",
   order_status_changed: "Статус: {status}",

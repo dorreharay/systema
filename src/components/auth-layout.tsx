@@ -182,7 +182,7 @@ export default function AuthLayout({
     <AuthLeaveContext value={leave}>
       <Animated.View className="flex-1" style={screenStyle}>
         {centered ? (
-          <ScrollView
+          <ScrollView bounces={false} overScrollMode="never"
             className="flex-1"
             contentContainerClassName="grow"
             keyboardDismissMode="on-drag"

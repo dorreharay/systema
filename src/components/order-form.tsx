@@ -606,7 +606,7 @@ export default function OrderForm({ initial, order, draftKey, saved }: OrderForm
                         accessibilityState={{ selected }}
                         onPress={() => toggleExtra(service.id, service.name, service.price)}
                         className={`min-h-10 flex-row items-center gap-1.5 rounded-lg border px-4 ${
-                          selected ? 'border-primary bg-primary' : 'border-line bg-white active:bg-surface'
+                          selected ? 'border-primary bg-primary active:bg-primary' : 'border-line bg-white active:bg-surface'
                         }`}>
                         {selected ? null : <Plus size={16} color={colors.ink} />}
                         <Text className={`text-[15px] font-medium ${selected ? 'text-white' : 'text-ink'}`}>

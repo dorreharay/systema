@@ -149,6 +149,8 @@ export function DetailScroll({ contentContainerStyle, ...props }: ScrollViewProp
   const top = useDetailHeaderHeight();
   return (
     <ScrollView
+      bounces={false}
+      overScrollMode="never"
       {...props}
       contentContainerStyle={[{ paddingTop: top + DETAIL_CONTENT_GAP }, contentContainerStyle]}
     />

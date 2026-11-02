@@ -102,7 +102,7 @@ export default function Catalog() {
       footer={<StackNavBar />}>
       <DetailHeader floating title={t('tab_catalog')} />
       {racketsTab ? (
-        <FlatList
+        <FlatList bounces={false} overScrollMode="never"
           key="rackets"
           contentContainerStyle={{ paddingTop: contentTop }}
           ListHeaderComponent={listHeader}
@@ -149,7 +149,7 @@ export default function Catalog() {
           }
         />
       ) : (
-        <FlatList
+        <FlatList bounces={false} overScrollMode="never"
           key="strings"
           contentContainerStyle={{ paddingTop: contentTop }}
           ListHeaderComponent={listHeader}

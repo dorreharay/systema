@@ -69,7 +69,7 @@ export default function Settings() {
   return (
     <Screen>
       <ScreenHeader title={t('tab_settings')} />
-      <ScrollView contentContainerClassName="gap-page px-page pb-10" showsVerticalScrollIndicator={false} scrollEnabled={false}>
+      <ScrollView bounces={false} overScrollMode="never" contentContainerClassName="gap-page px-page pb-10" showsVerticalScrollIndicator={false} scrollEnabled={false}>
         <ListGroup>
           <ListRow
             icon={Store}

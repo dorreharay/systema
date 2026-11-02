@@ -4,15 +4,12 @@ import {
   Copy,
   Mail,
   MoreHorizontal,
-  PackageCheck,
   Pencil,
   Phone,
-  Play,
   Repeat,
   Trash2,
   Undo2,
   UserRound,
-  type LucideIcon,
 } from 'lucide-react-native';
 import { useState, type ReactNode } from 'react';
 import { Pressable, View } from 'react-native';
@@ -24,7 +21,7 @@ import ReadyMessageSheet from '@/components/ready-message-sheet';
 import ActionSheet from '@/components/ui/action-sheet';
 import { Badge, StatusBadge } from '@/components/ui/badge';
 import Card from '@/components/ui/card';
-import { colors, statusButton } from '@/components/ui/colors';
+import { colors, statusColors } from '@/components/ui/colors';
 import { useConfirm } from '@/components/ui/confirm';
 import IconButton from '@/components/ui/icon-button';
 import { PhotoViewer, ServerPhoto } from '@/components/ui/photo';
@@ -54,14 +51,11 @@ import type { OrderStatus } from '@/lib/types';
 
 // What the main button does for each status: where the order goes next.
 const NEXT: Partial<
-  Record<
-    OrderStatus,
-    { status: OrderStatus; label: 'action_start' | 'action_ready' | 'action_complete'; icon: LucideIcon }
-  >
+  Record<OrderStatus, { status: OrderStatus; label: 'action_start' | 'action_ready' | 'action_complete' }>
 > = {
-  received: { status: 'in_progress', label: 'action_start', icon: Play },
-  in_progress: { status: 'ready', label: 'action_ready', icon: Check },
-  ready: { status: 'completed', label: 'action_complete', icon: PackageCheck },
+  received: { status: 'in_progress', label: 'action_start' },
+  in_progress: { status: 'ready', label: 'action_ready' },
+  ready: { status: 'completed', label: 'action_complete' },
 };
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
@@ -182,10 +176,9 @@ export default function OrderDetails() {
       dock={
         next ? (
           <Shortcut
-            icon={next.icon}
             label={t(next.label)}
-            color={statusButton[next.status].fill}
-            contentColor={statusButton[next.status].ink}
+            color={statusColors[next.status].fill}
+            contentColor="#000000"
             className="px-5 py-5 w-full"
             onPress={() => move(next.status)}
             loading={update.isPending && update.variables?.status === next.status}

@@ -132,7 +132,7 @@ function StringForm({ string, initialModel, onClose, onSaved }: Omit<StringFormS
                 accessibilityState={{ selected: type === option }}
                 onPress={() => setType(option)}
                 className={`min-h-10 justify-center rounded-lg border px-4 ${
-                  type === option ? 'border-primary bg-primary' : 'border-line bg-white active:bg-surface'
+                  type === option ? 'border-primary bg-primary active:bg-primary' : 'border-line bg-white active:bg-surface'
                 }`}>
                 <Text className={`text-[15px] font-medium ${type === option ? 'text-white' : 'text-ink'}`}>
                   {t(`string_type_${option}`)}

@@ -1,12 +1,6 @@
 import { Tabs, useRouter } from 'expo-router';
-import { useEffect, useRef, useState, type ComponentProps, type ComponentType } from 'react';
+import { useState, type ComponentProps, type ComponentType } from 'react';
 import { Pressable, View } from 'react-native';
-import Animated, {
-  Easing,
-  useAnimatedStyle,
-  useSharedValue,
-  withTiming,
-} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import HomeIcon from '@/components/icons/home-icon';
@@ -35,34 +29,18 @@ const BAR_HEIGHT = 60;
 const SPREAD = 1;
 // From the page above down to the top of the pill (it was 23.5, then 21, now ten percent less again).
 const GAP_ABOVE_PILL = 14;
-const MOVE_MS = 200;
 const ICON_SIZE = 27;
 // How far a tab reaches past its column to be pressed: up to the page, down into the room under the bar
 // (the first and the last also to the edge of the screen), so that a thumb need not aim at the icon.
 const HIT_ABOVE = 6;
 const HIT_SIDE = 12;
 
-/** A tab's icon: white, turning dark and a little larger as the light pill arrives under it. */
+/** A tab's icon: white, dark and a little larger on the light pill. It changes at once. */
 function TabIcon({ icon: Icon, focused }: { icon: NavIcon; focused: boolean }) {
-  const progress = useSharedValue(focused ? 1 : 0);
-
-  useEffect(() => {
-    progress.set(withTiming(focused ? 1 : 0, { duration: MOVE_MS }));
-  }, [focused, progress]);
-
-  const size = useAnimatedStyle(() => ({ transform: [{ scale: 1 + 0.1 * progress.get() }] }));
-  const light = useAnimatedStyle(() => ({ opacity: 1 - progress.get() }));
-  const dark = useAnimatedStyle(() => ({ opacity: progress.get() }));
-
   return (
-    <Animated.View style={[{ width: ICON_SIZE, height: ICON_SIZE }, size]}>
-      <Animated.View className="absolute inset-0" style={light}>
-        <Icon size={ICON_SIZE} color={colors.white} />
-      </Animated.View>
-      <Animated.View className="absolute inset-0" style={dark}>
-        <Icon size={ICON_SIZE} color={colors.chrome} />
-      </Animated.View>
-    </Animated.View>
+    <View style={{ width: ICON_SIZE, height: ICON_SIZE, transform: [{ scale: focused ? 1.1 : 1 }] }}>
+      <Icon size={ICON_SIZE} color={focused ? colors.chrome : colors.white} />
+    </View>
   );
 }
 
@@ -86,34 +64,14 @@ function NavBar({ places, activeKey, onPress }: NavBarProps) {
 
   const activeIndex = places.findIndex((place) => place.key === activeKey);
 
-  // The pill: where it is, and whether it shows (it does not on pages that are not in the bar).
+  // The pill: where it is, and whether it shows (it does not on pages that are not in the bar). It is put in place
+  // at once, not slid there.
   const [rowWidth, setRowWidth] = useState(0);
-  const x = useSharedValue(0);
-  const shown = useSharedValue(0);
-  const placed = useRef(false);
   const inset = (rowWidth * (1 - SPREAD)) / 2;
   const column = (rowWidth * SPREAD) / places.length;
   // On a narrow screen the pill gives way a little, so it always stays inside the bar.
   const pillWidth = Math.min(PILL_WIDTH, rowWidth / places.length - 4);
   const target = inset + Math.max(activeIndex, 0) * column + (column - pillWidth) / 2;
-
-  useEffect(() => {
-    if (column === 0) return;
-    if (!placed.current) {
-      // The first time it is put in place, not slid there.
-      placed.current = true;
-      x.set(target);
-      shown.set(activeIndex >= 0 ? 1 : 0);
-      return;
-    }
-    x.set(withTiming(target, { duration: MOVE_MS, easing: Easing.out(Easing.cubic) }));
-    shown.set(withTiming(activeIndex >= 0 ? 1 : 0, { duration: MOVE_MS }));
-  }, [column, target, activeIndex, x, shown]);
-
-  const pillStyle = useAnimatedStyle(() => ({
-    opacity: shown.get(),
-    transform: [{ translateX: x.get() }],
-  }));
 
   if (keyboardHeight > 0) {
     return null;
@@ -132,10 +90,17 @@ function NavBar({ places, activeKey, onPress }: NavBarProps) {
         className="flex-row items-center"
         style={{ height: BAR_HEIGHT, paddingHorizontal: inset }}
         onLayout={(event) => setRowWidth(event.nativeEvent.layout.width)}>
-        <Animated.View
+        <View
           pointerEvents="none"
-          className="absolute left-0 rounded-full bg-chrome-pill"
-          style={[{ width: pillWidth, height: PILL_HEIGHT, top: (BAR_HEIGHT - PILL_HEIGHT) / 2 }, pillStyle]}
+          className="absolute rounded-full bg-chrome-pill"
+          style={{
+            width: Math.max(pillWidth, 0),
+            height: PILL_HEIGHT,
+            top: (BAR_HEIGHT - PILL_HEIGHT) / 2,
+            left: target,
+            // Not before the bar has been measured, nor on a page that is not one of the places.
+            opacity: rowWidth > 0 && activeIndex >= 0 ? 1 : 0,
+          }}
         />
 
         {places.map((place, index) => {

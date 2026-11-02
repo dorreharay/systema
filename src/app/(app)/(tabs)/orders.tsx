@@ -1,7 +1,15 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ClipboardList, Plus, Search, X } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, Platform, RefreshControl, TextInput, View } from 'react-native';
+import {
+  ActivityIndicator,
+  FlatList,
+  LayoutAnimation,
+  Platform,
+  RefreshControl,
+  TextInput,
+  View,
+} from 'react-native';
 
 import OrderCard from '@/components/order-card';
 import { FilterChips } from '@/components/ui/chips';
@@ -22,6 +30,10 @@ const isFilter = (value: unknown): value is Filter =>
   value === 'all' || value === 'active' || ORDER_STATUSES.includes(value as OrderStatus);
 
 const SEARCH_DEBOUNCE_MS = 250;
+// The search field comes and goes at the head of the list: the cards slide to make room for it, not jump.
+const SEARCH_SLIDE_MS = 200;
+const slideList = () =>
+  LayoutAnimation.configureNext(LayoutAnimation.create(SEARCH_SLIDE_MS, 'easeInEaseOut', 'opacity'));
 
 export default function Orders() {
   const { t } = useI18n();
@@ -51,7 +63,13 @@ export default function Orders() {
 
   const pull = usePullRefresh(orders.refetch);
 
+  const openSearch = () => {
+    slideList();
+    setSearching(true);
+  };
+
   const closeSearch = () => {
+    slideList();
     setSearching(false);
     setText('');
     setQuery('');
@@ -126,12 +144,12 @@ export default function Orders() {
           <IconButton
             icon={searching ? X : Search}
             label={searching ? t('close_search') : t('search')}
-            onPress={searching ? closeSearch : () => setSearching(true)}
+            onPress={searching ? closeSearch : openSearch}
           />
         }
       />
 
-      <FlatList
+      <FlatList bounces={false} overScrollMode="never"
         {...underHeader}
         ListHeaderComponent={listHeader}
         data={items}

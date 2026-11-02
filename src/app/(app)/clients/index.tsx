@@ -54,7 +54,7 @@ export default function Clients() {
       }
       footer={<StackNavBar />}>
       <DetailHeader floating title={t('tab_clients')} />
-      <FlatList
+      <FlatList bounces={false} overScrollMode="never"
         // The search goes with the list when it is scrolled; the title stays at the top, and the list goes up behind it.
         contentContainerStyle={{ paddingTop: contentTop }}
         ListHeaderComponent={

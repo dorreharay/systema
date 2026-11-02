@@ -129,7 +129,7 @@ export function DateSheet({ visible, onClose, title, value, today, onChange, cle
               accessibilityRole="button"
               onPress={() => pick(preset.iso)}
               className={`min-h-10 justify-center rounded-lg border px-4 ${
-                value === preset.iso ? 'border-primary bg-primary' : 'border-line bg-white active:bg-surface'
+                value === preset.iso ? 'border-primary bg-primary active:bg-primary' : 'border-line bg-white active:bg-surface'
               }`}>
               <Text
                 className={`text-[15px] font-medium ${value === preset.iso ? 'text-white' : 'text-ink'}`}>
@@ -177,7 +177,7 @@ export function TimeSheet({ visible, onClose, value, onChange }: TimeSheetProps)
               accessibilityRole="button"
               onPress={() => pick(time)}
               className={`min-h-11 min-w-[22%] flex-1 items-center justify-center rounded-lg border ${
-                value === time ? 'border-primary bg-primary' : 'border-line bg-white active:bg-surface'
+                value === time ? 'border-primary bg-primary active:bg-primary' : 'border-line bg-white active:bg-surface'
               }`}>
               <Text className={`text-[15px] font-medium ${value === time ? 'text-white' : 'text-ink'}`}>
                 {time}
