@@ -101,7 +101,7 @@ function StringForm({ string, initialModel, onClose, onSaved }: Omit<StringFormS
           }}
           error={errors.brand}
           placeholder="Luxilon"
-          autoFocus
+          autoFocus={!string}
           autoCapitalize="words"
           returnKeyType="next"
           submitBehavior="submit"

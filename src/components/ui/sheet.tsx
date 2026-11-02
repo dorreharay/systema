@@ -29,6 +29,7 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { scheduleOnRN } from 'react-native-worklets';
 
+import { ConfirmProvider } from '@/components/ui/confirm';
 import IconButton from '@/components/ui/icon-button';
 import { Text } from '@/components/ui/text';
 import { useI18n } from '@/lib/i18n';
@@ -216,31 +217,35 @@ export default function Sheet({
 
   return (
     <Modal transparent visible animationType="none" onRequestClose={onClose}>
-      <View className="flex-1 justify-end">
-        {/* Anywhere outside the panel closes it. */}
-        <Animated.View className="absolute inset-0 bg-black/40" style={backdropStyle}>
-          <Pressable accessibilityLabel={t('close')} className="flex-1" onPress={onClose} />
-        </Animated.View>
-        <Animated.View style={[panelStyle, measuring && { opacity: 0 }]}>
-          <View className="overflow-hidden rounded-t-3xl bg-white" style={size}>
-            <View onLayout={(event) => setHeaderHeight(Math.round(event.nativeEvent.layout.height))}>
-              <View className="items-center pt-2.5">
-                <View className="h-1 w-10 rounded-full bg-neutral-300" />
-              </View>
-              {title ? (
-                <View className="flex-row items-center justify-between pb-1 pl-page pr-4 pt-4">
-                  <Text accessibilityRole="header" className="flex-1 text-[24px] font-semibold">
-                    {title}
-                  </Text>
-                  <IconButton icon={X} label={t('close')} onPress={onClose} round />
+      {/* A question asked from inside the sheet ("Delete this?") is shown inside it: iOS will not show a second
+          modal from the app over this one, but it does show one from the modal itself. */}
+      <ConfirmProvider>
+        <View className="flex-1 justify-end">
+          {/* Anywhere outside the panel closes it. */}
+          <Animated.View className="absolute inset-0 bg-black/40" style={backdropStyle}>
+            <Pressable accessibilityLabel={t('close')} className="flex-1" onPress={onClose} />
+          </Animated.View>
+          <Animated.View style={[panelStyle, measuring && { opacity: 0 }]}>
+            <View className="overflow-hidden rounded-t-3xl bg-white" style={size}>
+              <View onLayout={(event) => setHeaderHeight(Math.round(event.nativeEvent.layout.height))}>
+                <View className="items-center pt-2.5">
+                  <View className="h-1 w-10 rounded-full bg-neutral-300" />
                 </View>
-              ) : null}
+                {title ? (
+                  <View className="flex-row items-center justify-between pb-1 pl-page pr-4 pt-4">
+                    <Text accessibilityRole="header" className="flex-1 text-[24px] font-semibold">
+                      {title}
+                    </Text>
+                    <IconButton icon={X} label={t('close')} onPress={onClose} round />
+                  </View>
+                ) : null}
+              </View>
+              <View className={tall ? 'flex-1' : 'shrink'}>{content}</View>
+              <View style={{ height: Math.max(insets.bottom, 16) * 2 }} />
             </View>
-            <View className={tall ? 'flex-1' : 'shrink'}>{content}</View>
-            <View style={{ height: Math.max(insets.bottom, 16) * 2 }} />
-          </View>
-        </Animated.View>
-      </View>
+          </Animated.View>
+        </View>
+      </ConfirmProvider>
     </Modal>
   );
 }

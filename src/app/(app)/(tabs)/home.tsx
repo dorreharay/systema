@@ -36,20 +36,21 @@ function greetingKey(hour: number): TKey {
 
 type StatProps = { value: number | undefined; failed: boolean; label: string; onPress: () => void };
 
-// One third of the card of numbers: the card is one piece, so each of them presses on its own.
+// One third of the row of numbers: each of them presses on its own. The number and its name are in the middle of the
+// third, so that the dividers are the same distance from what stands on both sides of them.
 function Stat({ value, failed, label, onPress }: StatProps) {
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={`${label}: ${value ?? ''}`}
       onPress={onPress}
-      className="flex-1 gap-1 px-3 py-3 active:bg-surface">
+      className="flex-1 items-center gap-1 px-3 py-3 active:opacity-60">
       {value === undefined && !failed ? (
         <Skeleton className="my-1 h-7 w-10" />
       ) : (
         <Text className="text-[28.6px] font-semibold text-primary">{value ?? '—'}</Text>
       )}
-      <Text className="text-[13.2px] leading-4 text-muted" numberOfLines={2} maxFontSizeMultiplier={1.3}>
+      <Text className="text-center text-[13.2px] leading-4 text-muted" numberOfLines={2} maxFontSizeMultiplier={1.3}>
         {label}
       </Text>
     </Pressable>
@@ -120,7 +121,8 @@ export default function Home() {
         }>
 
         <View className="gap-page">
-          <View className="flex-row overflow-hidden rounded-2xl border border-line bg-white">
+          {/* Edge to edge: it takes back the margin of the page, and the three thirds are equal. */}
+          <View className="-mx-page flex-row">
             <Stat
               value={data?.active_orders}
               failed={dashboard.isError}

@@ -24,7 +24,7 @@ import AppSwitch from '@/components/ui/app-switch';
 import { Segmented } from '@/components/ui/chips';
 import { useConfirm } from '@/components/ui/confirm';
 import ListRow, { ListGroup } from '@/components/ui/list-row';
-import { Screen, ScreenHeader } from '@/components/ui/screen';
+import { Screen, ScreenHeader, TAB_HEADER_DROP } from '@/components/ui/screen';
 import { Text } from '@/components/ui/text';
 import { useToast } from '@/components/ui/toast';
 import { useAuth } from '@/lib/auth';
@@ -42,6 +42,8 @@ export default function Settings() {
   const toast = useToast();
   const confirm = useConfirm();
   const [sheet, setSheet] = useState<OpenSheet>(null);
+  const [pageHeight, setPageHeight] = useState(0);
+  const [contentHeight, setContentHeight] = useState(0);
 
   if (!user) return null;
 
@@ -68,8 +70,17 @@ export default function Settings() {
 
   return (
     <Screen>
-      <ScreenHeader title={t('tab_settings')} />
-      <ScrollView bounces={false} overScrollMode="never" contentContainerClassName="gap-page px-page pb-10" showsVerticalScrollIndicator={false} scrollEnabled={false}>
+      <ScreenHeader drop={TAB_HEADER_DROP} title={t('tab_settings')} />
+      <ScrollView
+        bounces={false}
+        overScrollMode="never"
+        contentContainerClassName="gap-page px-page pb-10"
+        showsVerticalScrollIndicator={false}
+        // It stands still when the list fits in the page, and scrolls when it does not (a small screen): the foot of
+        // it must be within reach.
+        scrollEnabled={contentHeight > pageHeight + 1}
+        onLayout={(event) => setPageHeight(event.nativeEvent.layout.height)}
+        onContentSizeChange={(_, height) => setContentHeight(height)}>
         <ListGroup>
           <ListRow
             icon={Store}
@@ -83,8 +94,9 @@ export default function Settings() {
             icon={Gauge}
             label={t('settings_tension_unit')}
             trailing={
-              <View className="w-28">
+              <View className="w-[86px]">
                 <Segmented<TensionUnit>
+                  compact
                   options={[
                     { value: 'kg', label: 'kg' },
                     { value: 'lbs', label: 'lbs' },
@@ -106,6 +118,7 @@ export default function Settings() {
             label={t('settings_notifications')}
             trailing={
               <AppSwitch
+                compact
                 accessibilityLabel={t('settings_notifications')}
                 value={user.notifications_enabled}
                 onValueChange={(enabled) => void changeReminders(enabled)}

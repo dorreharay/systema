@@ -18,6 +18,8 @@ const BackBlur = styled(BlurView);
 const HEADER_TOP_GAP = 6;
 const HEADER_ROW_HEIGHT = 56;
 const HEADER_ROW = 'flex-row items-center gap-4 pb-4';
+/** How much lower than the row of a detail header the title of a tab stands (the tabs' headers all have it). */
+export const TAB_HEADER_DROP = 16;
 
 type ScreenProps = {
   children: ReactNode;
@@ -79,8 +81,8 @@ type ScreenHeaderProps = {
   right?: ReactNode;
   // Stays at the top of the page while it is scrolled, on a blurred ground, as a floating `DetailHeader` does.
   floating?: boolean;
-  // How much lower than the usual place under the notch the title stands (a floating header only); the page then
-  // asks `useDetailContentTop` for the same.
+  // How much lower than the usual place under the notch the title stands; a floating header's page then asks
+  // `useDetailContentTop` for the same.
   drop?: number;
 };
 
@@ -111,7 +113,7 @@ export function ScreenHeader({ title, subtitle, right, floating, drop }: ScreenH
   }
 
   return (
-    <View className={`${HEADER_ROW} px-page`} style={{ height: HEADER_ROW_HEIGHT }}>
+    <View className={`${HEADER_ROW} px-page`} style={{ height: HEADER_ROW_HEIGHT, marginTop: drop }}>
       {content}
     </View>
   );

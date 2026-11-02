@@ -29,7 +29,8 @@ export function useDueText() {
 
 type OrderCardProps = { order: Order; onPress: () => void };
 
-// The customer and status on top, the racket, the strings and tension, and when it is due and what it costs.
+// The line above the name says where the order stands (the status, as a badge) and when it is due, red when it is late. Then who it is for and what it costs, and what is being strung; the numbers, the price
+// and the number to quote, are in a column on the right.
 export default function OrderCard({ order, onPress }: OrderCardProps) {
   const { user } = useAuth();
   const { t, language } = useI18n();
@@ -40,32 +41,19 @@ export default function OrderCard({ order, onPress }: OrderCardProps) {
   return (
     <Card
       onPress={onPress}
-      className="gap-2"
+      className="gap-1"
       accessibilityLabel={t('order_card_label', { number: order.number, client: order.client.name })}>
       <View className="flex-row items-center justify-between gap-3">
-        <Text className="flex-1 text-[18.7px] font-semibold" numberOfLines={1}>
-          {order.client.name}
-        </Text>
         <StatusBadge status={order.status} />
-      </View>
-      <Text className="text-[16.5px]" numberOfLines={1}>
-        {racketName(order.racket)}
-      </Text>
-      <Text className="text-[15.4px] text-muted" numberOfLines={2}>
-        {describeSetup(order, user?.tension_unit ?? 'kg', t)}
-      </Text>
-      <View className="mt-1 flex-row items-center justify-between gap-3">
-        {done ? (
-          <Text className="text-[14.3px] text-muted">{t('order_number', { number: order.number })}</Text>
-        ) : (
-          <View className="flex-1 flex-row items-center gap-1.5">
+        {done ? null : (
+          <View className="min-w-0 shrink flex-row items-center gap-1.5">
             {overdue ? (
               <TriangleAlert size={15} color={colors.danger} />
             ) : (
               <CalendarDays size={15} color={colors.muted} />
             )}
             <Text
-              className={`text-[15.4px] ${overdue ? 'font-semibold text-danger' : 'text-muted'}`}
+              className={`shrink text-[14.3px] ${overdue ? 'font-semibold text-danger' : 'text-muted'}`}
               numberOfLines={1}>
               {overdue
                 ? t('order_overdue_since', { date: dueText(order.due_date) })
@@ -75,10 +63,24 @@ export default function OrderCard({ order, onPress }: OrderCardProps) {
             </Text>
           </View>
         )}
+      </View>
+      <View className="mt-2 flex-row items-baseline justify-between gap-3">
+        <Text className="flex-1 text-[18.7px] font-semibold" numberOfLines={1}>
+          {order.client.name}
+        </Text>
         <Text className="text-[18.7px] font-semibold">
           {formatMoney(order.total, user?.currency ?? 'USD', language)}
         </Text>
       </View>
+      <View className="flex-row items-baseline justify-between gap-3">
+        <Text className="flex-1 text-[16.5px]" numberOfLines={1}>
+          {racketName(order.racket)}
+        </Text>
+        <Text className="text-[14.3px] text-muted">{t('order_number', { number: order.number })}</Text>
+      </View>
+      <Text className="text-[15.4px] text-muted" numberOfLines={2}>
+        {describeSetup(order, user?.tension_unit ?? 'kg', t)}
+      </Text>
     </Card>
   );
 }

@@ -194,60 +194,65 @@ export default function OrderDetails() {
       <DetailScroll
         contentContainerClassName="gap-4 p-page pb-28"
         showsVerticalScrollIndicator={false}>
-        <View className="flex-row flex-wrap items-center gap-2">
-          <StatusBadge status={order.status} />
-          <Badge
-            label={order.is_paid ? t('payment_paid') : t('payment_unpaid')}
-            tone={order.is_paid ? 'success' : 'warning'}
-          />
-          {overdue ? <Badge label={t('order_overdue')} tone="danger" /> : null}
-        </View>
+        {/* Where the order stands and whom it is for: one block. */}
+        <Card className="gap-4">
+          <View className="flex-row flex-wrap items-center gap-2">
+            <StatusBadge status={order.status} />
+            <Badge
+              label={order.is_paid ? t('payment_paid') : t('payment_unpaid')}
+              tone={order.is_paid ? 'success' : 'warning'}
+            />
+            {overdue ? <Badge label={t('order_overdue')} tone="danger" /> : null}
+          </View>
 
-        <StatusSteps status={order.status} />
+          <StatusSteps status={order.status} />
 
-        <Card className="gap-3">
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => router.push({ pathname: '/clients/[id]', params: { id: order.client.id } })}
-            className="flex-row items-center gap-3 active:opacity-60">
-            <View className="size-11 items-center justify-center rounded-full bg-primary-soft">
-              <UserRound size={22} color={colors.primary} />
-            </View>
-            <View className="flex-1">
-              <Text className="text-[18.7px] font-semibold" numberOfLines={1}>
-                {order.client.name}
-              </Text>
-              <Text className="text-[15.4px] text-muted" numberOfLines={1}>
-                {order.client.phone ?? order.client.email ?? t('no_contact_details')}
-              </Text>
-            </View>
-          </Pressable>
-          {hasContact ? (
-            <View className="flex-row flex-wrap gap-2">
-              {order.client.phone ? (
-                <Shortcut
-                  compact
-                  className="min-w-[46%] flex-1"
-                  icon={Phone}
-                  label={t('call')}
-                  color={colors.primarySoft}
-                  contentColor={colors.ink}
-                  onPress={() => void callPhone(order.client.phone!)}
-                />
-              ) : null}
-              {!order.client.phone && order.client.email ? (
-                <Shortcut
-                  compact
-                  className="min-w-[46%] flex-1"
-                  icon={Mail}
-                  label={t('field_email')}
-                  color={colors.primarySoft}
-                  contentColor={colors.ink}
-                  onPress={() => void emailTo(order.client.email!)}
-                />
-              ) : null}
-            </View>
-          ) : null}
+          <View className="h-px bg-line" />
+
+          <View className="gap-3">
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => router.push({ pathname: '/clients/[id]', params: { id: order.client.id } })}
+              className="flex-row items-center gap-3 active:opacity-60">
+              <View className="size-11 items-center justify-center rounded-full bg-primary-soft">
+                <UserRound size={22} color={colors.primary} />
+              </View>
+              <View className="flex-1">
+                <Text className="text-[18.7px] font-semibold" numberOfLines={1}>
+                  {order.client.name}
+                </Text>
+                <Text className="text-[15.4px] text-muted" numberOfLines={1}>
+                  {order.client.phone ?? order.client.email ?? t('no_contact_details')}
+                </Text>
+              </View>
+            </Pressable>
+            {hasContact ? (
+              <View className="flex-row flex-wrap gap-2">
+                {order.client.phone ? (
+                  <Shortcut
+                    compact
+                    className="min-w-[46%] flex-1"
+                    icon={Phone}
+                    label={t('call')}
+                    color={colors.primarySoft}
+                    contentColor={colors.ink}
+                    onPress={() => void callPhone(order.client.phone!)}
+                  />
+                ) : null}
+                {!order.client.phone && order.client.email ? (
+                  <Shortcut
+                    compact
+                    className="min-w-[46%] flex-1"
+                    icon={Mail}
+                    label={t('field_email')}
+                    color={colors.primarySoft}
+                    contentColor={colors.ink}
+                    onPress={() => void emailTo(order.client.email!)}
+                  />
+                ) : null}
+              </View>
+            ) : null}
+          </View>
         </Card>
 
         <Section title={t('section_racket_setup')}>

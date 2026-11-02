@@ -19,11 +19,11 @@ export default function ListRow({ icon: Icon, label, value, onPress, destructive
   const content = (
     <>
       {Icon ? <Icon size={22} color={destructive ? colors.danger : colors.primary} /> : null}
-      <Text className={`flex-1 text-base ${destructive ? 'font-medium text-danger' : ''}`} numberOfLines={1}>
+      <Text className={`flex-1 text-[16.3px] ${destructive ? 'font-medium text-danger' : ''}`} numberOfLines={1}>
         {label}
       </Text>
       {value ? (
-        <Text className="max-w-[45%] text-[16.5px] text-muted" numberOfLines={1}>
+        <Text className="max-w-[45%] text-[15.4px] text-muted" numberOfLines={1}>
           {value}
         </Text>
       ) : null}
@@ -33,7 +33,7 @@ export default function ListRow({ icon: Icon, label, value, onPress, destructive
       {onPress && !destructive ? <ChevronRight size={18} color={colors.muted} /> : null}
     </>
   );
-  const classes = 'min-h-14 flex-row items-center gap-3 px-4';
+  const classes = 'min-h-[59px] flex-row items-center gap-[11px] px-4';
   if (!onPress) {
     return <View className={classes}>{content}</View>;
   }

@@ -23,7 +23,7 @@ export default function StatusSteps({ status }: { status: OrderStatus }) {
     <View
       accessible
       accessibilityLabel={t('order_status_label', { status: t(`status_${status}`) })}
-      className="flex-row py-4">
+      className="flex-row">
       {ORDER_STATUSES.map((step, index) => {
         const done = index < current || finished;
         const here = index === current && !finished;

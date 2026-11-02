@@ -14,7 +14,7 @@ import {
 import OrderCard from '@/components/order-card';
 import { colors } from '@/components/ui/colors';
 import IconButton from '@/components/ui/icon-button';
-import { Screen, ScreenHeader, useDetailContentTop } from '@/components/ui/screen';
+import { Screen, ScreenHeader, TAB_HEADER_DROP, useDetailContentTop } from '@/components/ui/screen';
 import Shortcut from '@/components/ui/shortcut';
 import { ListSkeleton } from '@/components/ui/skeleton';
 import { EmptyState, ErrorState, NoResults } from '@/components/ui/states';
@@ -23,8 +23,6 @@ import { useOrders } from '@/lib/queries';
 import { usePullRefresh } from '@/lib/use-pull-refresh';
 
 const SEARCH_DEBOUNCE_MS = 250;
-// The title of the page stands this much lower than the usual place of a page title, under the notch.
-const HEADER_DROP = 16;
 // The search field comes and goes at the head of the list: the cards slide to make room for it, not jump.
 const SEARCH_SLIDE_MS = 200;
 const slideList = () =>
@@ -44,7 +42,7 @@ export default function Orders() {
 
   const orders = useOrders({ q: query });
   const items = orders.data?.pages.flatMap((page) => page.items) ?? [];
-  const contentTop = useDetailContentTop(HEADER_DROP);
+  const contentTop = useDetailContentTop(TAB_HEADER_DROP);
 
   const pull = usePullRefresh(orders.refetch);
 
@@ -115,7 +113,7 @@ export default function Orders() {
     >
       <ScreenHeader
         floating
-        drop={HEADER_DROP}
+        drop={TAB_HEADER_DROP}
         title={t('tab_orders')}
         right={
           <IconButton
