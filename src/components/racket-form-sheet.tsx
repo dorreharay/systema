@@ -150,7 +150,7 @@ function RacketForm({ racket, owner: knownOwner, onClose, onSaved }: Omit<Racket
         renderItem={(client) => (
           <>
             <Text className="text-base font-medium">{client.name}</Text>
-            {client.phone ? <Text className="text-[13px] text-muted">{client.phone}</Text> : null}
+            {client.phone ? <Text className="text-[14.3px] text-muted">{client.phone}</Text> : null}
           </>
         )}
         onSelect={(client) => {

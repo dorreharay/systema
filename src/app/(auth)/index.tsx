@@ -2,7 +2,8 @@ import { Pressable, Text, View } from 'react-native';
 
 import AuthLayout from '@/components/auth-layout';
 import AuthLink from '@/components/auth-link';
-import Button from '@/components/button';
+import { colors } from '@/components/ui/colors';
+import Shortcut from '@/components/ui/shortcut';
 import { LANGUAGES, useI18n } from '@/lib/i18n';
 
 // The first screen when signed out: what the app is for, and the two ways in.
@@ -33,10 +34,10 @@ export default function Welcome() {
       }>
       <View className="gap-3">
         <AuthLink href="/register" prefetch asChild>
-          <Button title={t('get_started')} />
+          <Shortcut label={t('get_started')} color={colors.white} contentColor={colors.primary} />
         </AuthLink>
         <AuthLink href="/login" prefetch asChild>
-          <Button variant="outline" title={t('sign_in')} />
+          <Shortcut label={t('sign_in')} color="rgba(255, 255, 255, 0.14)" contentColor={colors.white} />
         </AuthLink>
       </View>
     </AuthLayout>

@@ -5,9 +5,10 @@ import { View } from 'react-native';
 import AuthLayout from '@/components/auth-layout';
 import { useAuthRouter } from '@/components/auth-leave';
 import AuthSwitch from '@/components/auth-switch';
-import Button from '@/components/button';
 import FormMessage from '@/components/form-message';
 import TextField, { type TextFieldRef } from '@/components/text-field';
+import { colors } from '@/components/ui/colors';
+import Shortcut from '@/components/ui/shortcut';
 import { useAuth } from '@/lib/auth';
 import { describeError } from '@/lib/errors';
 import { useI18n } from '@/lib/i18n';
@@ -99,7 +100,7 @@ function ResetPasswordForm() {
       />
       {formError ? <FormMessage message={formError} /> : null}
       <View className="pt-4">
-        <Button title={t('change_password')} onPress={submit} loading={submitting} />
+        <Shortcut label={t('change_password')} color={colors.white} contentColor={colors.primary} onPress={submit} loading={submitting} />
       </View>
     </View>
   );

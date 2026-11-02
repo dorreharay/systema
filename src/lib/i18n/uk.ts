@@ -3,7 +3,7 @@ import type { en } from './en';
 // Every key of the English dictionary must have a translation here; the type makes the compiler check.
 export const uk: Record<keyof typeof en, string> & Record<string, string> = {
   tab_home: "Головна",
-  tab_orders: "Замовлення",
+  tab_orders: "Список замовлень",
   tab_clients: "Клієнти",
   tab_catalog: "Каталог",
   tab_settings: "Налаштування",

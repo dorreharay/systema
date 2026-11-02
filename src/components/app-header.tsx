@@ -19,10 +19,10 @@ const TITLE = 're:string';
 // The title is typed out once per launch, signed in or not. If the header is mounted again it is already docked.
 let introPlayed = false;
 export const HEADER_HEIGHT = 104;
-// Inside the app only the home page has the logo in its header; the header of the other pages is empty, and half as tall.
-export const COMPACT_HEADER_HEIGHT = HEADER_HEIGHT / 2;
 const HOME_PATH = '/home';
 const HEADER_FONT_SIZE = 24;
+// How far above the middle of the header the logo sits once it has docked.
+const LOGO_RAISE = 14;
 const INTRO_TEXT_COLOR = '#ffffff';
 const HEADER_TEXT_COLOR = '#000000';
 
@@ -49,7 +49,7 @@ export default function AppHeader() {
 
   const introFontSize = Math.min(72, width * 0.14);
   const targetScale = HEADER_FONT_SIZE / introFontSize;
-  const targetY = insets.top + HEADER_HEIGHT / 2 - height / 2;
+  const targetY = insets.top + HEADER_HEIGHT / 2 - LOGO_RAISE - height / 2;
   const headerTextColor = status === 'signedIn' ? HEADER_TEXT_COLOR : INTRO_TEXT_COLOR;
 
   useEffect(() => {

@@ -4,8 +4,9 @@ import { Pressable, Text, View } from 'react-native';
 
 import AuthLayout from '@/components/auth-layout';
 import AuthLink from '@/components/auth-link';
-import Button from '@/components/button';
 import FormMessage from '@/components/form-message';
+import { colors } from '@/components/ui/colors';
+import Shortcut from '@/components/ui/shortcut';
 import { useAuth } from '@/lib/auth';
 import { describeError } from '@/lib/errors';
 import { useI18n } from '@/lib/i18n';
@@ -36,7 +37,7 @@ function ResendRow({ email }: { email?: string }) {
   return (
     <View className="items-center">
       <View className="min-h-12 flex-row items-center justify-center">
-        <Text className="font-normal text-white/80">
+        <Text className="text-[15.4px] font-normal text-white/80">
           {resent ? t('resend_done') : t('resend_question')}
         </Text>
         {resent || !email ? null : (
@@ -46,7 +47,7 @@ function ResendRow({ email }: { email?: string }) {
             disabled={sending}
             className="min-h-12 justify-center px-2.5 active:opacity-70"
             onPress={resend}>
-            <Text className="font-medium text-white">
+            <Text className="text-[15.4px] font-medium text-white">
               {sending ? t('resend_sending') : t('resend_action')}
             </Text>
           </Pressable>
@@ -69,7 +70,7 @@ export default function CheckEmail() {
       centered
       footer={<ResendRow email={email} />}>
       <AuthLink href="/login" dismissTo asChild>
-        <Button title={t('back_to_sign_in')} />
+        <Shortcut label={t('back_to_sign_in')} color={colors.white} contentColor={colors.primary} />
       </AuthLink>
     </AuthLayout>
   );

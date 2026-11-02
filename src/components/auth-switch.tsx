@@ -16,13 +16,13 @@ type AuthSwitchProps = {
 export default function AuthSwitch({ question, action, href, replace, dismissTo }: AuthSwitchProps) {
   return (
     <View className="flex-row items-center justify-center">
-      <Text className="font-normal text-white/80">{question}</Text>
+      <Text className="text-[15.4px] font-normal text-white/80">{question}</Text>
       <AuthLink href={href} replace={replace} dismissTo={dismissTo} prefetch asChild>
         <Pressable
           accessibilityRole="link"
           hitSlop={8}
           className="min-h-12 justify-center px-2.5 active:opacity-70">
-          <Text className="font-medium text-white">{action}</Text>
+          <Text className="text-[15.4px] font-medium text-white">{action}</Text>
         </Pressable>
       </AuthLink>
     </View>

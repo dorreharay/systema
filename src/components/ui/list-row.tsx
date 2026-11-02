@@ -23,7 +23,7 @@ export default function ListRow({ icon: Icon, label, value, onPress, destructive
         {label}
       </Text>
       {value ? (
-        <Text className="max-w-[45%] text-[15px] text-muted" numberOfLines={1}>
+        <Text className="max-w-[45%] text-[16.5px] text-muted" numberOfLines={1}>
           {value}
         </Text>
       ) : null}

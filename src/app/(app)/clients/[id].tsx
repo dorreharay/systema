@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Mail, MessageSquare, MoreHorizontal, Pencil, Phone, Plus, Trash2 } from 'lucide-react-native';
+import { Mail, MessageSquare, MoreHorizontal, Pencil, Phone, Trash2 } from 'lucide-react-native';
 import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -8,7 +8,7 @@ import ClientFormSheet from '@/components/client-form-sheet';
 import OrderCard from '@/components/order-card';
 import RacketFormSheet from '@/components/racket-form-sheet';
 import ActionSheet from '@/components/ui/action-sheet';
-import AppButton from '@/components/ui/app-button';
+import PlusIcon from '@/components/icons/plus-icon';
 import Avatar from '@/components/ui/avatar';
 import Card from '@/components/ui/card';
 import { colors } from '@/components/ui/colors';
@@ -16,6 +16,7 @@ import { useConfirm } from '@/components/ui/confirm';
 import IconButton from '@/components/ui/icon-button';
 import Section from '@/components/ui/section';
 import { DetailHeader, DetailScroll, Screen } from '@/components/ui/screen';
+import Shortcut from '@/components/ui/shortcut';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ErrorState } from '@/components/ui/states';
 import { Text } from '@/components/ui/text';
@@ -75,7 +76,19 @@ export default function ClientDetails() {
   };
 
   return (
-    <Screen flush>
+    <Screen
+      flush
+      dock={
+        <Shortcut
+          icon={PlusIcon}
+          label={t('new_order')}
+          color={colors.newOrder}
+          contentColor={colors.ink}
+          className="px-5 py-5 w-full"
+          onPress={() => router.push({ pathname: '/orders/new', params: { clientId: client.id } })}
+        />
+      }
+      footer={<View style={{ height: Math.max(insets.bottom, 12) + 24 }} />}>
       <DetailHeader
         floating
         title={client.name}
@@ -85,66 +98,75 @@ export default function ClientDetails() {
               accessibilityRole="button"
               onPress={() => setEditing(true)}
               className="min-h-11 justify-center px-3 active:opacity-60">
-              <Text className="text-base font-semibold text-primary">{t('edit')}</Text>
+              <Text className="text-[14px] font-semibold text-primary">{t('edit')}</Text>
             </Pressable>
             <IconButton icon={MoreHorizontal} label={t('more_actions')} onPress={() => setMenu(true)} />
           </>
         }
       />
-      <DetailScroll contentContainerClassName="gap-page p-page pb-8" showsVerticalScrollIndicator={false}>
+      <DetailScroll contentContainerClassName="gap-page p-page pb-28" showsVerticalScrollIndicator={false}>
         <Card className="gap-3">
           <View className="flex-row items-center gap-3">
             <Avatar name={client.name} size={52} />
             <View className="flex-1 gap-0.5">
-              <Text className="text-[19px] font-semibold" numberOfLines={2}>
+              <Text className="text-[20.9px] font-semibold" numberOfLines={2}>
                 {client.name}
               </Text>
-              {client.phone ? <Text className="text-[15px] text-muted">{client.phone}</Text> : null}
-              {client.email ? <Text className="text-[15px] text-muted">{client.email}</Text> : null}
+              {client.phone ? <Text className="text-[16.5px] text-muted">{client.phone}</Text> : null}
+              {client.email ? <Text className="text-[16.5px] text-muted">{client.email}</Text> : null}
             </View>
           </View>
           {client.phone || client.email ? (
-            <View className="flex-row gap-2">
+            <View className="flex-row flex-wrap gap-2">
               {client.phone ? (
-                <AppButton
-                  className="flex-1"
-                  title={t('call')}
-                  variant="secondary"
-                  icon={<Phone size={18} color={colors.ink} />}
+                <Shortcut
+                  compact
+                  className="min-w-[46%] flex-1"
+                  icon={Phone}
+                  label={t('call')}
+                  color={colors.primarySoft}
+                  contentColor={colors.ink}
                   onPress={() => void callPhone(client.phone!)}
                 />
               ) : null}
               {client.phone ? (
-                <AppButton
-                  className="flex-1"
-                  title={t('message')}
-                  variant="secondary"
-                  icon={<MessageSquare size={18} color={colors.ink} />}
+                <Shortcut
+                  compact
+                  className="min-w-[46%] flex-1"
+                  icon={MessageSquare}
+                  label={t('message')}
+                  color={colors.primarySoft}
+                  contentColor={colors.ink}
                   onPress={() => void textPhone(client.phone!)}
                 />
               ) : null}
               {client.email ? (
-                <AppButton
-                  className="flex-1"
-                  title={t('field_email')}
-                  variant="secondary"
-                  icon={<Mail size={18} color={colors.ink} />}
+                <Shortcut
+                  compact
+                  className="min-w-[46%] flex-1"
+                  icon={Mail}
+                  label={t('field_email')}
+                  color={colors.primarySoft}
+                  contentColor={colors.ink}
                   onPress={() => void emailTo(client.email!)}
                 />
               ) : null}
             </View>
           ) : null}
-          {client.notes ? <Text className="text-[15px] text-muted">{client.notes}</Text> : null}
+          {client.notes ? <Text className="text-[16.5px] text-muted">{client.notes}</Text> : null}
         </Card>
 
         <Section title={t('section_rackets')} actionLabel={t('add')} onAction={() => setAddingRacket(true)}>
           {client.rackets.length === 0 ? (
             <Card className="items-center gap-3 py-6">
-              <Text className="text-center text-[15px] text-muted">{t('client_no_rackets')}</Text>
-              <AppButton
-                title={t('add_racket')}
-                variant="soft"
-                icon={<Plus size={18} color={colors.primary} />}
+              <Text className="text-center text-[16.5px] text-muted">{t('client_no_rackets')}</Text>
+              <Shortcut
+                compact
+                className="self-stretch"
+                icon={PlusIcon}
+                label={t('add_racket')}
+                color={colors.catalog}
+                contentColor={colors.ink}
                 onPress={() => setAddingRacket(true)}
               />
             </Card>
@@ -156,7 +178,7 @@ export default function ClientDetails() {
                   onPress={() => router.push({ pathname: '/rackets/[id]', params: { id: racket.id } })}
                   className="gap-0.5">
                   <Text className="text-base font-semibold">{racketName(racket)}</Text>
-                  <Text className="text-[13px] text-muted">
+                  <Text className="text-[14.3px] text-muted">
                     {t('orders_count', { count: racket.orders_count })}
                   </Text>
                 </Card>
@@ -168,7 +190,7 @@ export default function ClientDetails() {
         <Section title={t('section_order_history')}>
           {client.orders.length === 0 ? (
             <Card>
-              <Text className="text-center text-[15px] text-muted">{t('client_no_orders_yet')}</Text>
+              <Text className="text-center text-[16.5px] text-muted">{t('client_no_orders_yet')}</Text>
             </Card>
           ) : (
             <View className="gap-3">
@@ -184,16 +206,6 @@ export default function ClientDetails() {
         </Section>
       </DetailScroll>
 
-      <View
-        className="border-t border-line bg-white px-page pt-3"
-        style={{ paddingBottom: Math.max(insets.bottom, 12) }}>
-        <AppButton
-          large
-          title={t('new_order')}
-          icon={<Plus size={20} color={colors.white} />}
-          onPress={() => router.push({ pathname: '/orders/new', params: { clientId: client.id } })}
-        />
-      </View>
 
       <ClientFormSheet visible={editing} onClose={() => setEditing(false)} client={client} />
       <RacketFormSheet

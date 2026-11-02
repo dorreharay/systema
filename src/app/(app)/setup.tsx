@@ -1,15 +1,17 @@
 import { useRouter } from 'expo-router';
+import { ArrowRight } from 'lucide-react-native';
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { TimeZoneSheet } from '@/components/settings-sheets';
-import AppButton from '@/components/ui/app-button';
 import { Segmented } from '@/components/ui/chips';
+import { colors } from '@/components/ui/colors';
 import { FormError, Input } from '@/components/ui/input';
 import PickerField from '@/components/ui/picker-field';
 import SearchPicker from '@/components/ui/search-picker';
 import { Screen } from '@/components/ui/screen';
+import Shortcut from '@/components/ui/shortcut';
 import { Text } from '@/components/ui/text';
 import { useAuth } from '@/lib/auth';
 import { CURRENCIES, deviceTimeZone, timeZoneLabel } from '@/lib/choices';
@@ -104,7 +106,7 @@ export default function Setup() {
               onPress={() => setChoosing('currency')}
             />
             <View className="gap-1.5">
-              <Text className="text-[13px] font-medium text-muted">{t('settings_tension_unit')}</Text>
+              <Text className="text-[14.3px] font-medium text-muted">{t('settings_tension_unit')}</Text>
               <Segmented<TensionUnit>
                 options={[
                   { value: 'kg', label: 'kg' },
@@ -122,14 +124,21 @@ export default function Setup() {
               onPress={() => setChoosing('zone')}
             />
           </View>
-          <Text className="px-1 text-[13px] text-muted">{t('setup_hint')}</Text>
+          <Text className="px-1 text-[14.3px] text-muted">{t('setup_hint')}</Text>
           {formError ? <FormError message={formError} /> : null}
         </ScrollView>
 
         <View
           className="border-t border-line bg-white px-page pt-3"
           style={{ paddingBottom: Math.max(insets.bottom, 12) }}>
-          <AppButton large title={t('continue')} onPress={save} loading={saving} />
+          <Shortcut
+            icon={ArrowRight}
+            label={t('continue')}
+            color={colors.newOrder}
+            contentColor={colors.ink}
+            onPress={save}
+            loading={saving}
+          />
         </View>
       </KeyboardAvoidingView>
 

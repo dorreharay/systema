@@ -99,7 +99,7 @@ function PickerBody<T>({
           <View className="size-9 items-center justify-center rounded-full bg-primary-soft">
             <Plus size={18} color={colors.primary} />
           </View>
-          <Text className="flex-1 text-base font-medium text-primary" numberOfLines={2}>
+          <Text className="flex-1 text-[14px] font-medium text-primary" numberOfLines={2}>
             {createLabel ? createLabel(trimmed) : t('create_new')}
           </Text>
         </Pressable>
@@ -123,7 +123,7 @@ function PickerBody<T>({
             ) : trimmed || !emptyHint ? (
               <NoResults query={trimmed} />
             ) : (
-              <Text className="px-page py-10 text-center text-[15px] text-muted">{emptyHint}</Text>
+              <Text className="px-page py-10 text-center text-[16.5px] text-muted">{emptyHint}</Text>
             )
           }
           renderItem={({ item }) => (

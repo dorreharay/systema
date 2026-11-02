@@ -21,6 +21,7 @@ import { formatMoney, racketName } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import { stringLabel } from '@/lib/order-draft';
 import { useRackets, useStrings } from '@/lib/queries';
+import { usePullRefresh } from '@/lib/use-pull-refresh';
 import type { CatalogString } from '@/lib/types';
 
 type Tab = 'rackets' | 'strings';
@@ -37,6 +38,8 @@ export default function Catalog() {
   const [editingString, setEditingString] = useState<CatalogString | 'new' | null>(null);
   const rackets = useRackets({ q: tab === 'rackets' ? query : '' });
   const strings = useStrings(tab === 'strings' ? query : '');
+  const racketsPull = usePullRefresh(rackets.refetch);
+  const stringsPull = usePullRefresh(strings.refetch);
 
   useEffect(() => {
     const timer = setTimeout(() => setQuery(text), SEARCH_DEBOUNCE_MS);
@@ -105,13 +108,12 @@ export default function Catalog() {
           ListHeaderComponent={listHeader}
           data={rackets.data ?? []}
           keyExtractor={(racket) => racket.id}
-          contentContainerClassName="gap-3 px-page pb-page"
+          contentContainerClassName="gap-3 px-page pb-28"
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           refreshControl={
             <RefreshControl
-              refreshing={rackets.isRefetching && !rackets.isLoading}
-              onRefresh={() => void rackets.refetch()}
+              {...racketsPull}
               tintColor={colors.primary}
             />
           }
@@ -122,10 +124,10 @@ export default function Catalog() {
               <Text className="text-base font-semibold" numberOfLines={1}>
                 {racketName(item)}
               </Text>
-              <Text className="text-[14px] text-muted" numberOfLines={1}>
+              <Text className="text-[15.4px] text-muted" numberOfLines={1}>
                 {item.client_name}
               </Text>
-              <Text className="text-[13px] text-muted">{t('orders_count', { count: item.orders_count })}</Text>
+              <Text className="text-[14.3px] text-muted">{t('orders_count', { count: item.orders_count })}</Text>
             </Card>
           )}
           ListEmptyComponent={
@@ -153,13 +155,12 @@ export default function Catalog() {
           ListHeaderComponent={listHeader}
           data={strings.data ?? []}
           keyExtractor={(string) => string.id}
-          contentContainerClassName="gap-3 px-page pb-page"
+          contentContainerClassName="gap-3 px-page pb-28"
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           refreshControl={
             <RefreshControl
-              refreshing={strings.isRefetching && !strings.isLoading}
-              onRefresh={() => void strings.refetch()}
+              {...stringsPull}
               tintColor={colors.primary}
             />
           }

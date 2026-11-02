@@ -28,10 +28,11 @@ export default function AppLayout() {
         {/* Dark behind the tabs: it shows around the rounded corners of the page and under the navigation. */}
         <Stack.Screen name="(tabs)" options={{ contentStyle: { backgroundColor: colors.chrome } }} />
         {/* Opened from the home screen, with no navigation: they come in from the side, as the platform
-            does it, so that a swipe from the edge takes them away again. (A fade has no swipe back.) */}
+            does it, so that a swipe from the edge takes them away again. (A fade has no swipe back.) A new
+            order is the same: what is not finished is kept as a draft, so leaving it loses nothing. */}
         <Stack.Screen name="clients/index" options={{ animation: 'default', gestureEnabled: true }} />
         <Stack.Screen name="catalog" options={{ animation: 'default', gestureEnabled: true }} />
-        <Stack.Screen name="orders/new" />
+        <Stack.Screen name="orders/new" options={{ animation: 'default', gestureEnabled: true }} />
         <Stack.Screen name="orders/[id]/index" />
         <Stack.Screen name="orders/[id]/edit" />
         <Stack.Screen name="clients/[id]" />

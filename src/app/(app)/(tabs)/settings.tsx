@@ -113,14 +113,14 @@ export default function Settings() {
             }
           />
         </ListGroup>
-        <Text className="-mt-3 px-1 text-[13px] text-muted">{t('settings_notifications_hint')}</Text>
+        <Text className="-mt-3 px-1 text-[14.3px] text-muted">{t('settings_notifications_hint')}</Text>
 
         <ListGroup>
           <ListRow icon={ShieldCheck} label={t('settings_account')} onPress={() => setSheet('account')} />
           <ListRow icon={LogOut} label={t('sign_out')} destructive onPress={() => void askSignOut()} />
         </ListGroup>
 
-        <Text className="text-center text-[13px] text-muted">
+        <Text className="text-center text-[14.3px] text-muted">
           re:string {Constants.expoConfig?.version ?? ''}
         </Text>
       </ScrollView>

@@ -29,7 +29,7 @@ export default function ReadyMessageSheet({ visible, onClose, message, phone }: 
   return (
     <Sheet visible={visible} onClose={onClose} title={t('ready_sheet_title')}>
       <View className="gap-4 pt-2">
-        <Text className="text-[15px] text-muted">{t('ready_sheet_hint')}</Text>
+        <Text className="text-[16.5px] text-muted">{t('ready_sheet_hint')}</Text>
         <View className="rounded-xl bg-surface p-4">
           <Text selectable className="text-base">
             {message}

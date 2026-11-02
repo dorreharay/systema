@@ -29,7 +29,7 @@ export default function PickerField({
 }: PickerFieldProps) {
   return (
     <View className={`gap-1.5 ${className}`}>
-      {label ? <Text className="text-[13px] font-medium text-muted">{label}</Text> : null}
+      {label ? <Text className="text-[14.3px] font-medium text-muted">{label}</Text> : null}
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={label ? `${label}: ${value ?? placeholder}` : (value ?? placeholder)}

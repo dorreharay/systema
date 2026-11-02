@@ -1,18 +1,19 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ClipboardList, Plus, Search, X } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, RefreshControl, TextInput, View } from 'react-native';
+import { ActivityIndicator, FlatList, Platform, RefreshControl, TextInput, View } from 'react-native';
 
 import OrderCard from '@/components/order-card';
 import { FilterChips } from '@/components/ui/chips';
 import { colors } from '@/components/ui/colors';
 import IconButton from '@/components/ui/icon-button';
-import { Screen, ScreenHeader } from '@/components/ui/screen';
+import { Screen, ScreenHeader, useDetailContentTop } from '@/components/ui/screen';
 import Shortcut from '@/components/ui/shortcut';
 import { ListSkeleton } from '@/components/ui/skeleton';
 import { EmptyState, ErrorState, NoResults } from '@/components/ui/states';
 import { useI18n } from '@/lib/i18n';
 import { useOrders } from '@/lib/queries';
+import { usePullRefresh } from '@/lib/use-pull-refresh';
 import { ORDER_STATUSES, type OrderStatus } from '@/lib/types';
 
 type Filter = 'all' | 'active' | OrderStatus;
@@ -46,6 +47,9 @@ export default function Orders() {
 
   const orders = useOrders({ status: filter === 'all' ? undefined : filter, q: query });
   const items = orders.data?.pages.flatMap((page) => page.items) ?? [];
+  const contentTop = useDetailContentTop();
+
+  const pull = usePullRefresh(orders.refetch);
 
   const closeSearch = () => {
     setSearching(false);
@@ -59,34 +63,21 @@ export default function Orders() {
     ...ORDER_STATUSES.map((status) => ({ value: status, label: t(`status_${status}`) })),
   ];
 
-  return (
-    <Screen
-      dock={
-        <View className="flex-row w-full gap-1">
-          <Shortcut
-            icon={Plus}
-            label={t('new_order')}
-            color={colors.newOrder}
-            contentColor="#000000"
-            className="px-5 py-5 w-full"
-            onPress={() => router.push('/orders/new')}
-          />
-        </View>
-      }
-    >
-      <ScreenHeader
-        title={t('tab_orders')}
-        right={
-          <IconButton
-            icon={searching ? X : Search}
-            label={searching ? t('close_search') : t('search')}
-            onPress={searching ? closeSearch : () => setSearching(true)}
-          />
+  // The list goes up under the floating header. On iOS the room is an inset, so that the pull to refresh opens
+  // under the header, not behind it.
+  const underHeader =
+    Platform.OS === 'ios'
+      ? {
+          contentInset: { top: contentTop },
+          contentOffset: { x: 0, y: -contentTop },
+          scrollIndicatorInsets: { top: contentTop },
         }
-      />
+      : { contentContainerStyle: { paddingTop: contentTop } };
 
+  const listHeader = (
+    <View>
       {searching ? (
-        <View className="px-page pb-3">
+        <View className="pb-3">
           <View className="min-h-12 flex-row items-center gap-2 rounded-lg border border-line bg-white px-3.5">
             <Search size={18} color={colors.muted} />
             <TextInput
@@ -106,12 +97,43 @@ export default function Orders() {
           </View>
         </View>
       ) : null}
-
-      <View className="pb-3">
+      <View className="-mx-page pb-3">
         <FilterChips options={options} value={filter} onChange={setFilter} />
       </View>
+    </View>
+  );
+
+  return (
+    <Screen
+      flush
+      dock={
+        <View className="flex-row w-full gap-1">
+          <Shortcut
+            icon={Plus}
+            label={t('new_order')}
+            color={colors.newOrder}
+            contentColor="#000000"
+            className="px-5 py-5 w-full"
+            onPress={() => router.push('/orders/new')}
+          />
+        </View>
+      }
+    >
+      <ScreenHeader
+        floating
+        title={t('tab_orders')}
+        right={
+          <IconButton
+            icon={searching ? X : Search}
+            label={searching ? t('close_search') : t('search')}
+            onPress={searching ? closeSearch : () => setSearching(true)}
+          />
+        }
+      />
 
       <FlatList
+        {...underHeader}
+        ListHeaderComponent={listHeader}
         data={items}
         keyExtractor={(order) => order.id}
         contentContainerClassName="gap-3 px-page pb-28"
@@ -119,8 +141,7 @@ export default function Orders() {
         keyboardShouldPersistTaps="handled"
         refreshControl={
           <RefreshControl
-            refreshing={orders.isRefetching && !orders.isFetchingNextPage && !orders.isLoading}
-            onRefresh={() => void orders.refetch()}
+            {...pull}
             tintColor={colors.primary}
           />
         }

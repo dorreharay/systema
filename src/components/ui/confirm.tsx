@@ -1,4 +1,3 @@
-import { Check, Trash2, X } from 'lucide-react-native';
 import { createContext, use, useCallback, useRef, useState, type ReactNode } from 'react';
 import { Modal, Pressable, View } from 'react-native';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
@@ -72,20 +71,19 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
                   {options.title}
                 </Text>
                 {options.message ? (
-                  <Text className="text-[15px] text-muted">{options.message}</Text>
+                  <Text className="text-[16.5px] text-muted">{options.message}</Text>
                 ) : null}
               </View>
               <View className="gap-2">
                 <Shortcut
-                  icon={options.destructive ? Trash2 : Check}
                   label={options.confirmLabel}
                   color={options.destructive ? colors.danger : colors.newOrder}
                   contentColor={options.destructive ? colors.white : colors.ink}
                   onPress={() => answer(true)}
+                  compact
                 />
                 <Shortcut
                   compact
-                  icon={X}
                   label={options.cancelLabel ?? t('cancel')}
                   color={colors.surface}
                   contentColor={colors.ink}

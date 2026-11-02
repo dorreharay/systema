@@ -6,7 +6,7 @@ import { Pressable, ScrollView, View, type ScrollViewInstance, type ScrollViewPr
 import { styled } from 'react-native-css';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { COMPACT_HEADER_HEIGHT, HEADER_HEIGHT } from '@/components/app-header';
+import { HEADER_HEIGHT } from '@/components/app-header';
 import { colors } from '@/components/ui/colors';
 import { Text } from '@/components/ui/text';
 import { useI18n } from '@/lib/i18n';
@@ -14,10 +14,15 @@ import { useKeyboardHeight } from '@/lib/use-keyboard';
 
 const BackBlur = styled(BlurView);
 
+// The row of a page header, under the notch: the same for the title of a tab and of a page you went into.
+const HEADER_TOP_GAP = 6;
+const HEADER_ROW_HEIGHT = 56;
+const HEADER_ROW = 'flex-row items-center gap-4 pb-4';
+
 type ScreenProps = {
   children: ReactNode;
   // The page has the logo in its header (the home page): the header leaves room for it. On the other pages
-  // the header is empty, and half as tall.
+  // the header is empty: the row with the title of the page comes right under the notch.
   logo?: boolean;
   // Something set apart from the page: it sits under it, edge to edge, a gap of 1 below, in a rounded
   // container of its own, on the same dark ground as the navigation.
@@ -39,7 +44,7 @@ export function Screen({ children, dock, footer, logo, flush }: ScreenProps) {
   const insets = useSafeAreaInsets();
   // With the keyboard up, the dock and what is under it step aside: on Android they would ride on top of it.
   const keyboardOpen = useKeyboardHeight() > 0;
-  const paddingTop = flush ? 0 : insets.top + (logo ? HEADER_HEIGHT : COMPACT_HEADER_HEIGHT);
+  const paddingTop = flush ? 0 : insets.top + (logo ? HEADER_HEIGHT : HEADER_TOP_GAP);
 
   if (!dock) {
     return (
@@ -68,12 +73,18 @@ export function Screen({ children, dock, footer, logo, flush }: ScreenProps) {
 // The title of a page: in the header of a tab and in the header of a page that was gone into, the same size.
 const PAGE_TITLE = 'text-[28px] font-semibold';
 
-type ScreenHeaderProps = { title: string; subtitle?: string; right?: ReactNode };
+type ScreenHeaderProps = {
+  title: string;
+  subtitle?: string;
+  right?: ReactNode;
+  // Stays at the top of the page while it is scrolled, on a blurred ground, as a floating `DetailHeader` does.
+  floating?: boolean;
+};
 
-// The title of a main tab, with its actions on the right.
-export function ScreenHeader({ title, subtitle, right }: ScreenHeaderProps) {
-  return (
-    <View className="min-h-16 flex-row items-center justify-between gap-3 px-page pb-6 pt-3">
+// The title of a main tab, with its actions on the right: the row of a `DetailHeader` without the back button.
+export function ScreenHeader({ title, subtitle, right, floating }: ScreenHeaderProps) {
+  const content = (
+    <>
       <View className="flex-1">
         <Text accessibilityRole="header" className={PAGE_TITLE} numberOfLines={1}>
           {title}
@@ -85,20 +96,49 @@ export function ScreenHeader({ title, subtitle, right }: ScreenHeaderProps) {
         ) : null}
       </View>
       {right ? <View className="flex-row items-center">{right}</View> : null}
+    </>
+  );
+
+  if (floating) {
+    return <FloatingBar className="px-page">{content}</FloatingBar>;
+  }
+
+  return (
+    <View className={`${HEADER_ROW} px-page`} style={{ height: HEADER_ROW_HEIGHT }}>
+      {content}
     </View>
   );
 }
 
-// The row of a detail header, under the notch; the bar around it reaches the top of the screen.
-const DETAIL_TOP_GAP = 6;
-const DETAIL_ROW_HEIGHT = 56;
+// The bar of a floating header: it reaches the top of the screen, on a blur with a tint, and the row of the header
+// is under the notch.
+function FloatingBar({ children, className }: { children: ReactNode; className: string }) {
+  const insets = useSafeAreaInsets();
+
+  return (
+    <View
+      pointerEvents="box-none"
+      className="absolute inset-x-0 top-0 z-10 overflow-hidden"
+      style={{ height: insets.top + HEADER_TOP_GAP + HEADER_ROW_HEIGHT }}>
+      <BackBlur intensity={50} tint="light" className="absolute inset-0" pointerEvents="none" />
+      <View className="absolute inset-0 bg-surface/70" pointerEvents="none" />
+      <View
+        pointerEvents="box-none"
+        className={`${HEADER_ROW} ${className}`}
+        style={{ marginTop: insets.top + HEADER_TOP_GAP, height: HEADER_ROW_HEIGHT }}>
+        {children}
+      </View>
+    </View>
+  );
+}
+
 // The room between the foot of the header and the first thing of the page.
 const DETAIL_CONTENT_GAP = 0;
 
-/** How tall a floating `DetailHeader` is, from the top of the screen. */
+/** How tall a floating `DetailHeader` is, from the top of the screen; the bar reaches the top of the screen. */
 export function useDetailHeaderHeight() {
   const insets = useSafeAreaInsets();
-  return insets.top + DETAIL_TOP_GAP + DETAIL_ROW_HEIGHT;
+  return insets.top + HEADER_TOP_GAP + HEADER_ROW_HEIGHT;
 }
 
 /**
@@ -135,7 +175,6 @@ type DetailHeaderProps = {
 export function DetailHeader({ title, right, onBack, floating }: DetailHeaderProps) {
   const { t } = useI18n();
   const router = useRouter();
-  const insets = useSafeAreaInsets();
 
   const goBack = () => {
     if (onBack) {
@@ -167,22 +206,12 @@ export function DetailHeader({ title, right, onBack, floating }: DetailHeaderPro
   );
 
   if (!floating) {
-    return <View className="min-h-16 flex-row items-center gap-4 px-page pb-2">{content}</View>;
-  }
-
-  return (
-    <View
-      pointerEvents="box-none"
-      className="absolute inset-x-0 top-0 z-10 overflow-hidden"
-      style={{ height: insets.top + DETAIL_TOP_GAP + DETAIL_ROW_HEIGHT }}>
-      <BackBlur intensity={50} tint="light" className="absolute inset-0" pointerEvents="none" />
-      <View className="absolute inset-0 bg-surface/70" pointerEvents="none" />
-      <View
-        pointerEvents="box-none"
-        className="flex-row items-center gap-4 px-5 pb-4"
-        style={{ marginTop: insets.top + DETAIL_TOP_GAP, height: DETAIL_ROW_HEIGHT }}>
+    return (
+      <View className={`${HEADER_ROW} px-page`} style={{ height: HEADER_ROW_HEIGHT }}>
         {content}
       </View>
-    </View>
-  );
+    );
+  }
+
+  return <FloatingBar className="px-5">{content}</FloatingBar>;
 }

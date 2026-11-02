@@ -5,9 +5,10 @@ import { Pressable, Text, View } from 'react-native';
 import AuthLayout from '@/components/auth-layout';
 import AuthLink from '@/components/auth-link';
 import AuthSwitch from '@/components/auth-switch';
-import Button from '@/components/button';
 import FormMessage from '@/components/form-message';
 import TextField, { type TextFieldRef } from '@/components/text-field';
+import { colors } from '@/components/ui/colors';
+import Shortcut from '@/components/ui/shortcut';
 import { useAuth } from '@/lib/auth';
 import { describeError } from '@/lib/errors';
 import { useI18n } from '@/lib/i18n';
@@ -107,13 +108,13 @@ export default function Login() {
               accessibilityRole="link"
               hitSlop={8}
               className="min-h-10 justify-center active:opacity-70">
-              <Text className="font-medium text-white/80">{t('forgot_password_link')}</Text>
+              <Text className="text-[15.4px] font-medium text-white/80">{t('forgot_password_link')}</Text>
             </Pressable>
           </AuthLink>
         </View>
         {formError ? <FormMessage message={formError} /> : null}
         <View className="pt-4">
-          <Button title={t('sign_in')} onPress={submit} loading={submitting} />
+          <Shortcut label={t('sign_in')} color={colors.white} contentColor={colors.primary} onPress={submit} loading={submitting} />
         </View>
       </View>
     </AuthLayout>

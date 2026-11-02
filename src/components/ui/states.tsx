@@ -1,8 +1,8 @@
-import { SearchX, WifiOff, TriangleAlert, type LucideIcon } from 'lucide-react-native';
+import { RotateCcw, SearchX, WifiOff, TriangleAlert, type LucideIcon } from 'lucide-react-native';
 import { View } from 'react-native';
 
-import AppButton from '@/components/ui/app-button';
 import { colors } from '@/components/ui/colors';
+import Shortcut from '@/components/ui/shortcut';
 import { Text } from '@/components/ui/text';
 import { describeError, isOffline } from '@/lib/errors';
 import { useI18n } from '@/lib/i18n';
@@ -22,10 +22,17 @@ export function EmptyState({ icon: Icon, title, message, actionLabel, onAction }
       <View className="size-16 items-center justify-center rounded-full bg-primary-soft">
         <Icon size={28} color={colors.primary} />
       </View>
-      <Text className="text-center text-[17px] font-semibold">{title}</Text>
-      {message ? <Text className="text-center text-[15px] text-muted">{message}</Text> : null}
+      <Text className="text-center text-[18.7px] font-semibold">{title}</Text>
+      {message ? <Text className="text-center text-[16.5px] text-muted">{message}</Text> : null}
       {actionLabel && onAction ? (
-        <AppButton title={actionLabel} onPress={onAction} className="mt-2 self-stretch" />
+        <Shortcut
+          compact
+          label={actionLabel}
+          color={colors.primarySoft}
+          contentColor={colors.ink}
+          onPress={onAction}
+          className="mt-2 self-stretch"
+        />
       ) : null}
     </View>
   );
@@ -56,13 +63,21 @@ export function ErrorState({ error, onRetry }: { error: unknown; onRetry: () => 
           <TriangleAlert size={28} color={colors.danger} />
         )}
       </View>
-      <Text className="text-center text-[17px] font-semibold">
+      <Text className="text-center text-[18.7px] font-semibold">
         {offline ? t('error_offline_title') : t('error_load_title')}
       </Text>
-      <Text className="text-center text-[15px] text-muted">
+      <Text className="text-center text-[16.5px] text-muted">
         {offline ? t('error_offline_message') : describeError(error, t)}
       </Text>
-      <AppButton title={t('retry')} variant="secondary" onPress={onRetry} className="mt-2 self-stretch" />
+      <Shortcut
+        compact
+        icon={RotateCcw}
+        label={t('retry')}
+        color={colors.surface}
+        contentColor={colors.ink}
+        onPress={onRetry}
+        className="mt-2 self-stretch"
+      />
     </View>
   );
 }

@@ -27,7 +27,6 @@ import PlusIcon from '@/components/icons/plus-icon';
 import RacketFormSheet from '@/components/racket-form-sheet';
 import StringFormSheet from '@/components/string-form-sheet';
 import ActionSheet from '@/components/ui/action-sheet';
-import AppButton from '@/components/ui/app-button';
 import { Segmented } from '@/components/ui/chips';
 import { colors } from '@/components/ui/colors';
 import { useConfirm } from '@/components/ui/confirm';
@@ -116,7 +115,7 @@ function FormSection({
 }) {
   return (
     <View onLayout={onLayout} className="gap-3 rounded-2xl border border-line bg-white p-4">
-      <Text accessibilityRole="header" className="text-[17px] font-semibold">
+      <Text accessibilityRole="header" className="text-[18.7px] font-semibold">
         {title}
       </Text>
       {children}
@@ -415,12 +414,12 @@ export default function OrderForm({ initial, order, draftKey, saved }: OrderForm
           ref={scroll}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
-          contentContainerClassName="gap-4 p-page pb-8">
+          contentContainerClassName="gap-4 p-page pb-28">
           {restored ? (
             <View className="flex-row items-center justify-between gap-3 rounded-lg bg-primary-soft px-3.5 py-2.5">
-              <Text className="flex-1 text-[14px] text-primary">{t('draft_restored')}</Text>
+              <Text className="flex-1 text-[15.4px] text-primary">{t('draft_restored')}</Text>
               <Pressable accessibilityRole="button" hitSlop={8} onPress={startOver}>
-                <Text className="text-[14px] font-semibold text-primary">{t('draft_start_over')}</Text>
+                <Text className="text-[15.4px] font-semibold text-primary">{t('draft_start_over')}</Text>
               </Pressable>
             </View>
           ) : null}
@@ -444,19 +443,21 @@ export default function OrderForm({ initial, order, draftKey, saved }: OrderForm
             />
             {racket && lastSetup ? (
               <View className="gap-2 rounded-xl bg-primary-soft p-3">
-                <Text className="text-[13px] font-medium text-primary">
+                <Text className="text-[14.3px] font-medium text-primary">
                   {t('order_last_setup', {
                     number: orderNumber(lastSetup.number),
                     date: formatDate(lastSetup.received_date, language, today),
                   })}
                 </Text>
-                <Text className="text-[15px]">
+                <Text className="text-[16.5px]">
                   {describeSetup(lastSetup, draft.unit, t)}
                 </Text>
-                <AppButton
-                  title={t('use_previous_setup')}
-                  variant="soft"
-                  icon={<RotateCcw size={18} color={colors.primary} />}
+                <Shortcut
+                  compact
+                  icon={RotateCcw}
+                  label={t('use_previous_setup')}
+                  color={colors.white}
+                  contentColor={colors.ink}
                   onPress={() => {
                     const next = applySetup(draft, lastSetup);
                     setDraft(next);
@@ -473,7 +474,7 @@ export default function OrderForm({ initial, order, draftKey, saved }: OrderForm
                 />
               </View>
             ) : racket && !editing ? (
-              <Text className="text-[13px] text-muted">{t('order_no_history')}</Text>
+              <Text className="text-[14.3px] text-muted">{t('order_no_history')}</Text>
             ) : null}
           </FormSection>
 
@@ -577,7 +578,7 @@ export default function OrderForm({ initial, order, draftKey, saved }: OrderForm
                   />
                 ) : null}
                 <View className="gap-1.5">
-                  <Text className="text-[13px] font-medium text-muted">{t('field_knots')}</Text>
+                  <Text className="text-[14.3px] font-medium text-muted">{t('field_knots')}</Text>
                   <Segmented
                     options={[
                       { value: '2', label: t('knots_two') },
@@ -621,7 +622,7 @@ export default function OrderForm({ initial, order, draftKey, saved }: OrderForm
 
             {extras.length > 0 ? (
               <View className="gap-2">
-                <Text className="text-[13px] font-medium text-muted">{t('field_additional_services')}</Text>
+                <Text className="text-[14.3px] font-medium text-muted">{t('field_additional_services')}</Text>
                 <View className="flex-row flex-wrap gap-2">
                   {extras.map((service) => {
                     const selected = draft.services.some((line) => line.serviceId === service.id);
@@ -666,7 +667,7 @@ export default function OrderForm({ initial, order, draftKey, saved }: OrderForm
 
             <View className="flex-row items-center justify-between border-t border-line pt-3">
               <Text className="text-base font-medium text-muted">{t('order_total')}</Text>
-              <Text className="text-[24px] font-semibold text-primary">
+              <Text className="text-[26.4px] font-semibold text-primary">
                 {formatMoney(prices.total, currency, language)}
               </Text>
             </View>
@@ -709,7 +710,7 @@ export default function OrderForm({ initial, order, draftKey, saved }: OrderForm
               multiline
             />
             <View className="gap-2">
-              <Text className="text-[13px] font-medium text-muted">{t('field_photos')}</Text>
+              <Text className="text-[14.3px] font-medium text-muted">{t('field_photos')}</Text>
               <View className="flex-row flex-wrap gap-2">
                 {existingPhotos.map((photo) => (
                   <ServerPhoto
@@ -769,7 +770,7 @@ export default function OrderForm({ initial, order, draftKey, saved }: OrderForm
         renderItem={(client) => (
           <>
             <Text className="text-base font-medium">{client.name}</Text>
-            <Text className="text-[13px] text-muted">
+            <Text className="text-[14.3px] text-muted">
               {[client.phone, t('rackets_count', { count: client.rackets_count })]
                 .filter(Boolean)
                 .join(' · ')}
@@ -807,7 +808,7 @@ export default function OrderForm({ initial, order, draftKey, saved }: OrderForm
         renderItem={(item) => (
           <>
             <Text className="text-base font-medium">{racketName(item)}</Text>
-            <Text className="text-[13px] text-muted" numberOfLines={1}>
+            <Text className="text-[14.3px] text-muted" numberOfLines={1}>
               {item.client_name}
               {item.last_setup ? ` · ${describeSetup(item.last_setup, draft.unit, t)}` : ''}
             </Text>
@@ -841,7 +842,7 @@ export default function OrderForm({ initial, order, draftKey, saved }: OrderForm
         renderItem={(string) => (
           <>
             <Text className="text-base font-medium">{stringLabel(string)}</Text>
-            <Text className="text-[13px] text-muted">
+            <Text className="text-[14.3px] text-muted">
               {[
                 t(`string_type_${string.type}`),
                 string.default_price === null ? null : formatMoney(string.default_price, currency, language),

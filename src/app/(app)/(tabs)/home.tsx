@@ -47,9 +47,9 @@ function Stat({ value, failed, label, onPress }: StatProps) {
       {value === undefined && !failed ? (
         <Skeleton className="my-1 h-7 w-10" />
       ) : (
-        <Text className="text-[26px] font-semibold text-primary">{value ?? '—'}</Text>
+        <Text className="text-[28.6px] font-semibold text-primary">{value ?? '—'}</Text>
       )}
-      <Text className="text-[12px] leading-4 text-muted" numberOfLines={2} maxFontSizeMultiplier={1.3}>
+      <Text className="text-[13.2px] leading-4 text-muted" numberOfLines={2} maxFontSizeMultiplier={1.3}>
         {label}
       </Text>
     </Pressable>

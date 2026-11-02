@@ -40,7 +40,7 @@ export default function ActionSheet({ visible, onClose, title, actions }: Action
         }}
         className="min-h-14 flex-row items-center gap-3 rounded-lg px-2 active:bg-surface">
         {Icon ? <Icon size={22} color={color} /> : null}
-        <Text className={`text-base font-medium ${action.destructive ? 'text-danger' : 'text-ink'}`}>
+        <Text className={`text-[14px] font-medium ${action.destructive ? 'text-danger' : 'text-ink'}`}>
           {action.label}
         </Text>
       </Pressable>

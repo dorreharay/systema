@@ -25,6 +25,11 @@
   --color-chrome-pill: #f1f1ee;
   /* The margin of a page: the space between its content and the edge of the screen (22 pt). */
   --spacing-page: 1rem;
+  /* The sizes of text in use are 10% above Tailwind's (the line height follows the size). Buttons and
+     headers have a size of their own, in px, in their classes. */
+  --text-xs: 0.825rem;
+  --text-base: 1.1rem;
+  --text-lg: 1.2375rem;
 }
 
 :root {

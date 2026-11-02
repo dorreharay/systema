@@ -85,7 +85,7 @@ export default function TextField({
           textAlignVertical="center"
           autoCorrect={false}
           spellCheck={false}
-          className={`absolute inset-0 pl-4 ios:pb-1 text-[1.125rem] font-normal text-white outline-none ${
+          className={`absolute inset-0 pl-4 ios:pb-1 text-[1.2375rem] font-normal text-white outline-none ${
             isPassword ? 'pr-12' : 'pr-4'
           }`}
           secureTextEntry={isPassword && !revealed}
@@ -114,7 +114,7 @@ export default function TextField({
           </Pressable>
         ) : null}
       </View>
-      {error ? <Text className="text-md text-red-300">{error}</Text> : null}
+      {error ? <Text className="text-[15.4px] text-red-300">{error}</Text> : null}
     </View>
   );
 }

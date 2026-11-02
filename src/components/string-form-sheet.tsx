@@ -123,7 +123,7 @@ function StringForm({ string, initialModel, onClose, onSaved }: Omit<StringFormS
           onSubmitEditing={() => gaugeRef.current?.focus()}
         />
         <View className="gap-1.5">
-          <Text className="text-[13px] font-medium text-muted">{t('field_string_type')}</Text>
+          <Text className="text-[14.3px] font-medium text-muted">{t('field_string_type')}</Text>
           <View className="flex-row flex-wrap gap-2">
             {STRING_TYPES.map((option) => (
               <Pressable

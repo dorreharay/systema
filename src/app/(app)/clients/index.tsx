@@ -18,6 +18,7 @@ import { useAuth } from '@/lib/auth';
 import { formatDate, todayIso } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import { useClients } from '@/lib/queries';
+import { usePullRefresh } from '@/lib/use-pull-refresh';
 
 const SEARCH_DEBOUNCE_MS = 250;
 
@@ -29,6 +30,7 @@ export default function Clients() {
   const [query, setQuery] = useState('');
   const [adding, setAdding] = useState(false);
   const clients = useClients(query);
+  const pull = usePullRefresh(clients.refetch);
   const today = todayIso(user?.timezone);
   const contentTop = useDetailContentTop();
 
@@ -75,13 +77,12 @@ export default function Clients() {
         }
         data={clients.data ?? []}
         keyExtractor={(client) => client.id}
-        contentContainerClassName="gap-3 px-page pb-page"
+        contentContainerClassName="gap-3 px-page pb-28"
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         refreshControl={
           <RefreshControl
-            refreshing={clients.isRefetching && !clients.isLoading}
-            onRefresh={() => void clients.refetch()}
+            {...pull}
             tintColor={colors.primary}
           />
         }
@@ -96,11 +97,11 @@ export default function Clients() {
                 {item.name}
               </Text>
               {item.phone ? (
-                <Text className="text-[14px] text-muted" numberOfLines={1}>
+                <Text className="text-[15.4px] text-muted" numberOfLines={1}>
                   {item.phone}
                 </Text>
               ) : null}
-              <Text className="text-[13px] text-muted" numberOfLines={1}>
+              <Text className="text-[14.3px] text-muted" numberOfLines={1}>
                 {[
                   t('rackets_count', { count: item.rackets_count }),
                   item.last_order_date

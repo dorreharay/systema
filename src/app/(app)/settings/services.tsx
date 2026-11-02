@@ -1,14 +1,17 @@
-import { Plus, Tags } from 'lucide-react-native';
+import { Tags } from 'lucide-react-native';
 import { useState } from 'react';
 import { View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import PlusIcon from '@/components/icons/plus-icon';
 import ServiceFormSheet from '@/components/service-form-sheet';
 import AppSwitch from '@/components/ui/app-switch';
 import { Badge } from '@/components/ui/badge';
 import Card from '@/components/ui/card';
-import PillButton from '@/components/ui/pill-button';
+import { colors } from '@/components/ui/colors';
 import Section from '@/components/ui/section';
 import { DetailHeader, DetailScroll, Screen } from '@/components/ui/screen';
+import Shortcut from '@/components/ui/shortcut';
 import { ListSkeleton } from '@/components/ui/skeleton';
 import { EmptyState, ErrorState } from '@/components/ui/states';
 import { Text } from '@/components/ui/text';
@@ -24,6 +27,7 @@ export default function ServicesAndPricing() {
   const { user } = useAuth();
   const { t, language } = useI18n();
   const toast = useToast();
+  const insets = useSafeAreaInsets();
   const services = useServices();
   const update = useUpdateService();
   const [editing, setEditing] = useState<Service | 'new' | null>(null);
@@ -44,7 +48,7 @@ export default function ServicesAndPricing() {
           {service.name}
         </Text>
         <View className="flex-row items-center gap-2">
-          <Text className="text-[15px] text-muted">
+          <Text className="text-[16.5px] text-muted">
             {service.price === null
               ? t('service_no_price')
               : formatMoney(service.price, user?.currency ?? 'USD', language)}
@@ -64,14 +68,22 @@ export default function ServicesAndPricing() {
   const archived = services.data?.filter((service) => !service.active) ?? [];
 
   return (
-    <Screen flush>
-      <DetailHeader
-        floating
-        title={t('settings_services')}
-        right={<PillButton icon={Plus} label={t('add')} onPress={() => setEditing('new')} />}
-      />
-      <DetailScroll contentContainerClassName="gap-page p-page pb-10" showsVerticalScrollIndicator={false}>
-        <Text className="text-[15px] text-muted">{t('services_hint')}</Text>
+    <Screen
+      flush
+      dock={
+        <Shortcut
+          icon={PlusIcon}
+          label={t('add_service')}
+          color={colors.catalog}
+          contentColor={colors.ink}
+          className="w-full px-5 py-5"
+          onPress={() => setEditing('new')}
+        />
+      }
+      footer={<View style={{ height: Math.max(insets.bottom, 12) + 24 }} />}>
+      <DetailHeader floating title={t('settings_services')} />
+      <DetailScroll contentContainerClassName="gap-page p-page pb-28" showsVerticalScrollIndicator={false}>
+        <Text className="text-[16.5px] text-muted">{t('services_hint')}</Text>
         {services.isLoading ? (
           <ListSkeleton variant="row" />
         ) : services.isError ? (

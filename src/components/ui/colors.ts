@@ -8,7 +8,7 @@ export const colors = {
   placeholder: '#98a2b3',
   line: '#e3e5e8',
   surface: '#f4f5f6',
-  danger: '#d92d20',
+  danger: '#B42318',
   white: '#ffffff',
   // The track of a switch that is off: 3.6:1 on white, where the pale grey it replaces was 1.5:1 and the
   // switch vanished into the page (a control needs 3:1).

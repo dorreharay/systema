@@ -17,7 +17,7 @@ export default function SwitchRow({ label, description, value, onValueChange }: 
     <View className="flex-row items-start justify-between gap-4">
       <View className="flex-1 py-3">
         <Text className="text-base font-medium leading-[24px]">{label}</Text>
-        {description ? <Text className="text-[13px] text-muted">{description}</Text> : null}
+        {description ? <Text className="text-[14.3px] text-muted">{description}</Text> : null}
       </View>
       {/* The text of this font sits a little low in its line: the switch goes down with it. */}
       <View className="h-12 justify-center ios:pt-1">

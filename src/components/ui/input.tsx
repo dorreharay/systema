@@ -59,7 +59,7 @@ export function Input({
 
   return (
     <View ref={rootRef} collapsable={false} className={`gap-1.5 ${className}`}>
-      {label ? <Text className="text-[13px] font-medium text-muted">{label}</Text> : null}
+      {label ? <Text className="text-[14.3px] font-medium text-muted">{label}</Text> : null}
       <View
         className={`flex-row rounded-lg border bg-white px-3.5 ${
           multiline ? 'min-h-24 items-start' : 'min-h-12 items-center'
@@ -124,7 +124,7 @@ export function NumberInput({ onChangeText, ...props }: NumberInputProps) {
 export function FormError({ message }: { message: string }) {
   return (
     <View accessibilityRole="alert" className="rounded-xl bg-red-50 px-3.5 py-3">
-      <Text className="text-[14px] text-danger">{message}</Text>
+      <Text className="text-[15.4px] text-danger">{message}</Text>
     </View>
   );
 }

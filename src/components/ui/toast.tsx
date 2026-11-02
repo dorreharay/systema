@@ -62,7 +62,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             ) : (
               <CircleAlert size={20} color="#fca5a5" />
             )}
-            <Text className="shrink text-[15px] font-medium text-white">{toast.message}</Text>
+            <Text className="shrink text-[16.5px] font-medium text-white">{toast.message}</Text>
           </Animated.View>
         ) : null}
       </View>

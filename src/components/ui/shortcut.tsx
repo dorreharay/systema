@@ -5,13 +5,15 @@ import { colors } from '@/components/ui/colors';
 import { Text } from '@/components/ui/text';
 
 type ShortcutProps = {
-  icon: ComponentType<{ size?: number; color?: string }>;
+  // Without one, the label is all there is: the buttons of the sign-in screens.
+  icon?: ComponentType<{ size?: number; color?: string }>;
   label: string;
   // The colour of the button.
   color: string;
   // The colour of the icon and the label, where they are not to be the app's own.
   contentColor?: string;
-  onPress: () => void;
+  // Not given where a link puts its own on the button (`asChild`).
+  onPress?: () => void;
   // The size and the room around the content; the caller says how big the button is.
   className?: string;
   // A smaller button, for what is secondary to the one beside it.
@@ -54,7 +56,7 @@ export default function Shortcut({
       className={`flex-row items-center justify-center rounded-[18px] active:opacity-80 ${size.box} ${
         inactive ? 'opacity-60' : ''
       } ${className}`}>
-      {loading ? <ActivityIndicator color={ink} /> : <Icon size={size.icon} color={ink} />}
+      {loading ? <ActivityIndicator color={ink} /> : Icon ? <Icon size={size.icon} color={ink} /> : null}
       <Text
         className={`${size.label} font-semibold text-primary`}
         style={contentColor ? { color: contentColor } : undefined}

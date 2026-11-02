@@ -1,15 +1,5 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import {
-  Copy,
-  Mail,
-  MessageSquare,
-  MoreHorizontal,
-  Pencil,
-  Phone,
-  Repeat,
-  Trash2,
-  UserRound,
-} from 'lucide-react-native';
+import { Check, Copy, Mail, MoreHorizontal, Pencil, Phone, Repeat, Trash2, Undo2, UserRound } from 'lucide-react-native';
 import { useState, type ReactNode } from 'react';
 import { Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -18,7 +8,6 @@ import ContactSheet from '@/components/contact-sheet';
 import { useDueText } from '@/components/order-card';
 import ReadyMessageSheet from '@/components/ready-message-sheet';
 import ActionSheet from '@/components/ui/action-sheet';
-import AppButton from '@/components/ui/app-button';
 import { Badge, StatusBadge } from '@/components/ui/badge';
 import Card from '@/components/ui/card';
 import { colors } from '@/components/ui/colors';
@@ -27,12 +16,13 @@ import IconButton from '@/components/ui/icon-button';
 import { PhotoViewer, ServerPhoto } from '@/components/ui/photo';
 import Section from '@/components/ui/section';
 import { DetailHeader, DetailScroll, Screen } from '@/components/ui/screen';
+import Shortcut from '@/components/ui/shortcut';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ErrorState } from '@/components/ui/states';
 import { Text } from '@/components/ui/text';
 import { useToast } from '@/components/ui/toast';
 import { useAuth } from '@/lib/auth';
-import { callPhone, copyText, emailTo, textPhone } from '@/lib/contact';
+import { callPhone, copyText, emailTo } from '@/lib/contact';
 import { describeError } from '@/lib/errors';
 import {
   formatMoney,
@@ -57,10 +47,10 @@ const NEXT: Partial<Record<OrderStatus, { status: OrderStatus; label: 'action_st
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
     <View className="min-h-8 flex-row items-start justify-between gap-4">
-      <Text className="text-[15px] text-muted">{label}</Text>
+      <Text className="text-[16.5px] text-muted">{label}</Text>
       <View className="flex-1 items-end">
         {typeof children === 'string' ? (
-          <Text className="text-right text-[15px] font-medium">{children}</Text>
+          <Text className="text-right text-[16.5px] font-medium">{children}</Text>
         ) : (
           children
         )}
@@ -166,24 +156,29 @@ export default function OrderDetails() {
   ].filter((line) => line.price !== null);
 
   return (
-    <Screen flush>
+    <Screen
+      flush
+      dock={
+        next ? (
+          <Shortcut
+            icon={Check}
+            label={t(next.label)}
+            color={colors.newOrder}
+            contentColor={colors.ink}
+            className="px-5 py-5 w-full"
+            onPress={() => move(next.status)}
+            loading={update.isPending && update.variables?.status === next.status}
+          />
+        ) : undefined
+      }
+      footer={next ? <View style={{ height: Math.max(insets.bottom, 12) + 24 }} /> : undefined}>
       <DetailHeader
         floating
         title={t('order_title', { number: orderNumber(order.number) })}
-        right={
-          <>
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => router.push({ pathname: '/orders/[id]/edit', params: { id: order.id } })}
-              className="min-h-11 justify-center px-3 active:opacity-60">
-              <Text className="text-base font-semibold text-primary">{t('edit')}</Text>
-            </Pressable>
-            <IconButton icon={MoreHorizontal} label={t('more_actions')} onPress={() => setMenu(true)} />
-          </>
-        }
+        right={<IconButton icon={MoreHorizontal} label={t('more_actions')} onPress={() => setMenu(true)} />}
       />
       <DetailScroll
-        contentContainerClassName="gap-4 p-page pb-8"
+        contentContainerClassName="gap-4 p-page pb-28"
         showsVerticalScrollIndicator={false}>
         <View className="flex-row flex-wrap items-center gap-2">
           <StatusBadge status={order.status} />
@@ -203,40 +198,35 @@ export default function OrderDetails() {
               <UserRound size={22} color={colors.primary} />
             </View>
             <View className="flex-1">
-              <Text className="text-[17px] font-semibold" numberOfLines={1}>
+              <Text className="text-[18.7px] font-semibold" numberOfLines={1}>
                 {order.client.name}
               </Text>
-              <Text className="text-[14px] text-muted" numberOfLines={1}>
+              <Text className="text-[15.4px] text-muted" numberOfLines={1}>
                 {order.client.phone ?? order.client.email ?? t('no_contact_details')}
               </Text>
             </View>
           </Pressable>
           {hasContact ? (
-            <View className="flex-row gap-2">
+            <View className="flex-row flex-wrap gap-2">
               {order.client.phone ? (
-                <AppButton
-                  className="flex-1"
-                  title={t('call')}
-                  variant="secondary"
-                  icon={<Phone size={18} color={colors.ink} />}
+                <Shortcut
+                  compact
+                  className="min-w-[46%] flex-1"
+                  icon={Phone}
+                  label={t('call')}
+                  color={colors.primarySoft}
+                  contentColor={colors.ink}
                   onPress={() => void callPhone(order.client.phone!)}
                 />
               ) : null}
-              {order.client.phone ? (
-                <AppButton
-                  className="flex-1"
-                  title={t('message')}
-                  variant="secondary"
-                  icon={<MessageSquare size={18} color={colors.ink} />}
-                  onPress={() => void textPhone(order.client.phone!)}
-                />
-              ) : null}
               {!order.client.phone && order.client.email ? (
-                <AppButton
-                  className="flex-1"
-                  title={t('field_email')}
-                  variant="secondary"
-                  icon={<Mail size={18} color={colors.ink} />}
+                <Shortcut
+                  compact
+                  className="min-w-[46%] flex-1"
+                  icon={Mail}
+                  label={t('field_email')}
+                  color={colors.primarySoft}
+                  contentColor={colors.ink}
                   onPress={() => void emailTo(order.client.email!)}
                 />
               ) : null}
@@ -250,7 +240,7 @@ export default function OrderDetails() {
               accessibilityRole="button"
               onPress={() => router.push({ pathname: '/rackets/[id]', params: { id: order.racket.id } })}
               className="active:opacity-60">
-              <Text className="pb-1 text-[17px] font-semibold">{racketName(order.racket)}</Text>
+              <Text className="pb-1 text-[18.7px] font-semibold">{racketName(order.racket)}</Text>
             </Pressable>
             <Row label={order.hybrid ? t('field_main_strings') : t('field_strings')}>
               {order.hybrid ? (order.main_string_name ?? '—') : strungWith}
@@ -265,8 +255,8 @@ export default function OrderDetails() {
             {order.knots ? <Row label={t('field_knots')}>{String(order.knots)}</Row> : null}
             {order.stringing_notes ? (
               <View className="gap-0.5 pt-1.5">
-                <Text className="text-[13px] text-muted">{t('order_stringing_notes')}</Text>
-                <Text className="text-[15px]">{order.stringing_notes}</Text>
+                <Text className="text-[14.3px] text-muted">{t('order_stringing_notes')}</Text>
+                <Text className="text-[16.5px]">{order.stringing_notes}</Text>
               </View>
             ) : null}
           </Card>
@@ -278,7 +268,7 @@ export default function OrderDetails() {
               {formatTimestamp(`${order.received_date}T12:00:00`, language, 'UTC')}
             </Row>
             <Row label={t('order_due_date')}>
-              <Text className={`text-right text-[15px] font-medium ${overdue ? 'text-danger' : ''}`}>
+              <Text className={`text-right text-[16.5px] font-medium ${overdue ? 'text-danger' : ''}`}>
                 {order.due_date
                   ? `${dueText(order.due_date)}${order.due_time ? `, ${order.due_time}` : ''}`
                   : t('order_no_due_date')}
@@ -296,7 +286,7 @@ export default function OrderDetails() {
         {order.notes || order.photos.length > 0 ? (
           <Section title={t('section_notes_photos')}>
             <Card className="gap-3">
-              {order.notes ? <Text className="text-[15px]">{order.notes}</Text> : null}
+              {order.notes ? <Text className="text-[16.5px]">{order.notes}</Text> : null}
               {order.photos.length > 0 ? (
                 <View className="flex-row flex-wrap gap-2">
                   {order.photos.map((photo) => (
@@ -322,26 +312,32 @@ export default function OrderDetails() {
             ))}
             <View className="flex-row items-center justify-between border-t border-line pt-3">
               <Text className="text-base font-medium text-muted">{t('order_total')}</Text>
-              <Text className="text-[24px] font-semibold text-primary">{money(order.total)}</Text>
+              <Text className="text-[26.4px] font-semibold text-primary">{money(order.total)}</Text>
             </View>
             <View className="flex-row items-center justify-between">
-              <Text className="text-[15px] text-muted">{t('payment_status')}</Text>
+              <Text className="text-[16.5px] text-muted">{t('payment_status')}</Text>
               <Badge
                 label={order.is_paid ? t('payment_paid') : t('payment_unpaid')}
                 tone={order.is_paid ? 'success' : 'warning'}
               />
             </View>
             {order.is_paid ? (
-              <AppButton
-                title={t('mark_unpaid')}
-                variant="ghost"
+              <Shortcut
+                compact
+                icon={Undo2}
+                label={t('mark_unpaid')}
+                color={colors.surface}
+                contentColor={colors.ink}
                 onPress={() => setPaid(false)}
                 disabled={update.isPending}
               />
             ) : (
-              <AppButton
-                title={t('mark_paid')}
-                variant="soft"
+              <Shortcut
+                compact
+                icon={Check}
+                label={t('mark_paid')}
+                color={colors.primarySoft}
+                contentColor={colors.ink}
                 onPress={() => setPaid(true)}
                 loading={update.isPending && update.variables?.is_paid === true}
               />
@@ -350,18 +346,6 @@ export default function OrderDetails() {
         </Section>
       </DetailScroll>
 
-      {next ? (
-        <View
-          className="border-t border-line bg-white px-page pt-3"
-          style={{ paddingBottom: Math.max(insets.bottom, 12) }}>
-          <AppButton
-            large
-            title={t(next.label)}
-            onPress={() => move(next.status)}
-            loading={update.isPending && update.variables?.status === next.status}
-          />
-        </View>
-      ) : null}
 
       <ActionSheet
         visible={menu}

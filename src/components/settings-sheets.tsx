@@ -280,10 +280,10 @@ function AccountBody({ onClose }: { onClose: () => void }) {
   return (
     <View className="gap-4 pt-2">
       <View className="gap-0.5">
-        <Text className="text-[13px] font-medium text-muted">{t('field_email')}</Text>
+        <Text className="text-[14.3px] font-medium text-muted">{t('field_email')}</Text>
         <Text className="text-base">{user?.email}</Text>
       </View>
-      <Text className="text-[15px] text-muted">{t('account_password_hint')}</Text>
+      <Text className="text-[16.5px] text-muted">{t('account_password_hint')}</Text>
       <Shortcut
         compact
         icon={KeyRound}
