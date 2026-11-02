@@ -2,6 +2,7 @@ import { useRouter } from 'expo-router';
 import {
   Calendar,
   Camera,
+  Check,
   ChevronDown,
   ChevronUp,
   Clock,
@@ -22,6 +23,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import ClientFormSheet from '@/components/client-form-sheet';
+import PlusIcon from '@/components/icons/plus-icon';
 import RacketFormSheet from '@/components/racket-form-sheet';
 import StringFormSheet from '@/components/string-form-sheet';
 import ActionSheet from '@/components/ui/action-sheet';
@@ -33,9 +35,10 @@ import { DateSheet, TimeSheet } from '@/components/ui/date-sheets';
 import { FormError, Input, NumberInput } from '@/components/ui/input';
 import { LocalPhotoThumb, ServerPhoto } from '@/components/ui/photo';
 import PickerField from '@/components/ui/picker-field';
+import { DetailHeader, DetailScroll, Screen, useDetailContentTop } from '@/components/ui/screen';
 import SearchPicker from '@/components/ui/search-picker';
-import { DetailHeader, Screen } from '@/components/ui/screen';
 import { CLOSE_WAIT_MS } from '@/components/ui/sheet';
+import Shortcut from '@/components/ui/shortcut';
 import SwitchRow from '@/components/ui/switch-row';
 import { Text } from '@/components/ui/text';
 import { useToast } from '@/components/ui/toast';
@@ -57,9 +60,9 @@ import {
   changeUnit,
   draftSnapshot,
   pricing,
+  setupUsesAdvanced,
   stringLabel,
   toStringChoice,
-  setupUsesAdvanced,
   usesAdvanced,
   validateDraft,
   withRacket,
@@ -81,9 +84,8 @@ import {
   useUpdateOrder,
   useUploadPhotos,
 } from '@/lib/queries';
-import type { CatalogString, Client, OrderDetail, Racket } from '@/lib/types';
 import { clearSavedDraft, saveDraft, type SavedDraft } from '@/lib/saved-draft';
-import { useKeyboardHeight } from '@/lib/use-keyboard';
+import type { CatalogString, Client, OrderDetail, Racket } from '@/lib/types';
 
 const MAX_PHOTOS = 10;
 // How long after the last change the draft is written to the device.
@@ -145,7 +147,6 @@ export default function OrderForm({ initial, order, draftKey, saved }: OrderForm
   const { t, language } = useI18n();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const keyboardOpen = useKeyboardHeight() > 0;
   const toast = useToast();
   const confirm = useConfirm();
   const request = useRequest();
@@ -189,6 +190,7 @@ export default function OrderForm({ initial, order, draftKey, saved }: OrderForm
   const extras = services.data?.filter((service) => service.active && service.kind === 'extra') ?? [];
   const prices = pricing(draft, labor, catalog.data ?? []);
 
+  const contentTop = useDetailContentTop();
   const scroll = useRef<ComponentRef<typeof ScrollView>>(null);
   // Where each section starts, to scroll to the first one with a mistake.
   const [sectionY, setSectionY] = useState<Partial<Record<SectionKey, number>>>({});
@@ -340,7 +342,8 @@ export default function OrderForm({ initial, order, draftKey, saved }: OrderForm
     if (firstError) {
       toast.error(t('form_check_fields'));
       scroll.current?.scrollTo({
-        y: Math.max(0, (sectionY[SECTION_OF_ERROR[firstError]] ?? 0) - 12),
+        // The section goes just under the header, not behind it.
+        y: Math.max(0, (sectionY[SECTION_OF_ERROR[firstError]] ?? 0) - contentTop),
         animated: true,
       });
       return;
@@ -388,12 +391,27 @@ export default function OrderForm({ initial, order, draftKey, saved }: OrderForm
   ];
 
   return (
-    <Screen>
+    <Screen
+      flush
+      // Always in reach under the page, like the buttons that add something: it goes while the keyboard is open.
+      dock={
+        <Shortcut
+          icon={editing ? Check : PlusIcon}
+          label={editing ? t('save_changes') : t('create_order')}
+          color={colors.newOrder}
+          contentColor={colors.ink}
+          className="px-5 py-5 w-full"
+          onPress={submit}
+          loading={submitting}
+        />
+      }
+      footer={<View style={{ height: Math.max(insets.bottom, 12) + 24 }} />}>
       <DetailHeader
+        floating
         title={editing ? t('order_edit_title', { number: orderNumber(order.number) }) : t('new_order_title')}
       />
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1">
-        <ScrollView
+        <DetailScroll
           ref={scroll}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
@@ -726,21 +744,8 @@ export default function OrderForm({ initial, order, draftKey, saved }: OrderForm
           </FormSection>
 
           {formError ? <FormError message={formError} /> : null}
-        </ScrollView>
+        </DetailScroll>
 
-        {/* Always in reach at the foot of the page, but not above the keyboard: it goes while one is open. */}
-        {keyboardOpen ? null : (
-          <View
-            className="border-t border-line bg-white px-page pt-3"
-            style={{ paddingBottom: Math.max(insets.bottom, 12) }}>
-            <AppButton
-              large
-              title={editing ? t('save_changes') : t('create_order')}
-              onPress={submit}
-              loading={submitting}
-            />
-          </View>
-        )}
       </KeyboardAvoidingView>
 
       <SearchPicker

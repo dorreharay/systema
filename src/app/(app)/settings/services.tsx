@@ -1,6 +1,6 @@
 import { Plus, Tags } from 'lucide-react-native';
 import { useState } from 'react';
-import { ScrollView, View } from 'react-native';
+import { View } from 'react-native';
 
 import ServiceFormSheet from '@/components/service-form-sheet';
 import AppSwitch from '@/components/ui/app-switch';
@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import Card from '@/components/ui/card';
 import PillButton from '@/components/ui/pill-button';
 import Section from '@/components/ui/section';
-import { DetailHeader, Screen } from '@/components/ui/screen';
+import { DetailHeader, DetailScroll, Screen } from '@/components/ui/screen';
 import { ListSkeleton } from '@/components/ui/skeleton';
 import { EmptyState, ErrorState } from '@/components/ui/states';
 import { Text } from '@/components/ui/text';
@@ -64,12 +64,13 @@ export default function ServicesAndPricing() {
   const archived = services.data?.filter((service) => !service.active) ?? [];
 
   return (
-    <Screen>
+    <Screen flush>
       <DetailHeader
+        floating
         title={t('settings_services')}
         right={<PillButton icon={Plus} label={t('add')} onPress={() => setEditing('new')} />}
       />
-      <ScrollView contentContainerClassName="gap-page p-page pb-10" showsVerticalScrollIndicator={false}>
+      <DetailScroll contentContainerClassName="gap-page p-page pb-10" showsVerticalScrollIndicator={false}>
         <Text className="text-[15px] text-muted">{t('services_hint')}</Text>
         {services.isLoading ? (
           <ListSkeleton variant="row" />
@@ -95,7 +96,7 @@ export default function ServicesAndPricing() {
             ) : null}
           </>
         )}
-      </ScrollView>
+      </DetailScroll>
       <ServiceFormSheet
         visible={editing !== null}
         onClose={() => setEditing(null)}

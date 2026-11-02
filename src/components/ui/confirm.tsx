@@ -1,8 +1,10 @@
+import { Check, Trash2, X } from 'lucide-react-native';
 import { createContext, use, useCallback, useRef, useState, type ReactNode } from 'react';
 import { Modal, Pressable, View } from 'react-native';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
-import AppButton from '@/components/ui/app-button';
+import { colors } from '@/components/ui/colors';
+import Shortcut from '@/components/ui/shortcut';
 import { Text } from '@/components/ui/text';
 import { useI18n } from '@/lib/i18n';
 
@@ -74,14 +76,19 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
                 ) : null}
               </View>
               <View className="gap-2">
-                <AppButton
-                  title={options.confirmLabel}
-                  variant={options.destructive ? 'danger' : 'primary'}
+                <Shortcut
+                  icon={options.destructive ? Trash2 : Check}
+                  label={options.confirmLabel}
+                  color={options.destructive ? colors.danger : colors.newOrder}
+                  contentColor={options.destructive ? colors.white : colors.ink}
                   onPress={() => answer(true)}
                 />
-                <AppButton
-                  title={options.cancelLabel ?? t('cancel')}
-                  variant="ghost"
+                <Shortcut
+                  compact
+                  icon={X}
+                  label={options.cancelLabel ?? t('cancel')}
+                  color={colors.surface}
+                  contentColor={colors.ink}
                   onPress={() => answer(false)}
                 />
               </View>

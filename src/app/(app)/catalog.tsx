@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import Card from '@/components/ui/card';
 import { Segmented } from '@/components/ui/chips';
 import { colors } from '@/components/ui/colors';
-import { DetailHeader, Screen } from '@/components/ui/screen';
+import { DetailHeader, Screen, useDetailContentTop } from '@/components/ui/screen';
 import Shortcut from '@/components/ui/shortcut';
 import { ListSkeleton } from '@/components/ui/skeleton';
 import { EmptyState, ErrorState, NoResults } from '@/components/ui/states';
@@ -50,9 +50,42 @@ export default function Catalog() {
   };
 
   const racketsTab = tab === 'rackets';
+  const contentTop = useDetailContentTop();
+
+  // The tabs and the search go with the list when it is scrolled; the title stays at the top, and the list goes
+  // up behind it.
+  const listHeader = (
+    <View className="gap-3">
+      <Segmented
+        options={[
+          { value: 'rackets' as const, label: t('catalog_rackets') },
+          { value: 'strings' as const, label: t('catalog_strings') },
+        ]}
+        value={tab}
+        onChange={changeTab}
+      />
+      <View className="min-h-12 flex-row items-center gap-2 rounded-lg border border-line bg-white px-3.5">
+        <Search size={18} color={colors.muted} />
+        <TextInput
+          value={text}
+          onChangeText={setText}
+          placeholder={racketsTab ? t('rackets_search_placeholder') : t('strings_search_placeholder')}
+          placeholderTextColor={colors.placeholder}
+          selectionColor={colors.primary}
+          autoCapitalize="none"
+          autoCorrect={false}
+          returnKeyType="search"
+          accessibilityLabel={t('search')}
+          textAlignVertical="center"
+          className="min-w-0 flex-1 py-3 ios:pb-3.5 ios:pt-2.5 font-normal text-base text-ink outline-none"
+        />
+      </View>
+    </View>
+  );
 
   return (
     <Screen
+      flush
       dock={
         <Shortcut
           icon={PlusIcon}
@@ -64,37 +97,12 @@ export default function Catalog() {
         />
       }
       footer={<StackNavBar />}>
-      <DetailHeader title={t('tab_catalog')} />
-      <View className="gap-3 px-page pb-3">
-        <Segmented
-          options={[
-            { value: 'rackets' as const, label: t('catalog_rackets') },
-            { value: 'strings' as const, label: t('catalog_strings') },
-          ]}
-          value={tab}
-          onChange={changeTab}
-        />
-        <View className="min-h-12 flex-row items-center gap-2 rounded-lg border border-line bg-white px-3.5">
-          <Search size={18} color={colors.muted} />
-          <TextInput
-            value={text}
-            onChangeText={setText}
-            placeholder={racketsTab ? t('rackets_search_placeholder') : t('strings_search_placeholder')}
-            placeholderTextColor={colors.placeholder}
-            selectionColor={colors.primary}
-            autoCapitalize="none"
-            autoCorrect={false}
-            returnKeyType="search"
-            accessibilityLabel={t('search')}
-            textAlignVertical="center"
-            className="min-w-0 flex-1 py-3 ios:pb-3.5 ios:pt-2.5 font-normal text-base text-ink outline-none"
-          />
-        </View>
-      </View>
-
+      <DetailHeader floating title={t('tab_catalog')} />
       {racketsTab ? (
         <FlatList
           key="rackets"
+          contentContainerStyle={{ paddingTop: contentTop }}
+          ListHeaderComponent={listHeader}
           data={rackets.data ?? []}
           keyExtractor={(racket) => racket.id}
           contentContainerClassName="gap-3 px-page pb-page"
@@ -141,6 +149,8 @@ export default function Catalog() {
       ) : (
         <FlatList
           key="strings"
+          contentContainerStyle={{ paddingTop: contentTop }}
+          ListHeaderComponent={listHeader}
           data={strings.data ?? []}
           keyExtractor={(string) => string.id}
           contentContainerClassName="gap-3 px-page pb-page"

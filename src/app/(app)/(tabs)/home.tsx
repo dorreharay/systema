@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { Pressable, RefreshControl, ScrollView, View } from 'react-native';
+import { Pressable, RefreshControl, View } from 'react-native';
 
 import CatalogIcon from '@/components/icons/catalog-icon';
 import PlusIcon from '@/components/icons/plus-icon';
@@ -107,11 +107,10 @@ export default function Home() {
         </View>
       }
     >
-      <ScrollView
+      <View
         // The numbers rest at the foot of the page, just above the shortcuts.
-        contentContainerClassName="grow justify-end gap-page pb-page"
+        className="grow justify-end gap-page p-page"
         showsVerticalScrollIndicator={false}
-        scrollEnabled={false}
         refreshControl={
           <RefreshControl
             refreshing={dashboard.isRefetching && !dashboard.isLoading}
@@ -120,7 +119,7 @@ export default function Home() {
           />
         }>
 
-        <View className="gap-page px-page">
+        <View className="gap-page">
           <View className="flex-row overflow-hidden rounded-2xl border border-line bg-white">
             <Stat
               value={data?.active_orders}
@@ -149,7 +148,7 @@ export default function Home() {
             <ErrorState error={dashboard.error} onRetry={() => dashboard.refetch()} />
           ) : null}
         </View>
-      </ScrollView>
+      </View>
     </Screen>
   );
 }

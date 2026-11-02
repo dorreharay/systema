@@ -1,10 +1,11 @@
-import { ChevronLeft, ChevronRight } from 'lucide-react-native';
+import { ChevronLeft, ChevronRight, X } from 'lucide-react-native';
 import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 
-import AppButton from '@/components/ui/app-button';
+import { colors } from '@/components/ui/colors';
 import IconButton from '@/components/ui/icon-button';
 import Sheet from '@/components/ui/sheet';
+import Shortcut from '@/components/ui/shortcut';
 import { Text } from '@/components/ui/text';
 import {
   MONTHS_LONG,
@@ -139,7 +140,7 @@ export function DateSheet({ visible, onClose, title, value, today, onChange, cle
         </View>
         <Calendar value={value} today={today} onPick={pick} />
         {clearable && value ? (
-          <AppButton title={t('date_clear')} variant="ghost" onPress={() => pick(null)} />
+          <Shortcut compact icon={X} label={t('date_clear')} color={colors.surface} contentColor={colors.ink} onPress={() => pick(null)} />
         ) : null}
       </View>
     </Sheet>
@@ -184,7 +185,9 @@ export function TimeSheet({ visible, onClose, value, onChange }: TimeSheetProps)
             </Pressable>
           ))}
         </View>
-        {value ? <AppButton title={t('time_clear')} variant="ghost" onPress={() => pick(null)} /> : null}
+        {value ? (
+          <Shortcut compact icon={X} label={t('time_clear')} color={colors.surface} contentColor={colors.ink} onPress={() => pick(null)} />
+        ) : null}
       </View>
     </Sheet>
   );

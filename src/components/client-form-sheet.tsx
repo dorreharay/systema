@@ -1,9 +1,12 @@
+import { Check } from 'lucide-react-native';
 import { useRef, useState } from 'react';
 import { View } from 'react-native';
 
-import AppButton from '@/components/ui/app-button';
+import PlusIcon from '@/components/icons/plus-icon';
+import { colors } from '@/components/ui/colors';
 import { FormError, Input, type InputRef } from '@/components/ui/input';
 import Sheet from '@/components/ui/sheet';
+import Shortcut from '@/components/ui/shortcut';
 import { useToast } from '@/components/ui/toast';
 import { describeError, fieldError } from '@/lib/errors';
 import { useI18n } from '@/lib/i18n';
@@ -127,9 +130,10 @@ function ClientForm({ client, initialName, onClose, onSaved }: Omit<ClientFormSh
         {formError ? <FormError message={formError} /> : null}
       </View>
       <View className="pt-4">
-        <AppButton
-          large
-          title={client ? t('save') : t('add_client')}
+        <Shortcut
+          icon={client ? Check : PlusIcon}
+          label={client ? t('save') : t('add_client')}
+          color={colors.clients} contentColor={colors.ink}
           onPress={save}
           loading={saving}
         />

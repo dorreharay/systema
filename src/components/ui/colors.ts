@@ -22,4 +22,7 @@ export const colors = {
   // them (a client, a racket, a string).
   clients: '#F3D590',
   catalog: '#CCE7AC',
+  // A soft red for a button that takes something away, with its text (5.7:1 on it).
+  dangerSoft: '#FBE4E1',
+  dangerInk: '#B42318',
 } as const;

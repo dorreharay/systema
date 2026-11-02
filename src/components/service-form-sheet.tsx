@@ -1,9 +1,12 @@
+import { Check } from 'lucide-react-native';
 import { useState } from 'react';
 import { View } from 'react-native';
 
-import AppButton from '@/components/ui/app-button';
+import PlusIcon from '@/components/icons/plus-icon';
+import { colors } from '@/components/ui/colors';
 import { FormError, Input, NumberInput } from '@/components/ui/input';
 import Sheet from '@/components/ui/sheet';
+import Shortcut from '@/components/ui/shortcut';
 import SwitchRow from '@/components/ui/switch-row';
 import { Text } from '@/components/ui/text';
 import { useToast } from '@/components/ui/toast';
@@ -95,7 +98,13 @@ function ServiceForm({ service, onClose }: Omit<ServiceFormSheetProps, 'visible'
         {formError ? <FormError message={formError} /> : null}
       </View>
       <View className="pt-4">
-        <AppButton large title={service ? t('save') : t('add_service')} onPress={save} loading={saving} />
+        <Shortcut
+          icon={service ? Check : PlusIcon}
+          label={service ? t('save') : t('add_service')}
+          color={colors.primarySoft} contentColor={colors.ink}
+          onPress={save}
+          loading={saving}
+        />
       </View>
     </>
   );

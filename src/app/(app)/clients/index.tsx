@@ -9,7 +9,7 @@ import PlusIcon from '@/components/icons/plus-icon';
 import Avatar from '@/components/ui/avatar';
 import Card from '@/components/ui/card';
 import { colors } from '@/components/ui/colors';
-import { DetailHeader, Screen } from '@/components/ui/screen';
+import { DetailHeader, Screen, useDetailContentTop } from '@/components/ui/screen';
 import Shortcut from '@/components/ui/shortcut';
 import { ListSkeleton } from '@/components/ui/skeleton';
 import { EmptyState, ErrorState, NoResults } from '@/components/ui/states';
@@ -30,6 +30,7 @@ export default function Clients() {
   const [adding, setAdding] = useState(false);
   const clients = useClients(query);
   const today = todayIso(user?.timezone);
+  const contentTop = useDetailContentTop();
 
   useEffect(() => {
     const timer = setTimeout(() => setQuery(text), SEARCH_DEBOUNCE_MS);
@@ -38,6 +39,7 @@ export default function Clients() {
 
   return (
     <Screen
+      flush
       dock={
         <Shortcut
           icon={PlusIcon}
@@ -49,27 +51,28 @@ export default function Clients() {
         />
       }
       footer={<StackNavBar />}>
-      <DetailHeader title={t('tab_clients')} />
-      <View className="px-page py-3">
-        <View className="min-h-12 flex-row items-center gap-2 rounded-lg border border-line bg-white px-3.5">
-          <Search size={18} color={colors.muted} />
-          <TextInput
-            value={text}
-            onChangeText={setText}
-            placeholder={t('clients_search_placeholder')}
-            placeholderTextColor={colors.placeholder}
-            selectionColor={colors.primary}
-            autoCapitalize="none"
-            autoCorrect={false}
-            returnKeyType="search"
-            accessibilityLabel={t('search')}
-            textAlignVertical="center"
-            className="min-w-0 flex-1 py-3 ios:pb-3.5 ios:pt-2.5 font-normal text-base text-ink outline-none"
-          />
-        </View>
-      </View>
-
+      <DetailHeader floating title={t('tab_clients')} />
       <FlatList
+        // The search goes with the list when it is scrolled; the title stays at the top, and the list goes up behind it.
+        contentContainerStyle={{ paddingTop: contentTop }}
+        ListHeaderComponent={
+          <View className="min-h-12 flex-row items-center gap-2 rounded-lg border border-line bg-white px-3.5">
+            <Search size={18} color={colors.muted} />
+            <TextInput
+              value={text}
+              onChangeText={setText}
+              placeholder={t('clients_search_placeholder')}
+              placeholderTextColor={colors.placeholder}
+              selectionColor={colors.primary}
+              autoCapitalize="none"
+              autoCorrect={false}
+              returnKeyType="search"
+              accessibilityLabel={t('search')}
+              textAlignVertical="center"
+              className="min-w-0 flex-1 py-3 ios:pb-3.5 ios:pt-2.5 font-normal text-base text-ink outline-none"
+            />
+          </View>
+        }
         data={clients.data ?? []}
         keyExtractor={(client) => client.id}
         contentContainerClassName="gap-3 px-page pb-page"

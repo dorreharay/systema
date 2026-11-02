@@ -1,11 +1,14 @@
+import { Check } from 'lucide-react-native';
 import { useRef, useState } from 'react';
 import { View } from 'react-native';
 
-import AppButton from '@/components/ui/app-button';
+import PlusIcon from '@/components/icons/plus-icon';
+import { colors } from '@/components/ui/colors';
 import { FormError, Input, type InputRef } from '@/components/ui/input';
 import PickerField from '@/components/ui/picker-field';
 import SearchPicker from '@/components/ui/search-picker';
 import Sheet from '@/components/ui/sheet';
+import Shortcut from '@/components/ui/shortcut';
 import { Text } from '@/components/ui/text';
 import { useToast } from '@/components/ui/toast';
 import { describeError } from '@/lib/errors';
@@ -122,7 +125,13 @@ function RacketForm({ racket, owner: knownOwner, onClose, onSaved }: Omit<Racket
         {formError ? <FormError message={formError} /> : null}
       </View>
       <View className="pt-4">
-        <AppButton large title={racket ? t('save') : t('add_racket')} onPress={save} loading={saving} />
+        <Shortcut
+          icon={racket ? Check : PlusIcon}
+          label={racket ? t('save') : t('add_racket')}
+          color={colors.catalog} contentColor={colors.ink}
+          onPress={save}
+          loading={saving}
+        />
       </View>
 
       <SearchPicker

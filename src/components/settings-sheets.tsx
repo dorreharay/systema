@@ -1,13 +1,13 @@
-import { Check } from 'lucide-react-native';
+import { Check, KeyRound } from 'lucide-react-native';
 import { useMemo, useState } from 'react';
 import { View } from 'react-native';
 
-import AppButton from '@/components/ui/app-button';
 import { colors } from '@/components/ui/colors';
 import { FormError, Input } from '@/components/ui/input';
 import PickerField from '@/components/ui/picker-field';
 import SearchPicker from '@/components/ui/search-picker';
 import Sheet from '@/components/ui/sheet';
+import Shortcut from '@/components/ui/shortcut';
 import { Text } from '@/components/ui/text';
 import { useToast } from '@/components/ui/toast';
 import { useAuth } from '@/lib/auth';
@@ -185,7 +185,7 @@ function ProfileForm({ onClose }: { onClose: () => void }) {
         {formError ? <FormError message={formError} /> : null}
       </View>
       <View className="pt-4">
-        <AppButton large title={t('save')} onPress={save} loading={saving} />
+        <Shortcut icon={Check} label={t('save')} color={colors.primarySoft} contentColor={colors.ink} onPress={save} loading={saving} />
       </View>
       <TimeZoneSheet
         visible={choosingZone}
@@ -243,7 +243,7 @@ function WorkshopForm({ onClose }: { onClose: () => void }) {
         {formError ? <FormError message={formError} /> : null}
       </View>
       <View className="pt-4">
-        <AppButton large title={t('save')} onPress={save} loading={saving} />
+        <Shortcut icon={Check} label={t('save')} color={colors.primarySoft} contentColor={colors.ink} onPress={save} loading={saving} />
       </View>
     </>
   );
@@ -284,7 +284,14 @@ function AccountBody({ onClose }: { onClose: () => void }) {
         <Text className="text-base">{user?.email}</Text>
       </View>
       <Text className="text-[15px] text-muted">{t('account_password_hint')}</Text>
-      <AppButton title={t('account_reset_password')} variant="secondary" onPress={sendReset} loading={sending} />
+      <Shortcut
+        compact
+        icon={KeyRound}
+        label={t('account_reset_password')}
+        color={colors.primarySoft} contentColor={colors.ink}
+        onPress={sendReset}
+        loading={sending}
+      />
     </View>
   );
 }

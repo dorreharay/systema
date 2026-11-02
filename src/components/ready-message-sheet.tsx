@@ -1,9 +1,9 @@
-import { Copy, MessageSquare } from 'lucide-react-native';
+import { Copy, MessageSquare, X } from 'lucide-react-native';
 import { View } from 'react-native';
 
-import AppButton from '@/components/ui/app-button';
 import { colors } from '@/components/ui/colors';
 import Sheet from '@/components/ui/sheet';
+import Shortcut from '@/components/ui/shortcut';
 import { Text } from '@/components/ui/text';
 import { useToast } from '@/components/ui/toast';
 import { copyText, textPhone } from '@/lib/contact';
@@ -36,21 +36,17 @@ export default function ReadyMessageSheet({ visible, onClose, message, phone }: 
           </Text>
         </View>
         <View className="gap-2">
-          <AppButton
-            large
-            title={t('copy_message')}
-            icon={<Copy size={20} color={colors.white} />}
-            onPress={copy}
-          />
+          <Shortcut icon={Copy} label={t('copy_message')} color={colors.newOrder} contentColor={colors.ink} onPress={copy} />
           {phone ? (
-            <AppButton
-              title={t('send_text')}
-              variant="secondary"
-              icon={<MessageSquare size={20} color={colors.ink} />}
+            <Shortcut
+              compact
+              icon={MessageSquare}
+              label={t('send_text')}
+              color={colors.primarySoft} contentColor={colors.ink}
               onPress={() => void textPhone(phone, message)}
             />
           ) : null}
-          <AppButton title={t('not_now')} variant="ghost" onPress={onClose} />
+          <Shortcut compact icon={X} label={t('not_now')} color={colors.surface} contentColor={colors.ink} onPress={onClose} />
         </View>
       </View>
     </Sheet>

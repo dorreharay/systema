@@ -11,7 +11,7 @@ import {
   UserRound,
 } from 'lucide-react-native';
 import { useState, type ReactNode } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import ContactSheet from '@/components/contact-sheet';
@@ -26,7 +26,7 @@ import { useConfirm } from '@/components/ui/confirm';
 import IconButton from '@/components/ui/icon-button';
 import { PhotoViewer, ServerPhoto } from '@/components/ui/photo';
 import Section from '@/components/ui/section';
-import { DetailHeader, Screen } from '@/components/ui/screen';
+import { DetailHeader, DetailScroll, Screen } from '@/components/ui/screen';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ErrorState } from '@/components/ui/states';
 import { Text } from '@/components/ui/text';
@@ -166,8 +166,9 @@ export default function OrderDetails() {
   ].filter((line) => line.price !== null);
 
   return (
-    <Screen>
+    <Screen flush>
       <DetailHeader
+        floating
         title={t('order_title', { number: orderNumber(order.number) })}
         right={
           <>
@@ -181,8 +182,7 @@ export default function OrderDetails() {
           </>
         }
       />
-
-      <ScrollView
+      <DetailScroll
         contentContainerClassName="gap-4 p-page pb-8"
         showsVerticalScrollIndicator={false}>
         <View className="flex-row flex-wrap items-center gap-2">
@@ -348,7 +348,7 @@ export default function OrderDetails() {
             )}
           </Card>
         </Section>
-      </ScrollView>
+      </DetailScroll>
 
       {next ? (
         <View

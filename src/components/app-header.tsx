@@ -18,7 +18,7 @@ import { useAuth } from '@/lib/auth';
 const TITLE = 're:string';
 // The title is typed out once per launch, signed in or not. If the header is mounted again it is already docked.
 let introPlayed = false;
-export const HEADER_HEIGHT = 64;
+export const HEADER_HEIGHT = 104;
 // Inside the app only the home page has the logo in its header; the header of the other pages is empty, and half as tall.
 export const COMPACT_HEADER_HEIGHT = HEADER_HEIGHT / 2;
 const HOME_PATH = '/home';

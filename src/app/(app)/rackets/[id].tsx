@@ -1,7 +1,7 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { MoreHorizontal, Pencil, Plus, Repeat, Trash2 } from 'lucide-react-native';
 import { useState } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import RacketFormSheet from '@/components/racket-form-sheet';
@@ -13,7 +13,7 @@ import { colors } from '@/components/ui/colors';
 import { useConfirm } from '@/components/ui/confirm';
 import IconButton from '@/components/ui/icon-button';
 import Section from '@/components/ui/section';
-import { DetailHeader, Screen } from '@/components/ui/screen';
+import { DetailHeader, DetailScroll, Screen } from '@/components/ui/screen';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ErrorState } from '@/components/ui/states';
 import { Text } from '@/components/ui/text';
@@ -75,8 +75,9 @@ export default function RacketDetails() {
   };
 
   return (
-    <Screen>
+    <Screen flush>
       <DetailHeader
+        floating
         title={racketName(racket)}
         right={
           <>
@@ -90,7 +91,7 @@ export default function RacketDetails() {
           </>
         }
       />
-      <ScrollView contentContainerClassName="gap-page p-page pb-8" showsVerticalScrollIndicator={false}>
+      <DetailScroll contentContainerClassName="gap-page p-page pb-8" showsVerticalScrollIndicator={false}>
         <Card className="gap-3">
           <View className="gap-0.5">
             <Text className="text-[13px] text-muted">{racket.brand}</Text>
@@ -162,7 +163,7 @@ export default function RacketDetails() {
             </View>
           )}
         </Section>
-      </ScrollView>
+      </DetailScroll>
 
       {racket.last_setup ? (
         <View

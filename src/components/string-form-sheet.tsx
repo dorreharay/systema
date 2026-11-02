@@ -1,10 +1,13 @@
+import { Check, Trash2 } from 'lucide-react-native';
 import { useRef, useState } from 'react';
 import { Pressable, View } from 'react-native';
 
-import AppButton from '@/components/ui/app-button';
+import PlusIcon from '@/components/icons/plus-icon';
+import { colors } from '@/components/ui/colors';
 import { useConfirm } from '@/components/ui/confirm';
 import { FormError, Input, NumberInput, type InputRef } from '@/components/ui/input';
 import Sheet from '@/components/ui/sheet';
+import Shortcut from '@/components/ui/shortcut';
 import { Text } from '@/components/ui/text';
 import { useToast } from '@/components/ui/toast';
 import { useAuth } from '@/lib/auth';
@@ -169,9 +172,23 @@ function StringForm({ string, initialModel, onClose, onSaved }: Omit<StringFormS
         {formError ? <FormError message={formError} /> : null}
       </View>
       <View className="gap-2 pt-4">
-        <AppButton large title={string ? t('save') : t('add_string')} onPress={save} loading={saving} />
+        <Shortcut
+          icon={string ? Check : PlusIcon}
+          label={string ? t('save') : t('add_string')}
+          color={colors.catalog} contentColor={colors.ink}
+          onPress={save}
+          loading={saving}
+        />
         {string ? (
-          <AppButton title={t('delete')} variant="dangerOutline" onPress={confirmRemove} loading={remove.isPending} />
+          <Shortcut
+            compact
+            icon={Trash2}
+            label={t('delete')}
+            color={colors.dangerSoft}
+            contentColor={colors.dangerInk}
+            onPress={confirmRemove}
+            loading={remove.isPending}
+          />
         ) : null}
       </View>
     </>
