@@ -672,6 +672,94 @@ test('Dashboard', 'this month is the stringer\'s month, not the server\'s', asyn
 });
 
 // ---------------------------------------------------------------------------
+// Insights
+// ---------------------------------------------------------------------------
+test('Insights', 'need a signed-in stringer, and each has their own', async (ctx) => {
+  // A client of its own: the shared anonymous one may have signed in by an earlier test.
+  assertStatus(await new Client(ctx.server.base).get('/api/insights'), 401);
+  const s = await shop(ctx);
+  await s.client.post('/api/orders', minimalOrder(s, { labor_price: 100 }));
+  assertEq((await s.client.get('/api/insights')).data.receivables.unpaid_total, 100, 'their own order');
+  const other = (await register(ctx)).client;
+  const { data } = await other.get('/api/insights');
+  assertEq([data.receivables.unpaid_total, data.revenue.total, data.workload.overdue], [0, 0, 0], 'another stringer has none');
+});
+test('Insights', 'revenue is what was paid, on the day it was paid, in the stringer\'s month', async (ctx) => {
+  const s = await shop(ctx);
+  const make = async (extra) => (await s.client.post('/api/orders', minimalOrder(s, extra))).data;
+  const now = new Date();
+  const [year, month, day] = [now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()];
+  const iso = (y, m, d) => new Date(Date.UTC(y, m, d)).toISOString().slice(0, 10);
+  const paidAt = (order, date) => dbExec(`UPDATE orders SET paid_at = '${date} 12:00:00+00' WHERE id='${order.id}'`);
+
+  await make({ labor_price: 100, is_paid: true }); // paid now
+  paidAt(await make({ labor_price: 200, is_paid: true }), iso(year, month, 1)); // the first of this month
+  paidAt(await make({ labor_price: 400, is_paid: true }), iso(year, month - 1, 1)); // the first of last month
+  paidAt(await make({ labor_price: 800, is_paid: true }), iso(year, month, 0)); // the last day of last month
+  await make({ labor_price: 1600 }); // not paid: not revenue
+  await make({ is_paid: true }); // paid, but with no price: nothing
+
+  const { revenue } = (await s.client.get('/api/insights')).data;
+  assertEq(revenue.days.length, new Date(Date.UTC(year, month + 1, 0)).getUTCDate(), 'a day of the month each');
+  assertEq(revenue.days[0].date, iso(year, month, 1), 'from the first');
+  assertEq(revenue.total, 300, 'this month: what was paid');
+  assertEq(revenue.days[0].total, 200 + (day === 1 ? 100 : 0), 'the first');
+  assertEq(revenue.days[day - 1].total, 100 + (day === 1 ? 200 : 0), 'today');
+  // Last month is counted up to the same day of the month as today: all of it, once this day is past its last.
+  const lastMonthLength = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  assertEq(revenue.previous_total, 400 + (day >= lastMonthLength ? 800 : 0), 'the same days of last month');
+});
+test('Insights', 'the week ahead counts the work still to do on each day, and what is late', async (ctx) => {
+  const s = await shop(ctx);
+  const make = async (extra) => (await s.client.post('/api/orders', minimalOrder(s, extra))).data;
+  const today = new Date().toISOString().slice(0, 10); // the stringer's zone is UTC
+  const plus = (days) => new Date(Date.parse(`${today}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
+  await make({ due_date: today });
+  await make({ due_date: today });
+  await make({ due_date: plus(2) });
+  await make({ due_date: plus(6) });
+  await make({ due_date: plus(7) }); // after the week
+  await make({ due_date: plus(-1) }); // late
+  const ready = await make({ due_date: today });
+  await s.client.patch(`/api/orders/${ready.id}`, { status: 'ready' }); // done: it waits to be picked up
+  const handedOver = await make({ due_date: plus(-3) });
+  await s.client.patch(`/api/orders/${handedOver.id}`, { status: 'completed' });
+  await make({}); // no day promised
+
+  const { workload } = (await s.client.get('/api/insights')).data;
+  assertEq(workload.days.map((d) => d.date), [0, 1, 2, 3, 4, 5, 6].map(plus), 'seven days from today');
+  assertEq(workload.days.map((d) => d.count), [2, 0, 1, 0, 0, 0, 1], 'work to do on each');
+  assertEq(workload.overdue, 1, 'late');
+});
+test('Insights', 'what is unpaid, who owes it and who pays the most', async (ctx) => {
+  const s = await shop(ctx);
+  const racketOf = async (name) => {
+    const client = (await s.client.post('/api/clients', { name, phone: '+380501112244' })).data;
+    const racket = (await s.client.post('/api/rackets', { client_id: client.id, brand: 'Babolat', model: 'Pure Drive' })).data;
+    return { client, racket };
+  };
+  const make = (who, extra) => s.client.post('/api/orders', { client_id: who.client.id, racket_id: who.racket.id, ...extra });
+  const maria = { client: s.customer, racket: s.racket };
+  const serena = await racketOf('Serena Williams');
+  const gone = await racketOf('Gone');
+
+  await make(maria, { labor_price: 100 });
+  await make(maria, { labor_price: 50 });
+  await make(maria, {}); // no price: nothing owed yet
+  await make(serena, { labor_price: 70 });
+  await make(serena, { labor_price: 500, is_paid: true });
+  await make(maria, { labor_price: 30, is_paid: true });
+  await make(gone, { labor_price: 25 });
+  assertStatus(await s.client.delete(`/api/clients/${gone.client.id}`), 200);
+
+  const { receivables } = (await s.client.get('/api/insights')).data;
+  assertEq([receivables.unpaid_total, receivables.unpaid_orders], [245, 4], 'all that is unpaid');
+  const rows = (list) => list.map((row) => [row.client.name, row.total, row.orders]);
+  assertEq(rows(receivables.debtors), [['Maria Sharapova', 150, 2], ['Serena Williams', 70, 1]], 'who owes: a removed client is left out');
+  assertEq(rows(receivables.top_clients), [['Serena Williams', 500, 1], ['Maria Sharapova', 30, 1]], 'the best clients');
+});
+
+// ---------------------------------------------------------------------------
 // Bootstrap
 // ---------------------------------------------------------------------------
 test('Bootstrap', 'the first admin from SEED_ADMIN_* can sign in', async (ctx) => {

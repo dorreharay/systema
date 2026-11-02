@@ -14,6 +14,7 @@ import type {
   Client,
   ClientDetail,
   Dashboard,
+  Insights,
   Order,
   OrderDetail,
   OrderInput,
@@ -44,6 +45,11 @@ const search = (q: string) => (q.trim() ? `?q=${encodeURIComponent(q.trim())}` :
 export const useDashboard = () => {
   const request = useRequest();
   return useQuery({ queryKey: ['dashboard'], queryFn: () => request<Dashboard>('/api/dashboard') });
+};
+
+export const useInsights = () => {
+  const request = useRequest();
+  return useQuery({ queryKey: ['insights'], queryFn: () => request<Insights>('/api/insights') });
 };
 
 export type OrderFilter = { status?: OrderStatus | 'active'; q?: string; clientId?: string };

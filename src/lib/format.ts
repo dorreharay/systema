@@ -57,6 +57,20 @@ export function formatMoney(amount: number | null, currency: string, language: L
   }
 }
 
+/** A total without the cents, for the big numbers: "$1,040". */
+export function formatMoneyWhole(amount: number, currency: string, language: Language) {
+  try {
+    return new Intl.NumberFormat(LOCALES[language], {
+      style: 'currency',
+      currency,
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(amount);
+  } catch {
+    return `${Math.round(amount)} ${currency}`;
+  }
+}
+
 // Hermes on iOS answers a "narrow symbol" with the bare code, so the common ones are written out.
 const SYMBOLS: Record<string, string> = {
   USD: '$', EUR: '€', GBP: '£', UAH: '₴', PLN: 'zł', CAD: '$', AUD: '$', SEK: 'kr', NOK: 'kr',

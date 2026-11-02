@@ -20,6 +20,9 @@ const HEADER_ROW_HEIGHT = 56;
 const HEADER_ROW = 'flex-row items-center gap-4 pb-4';
 /** How much lower than the row of a detail header the title of a tab stands (the tabs' headers all have it). */
 export const TAB_HEADER_DROP = 16;
+// The room the logo takes under the notch, on the page that has it. The logo stands in the upper part of the app header
+// (see app-header), so the page can start before the foot of the header: this much sooner.
+const LOGO_ROOM = HEADER_HEIGHT - 40;
 
 type ScreenProps = {
   children: ReactNode;
@@ -46,7 +49,7 @@ export function Screen({ children, dock, footer, logo, flush }: ScreenProps) {
   const insets = useSafeAreaInsets();
   // With the keyboard up, the dock and what is under it step aside: on Android they would ride on top of it.
   const keyboardOpen = useKeyboardHeight() > 0;
-  const paddingTop = flush ? 0 : insets.top + (logo ? HEADER_HEIGHT : HEADER_TOP_GAP);
+  const paddingTop = flush ? 0 : insets.top + (logo ? LOGO_ROOM : HEADER_TOP_GAP);
 
   if (!dock) {
     return (
@@ -209,7 +212,13 @@ export function DetailHeader({ title, right, onBack, floating }: DetailHeaderPro
         <View className="absolute inset-0 bg-[rgba(60,60,67,0.12)]" />
         <ArrowLeft size={22} color={colors.ink} />
       </Pressable>
-      <Text accessibilityRole="header" className={`flex-1 ${PAGE_TITLE}`} numberOfLines={1}>
+      {/* A title that does not fit (an order number beside two buttons) gets a little smaller before it is cut. */}
+      <Text
+        accessibilityRole="header"
+        className={`flex-1 ${PAGE_TITLE}`}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.8}>
         {title}
       </Text>
       {right ? <View className="flex-row items-center pr-2">{right}</View> : null}

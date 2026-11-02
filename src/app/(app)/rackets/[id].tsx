@@ -127,7 +127,7 @@ export default function RacketDetails() {
               compact
               icon={Repeat}
               label={t('repeat_last_setup')}
-              color={colors.primarySoft}
+              color={colors.surface}
               contentColor={colors.ink}
               onPress={() => router.push({ pathname: '/orders/new', params: { racketId: racket.id } })}
             />

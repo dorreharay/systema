@@ -42,7 +42,7 @@ export default function ReadyMessageSheet({ visible, onClose, message, phone }: 
               compact
               icon={MessageSquare}
               label={t('send_text')}
-              color={colors.primarySoft} contentColor={colors.ink}
+              color={colors.surface} contentColor={colors.ink}
               onPress={() => void textPhone(phone, message)}
             />
           ) : null}

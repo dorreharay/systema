@@ -1,26 +1,27 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Mail, MoreHorizontal, Pencil, Phone, Trash2 } from 'lucide-react-native';
+import { Mail, MoreHorizontal, Pencil, Trash2 } from 'lucide-react-native';
 import { useState } from 'react';
 import { View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import CallButton from '@/components/call-button';
 import ClientFormSheet from '@/components/client-form-sheet';
+import PlusIcon from '@/components/icons/plus-icon';
 import OrderCard from '@/components/order-card';
 import RacketFormSheet from '@/components/racket-form-sheet';
 import ActionSheet from '@/components/ui/action-sheet';
-import PlusIcon from '@/components/icons/plus-icon';
 import Card from '@/components/ui/card';
 import { colors } from '@/components/ui/colors';
 import { useConfirm } from '@/components/ui/confirm';
 import IconButton from '@/components/ui/icon-button';
-import Section from '@/components/ui/section';
 import { DetailHeader, DetailScroll, Screen } from '@/components/ui/screen';
+import Section from '@/components/ui/section';
 import Shortcut from '@/components/ui/shortcut';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ErrorState } from '@/components/ui/states';
 import { Text } from '@/components/ui/text';
 import { useToast } from '@/components/ui/toast';
-import { callPhone, emailTo } from '@/lib/contact';
+import { emailTo } from '@/lib/contact';
 import { describeError } from '@/lib/errors';
 import { racketName } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
@@ -91,43 +92,27 @@ export default function ClientDetails() {
       <DetailHeader
         floating
         title={client.name}
-        right={<IconButton icon={MoreHorizontal} label={t('more_actions')} onPress={() => setMenu(true)} />}
+        right={
+          <>
+            {client.phone ? <CallButton phone={client.phone} /> : null}
+            <IconButton icon={MoreHorizontal} label={t('more_actions')} onPress={() => setMenu(true)} />
+          </>
+        }
       />
-      <DetailScroll contentContainerClassName="gap-page p-page pb-28" showsVerticalScrollIndicator={false}>
-        {/* The name is the title of the header; what is left of the profile is how to reach the client. */}
-        {client.phone || client.email || client.notes ? (
+      <DetailScroll contentContainerClassName="gap-page p-page mt-4 pb-28" showsVerticalScrollIndicator={false}>
+        {/* The name is the title of the header; what is left of the profile is how to reach the client. The call is
+            a button in the header. */}
+        {client.email || client.notes ? (
           <Card className="gap-3">
-            {client.phone || client.email ? (
-              <View className="gap-0.5">
-                {client.phone ? <Text className="text-[16.5px] text-muted">{client.phone}</Text> : null}
-                {client.email ? <Text className="text-[16.5px] text-muted">{client.email}</Text> : null}
-              </View>
-            ) : null}
-            {client.phone || client.email ? (
-              <View className="flex-row flex-wrap gap-2">
-                {client.phone ? (
-                  <Shortcut
-                    compact
-                    className="min-w-[46%] flex-1"
-                    icon={Phone}
-                    label={t('call')}
-                    color={colors.primarySoft}
-                    contentColor={colors.ink}
-                    onPress={() => void callPhone(client.phone!)}
-                  />
-                ) : null}
-                {client.email ? (
-                  <Shortcut
-                    compact
-                    className="min-w-[46%] flex-1"
-                    icon={Mail}
-                    label={t('field_email')}
-                    color={colors.primarySoft}
-                    contentColor={colors.ink}
-                    onPress={() => void emailTo(client.email!)}
-                  />
-                ) : null}
-              </View>
+            {client.email ? (
+              <Shortcut
+                compact
+                icon={Mail}
+                label={t('field_email')}
+                color={colors.surface}
+                contentColor={colors.ink}
+                onPress={() => void emailTo(client.email!)}
+              />
             ) : null}
             {client.notes ? <Text className="text-[16.5px] text-muted">{client.notes}</Text> : null}
           </Card>

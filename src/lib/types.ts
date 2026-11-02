@@ -120,6 +120,36 @@ export type Dashboard = {
   active: Order[];
 };
 
+/** A client with what their orders add up to (what they owe, or what they have paid). */
+export type ClientTotal = {
+  client: { id: string; name: string };
+  total: number;
+  orders: number;
+};
+
+/** GET /api/insights: what the home screen shows besides the numbers. `today` and the days are the stringer's. */
+export type Insights = {
+  today: string;
+  revenue: {
+    total: number;
+    // The same days of the month before, so that the two can be compared at any point in the month.
+    previous_total: number;
+    // Every day of this month, with what was paid on it.
+    days: { date: string; total: number }[];
+  };
+  workload: {
+    overdue: number;
+    // Today and the six days after it, with the work still to do for each.
+    days: { date: string; count: number }[];
+  };
+  receivables: {
+    unpaid_total: number;
+    unpaid_orders: number;
+    debtors: ClientTotal[];
+    top_clients: ClientTotal[];
+  };
+};
+
 /** The body of POST and PATCH /api/orders. */
 export type OrderInput = Partial<Setup> & {
   client_id?: string;

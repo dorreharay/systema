@@ -1,4 +1,4 @@
-import { RotateCcw, SearchX, WifiOff, TriangleAlert, type LucideIcon } from 'lucide-react-native';
+import { RotateCcw, SearchX, TriangleAlert, WifiOff, type LucideIcon } from 'lucide-react-native';
 import { View } from 'react-native';
 
 import { colors } from '@/components/ui/colors';
@@ -16,24 +16,14 @@ type EmptyStateProps = {
 };
 
 // What a list says when there is nothing in it: what that means, and the next step.
-export function EmptyState({ icon: Icon, title, message, actionLabel, onAction }: EmptyStateProps) {
+export function EmptyState({ icon: Icon, title, message }: EmptyStateProps) {
   return (
-    <View className="items-center gap-3 px-6 py-12">
-      <View className="size-16 items-center justify-center rounded-full bg-primary-soft">
+    <View className="items-center justify-center gap-3 px-6 py-12 h-[45vh]">
+      <View className="size-16 items-center justify-center rounded-full bg-white">
         <Icon size={28} color={colors.primary} />
       </View>
       <Text className="text-center text-[18.7px] font-semibold">{title}</Text>
       {message ? <Text className="text-center text-[16.5px] text-muted">{message}</Text> : null}
-      {actionLabel && onAction ? (
-        <Shortcut
-          compact
-          label={actionLabel}
-          color={colors.primarySoft}
-          contentColor={colors.ink}
-          onPress={onAction}
-          className="mt-2 self-stretch"
-        />
-      ) : null}
     </View>
   );
 }

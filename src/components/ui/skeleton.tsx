@@ -6,19 +6,19 @@ import Animated, {
   withRepeat,
   withTiming,
 } from 'react-native-reanimated';
-import { View } from 'react-native';
+import { View, type StyleProp, type ViewStyle } from 'react-native';
 
 // A grey block that pulses where something is still loading.
-export function Skeleton({ className = '' }: { className?: string }) {
+export function Skeleton({ className = '', style }: { className?: string; style?: StyleProp<ViewStyle> }) {
   const pulse = useSharedValue(0);
 
   useEffect(() => {
     pulse.set(withRepeat(withTiming(1, { duration: 800, easing: Easing.inOut(Easing.quad) }), -1, true));
   }, [pulse]);
 
-  const style = useAnimatedStyle(() => ({ opacity: 0.45 + pulse.get() * 0.55 }));
+  const pulseStyle = useAnimatedStyle(() => ({ opacity: 0.45 + pulse.get() * 0.55 }));
 
-  return <Animated.View className={`rounded-md bg-neutral-200 ${className}`} style={style} />;
+  return <Animated.View className={`rounded-md bg-neutral-200 ${className}`} style={[style, pulseStyle]} />;
 }
 
 export function OrderCardSkeleton() {

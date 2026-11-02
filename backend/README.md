@@ -25,7 +25,7 @@ backend/
     bootstrap.js          creates the first admin when there are no users
     db/                   schema.js, index.js (pool + drizzle), migrate.js
     middleware/           auth (requireAuth, requireRole), validate, rateLimit, error
-    routes/               one file per resource: auth, clients, rackets, strings, services, orders, photos, dashboard
+    routes/               one file per resource: auth, clients, rackets, strings, services, orders, photos, dashboard, insights
     utils/                http (HttpError), password, tokens, session, email, emailTemplates, emailFailure
     scripts/seed.js
   drizzle/                generated SQL migrations (commit them)
@@ -118,6 +118,7 @@ orders that used it (an old order never loses its history); an order is deleted 
 | `POST` | `/api/orders/:id/photos` | the body is the image (JPEG, PNG, WebP or HEIC, up to 8 MB, up to 10 per order); the type is read from the bytes |
 | `GET` `DELETE` | `/api/photos/:id` | the image itself (cached by the app: a photo never changes) / remove it |
 | `GET` | `/api/dashboard` | `active_orders`, `ready_for_pickup`, `completed_this_month` (the stringer's month, in their time zone) and the next orders `active` by due date |
+| `GET` | `/api/insights` | what the home screen charts, in the stringer's time zone: `revenue` (what was paid this month day by day, and `previous_total` for the same days of last month), `workload` (the work still to do on each of the next seven days, and `overdue`) and `receivables` (what is unpaid, `debtors`, and the best `top_clients`) |
 
 An order needs a `client_id` and a `racket_id` of that client and nothing else. **Tension is always in
 kilograms** (`main_tension`, `cross_tension`, 5 to 60); `tension_unit` in the profile only changes how the

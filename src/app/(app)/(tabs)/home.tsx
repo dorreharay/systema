@@ -1,6 +1,7 @@
 import { useRouter } from 'expo-router';
-import { Pressable, RefreshControl, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 
+import HomeInsights from '@/components/home-insights';
 import CatalogIcon from '@/components/icons/catalog-icon';
 import PlusIcon from '@/components/icons/plus-icon';
 import UserIcon from '@/components/icons/user-icon';
@@ -34,7 +35,7 @@ function greetingKey(hour: number): TKey {
   return 'greeting_evening';
 }
 
-type StatProps = { value: number | undefined; failed: boolean; label: string; onPress: () => void };
+type StatProps = { value: number | undefined; failed: boolean; label: string; onPress?: () => void };
 
 // One third of the row of numbers: each of them presses on its own. The number and its name are in the middle of the
 // third, so that the dividers are the same distance from what stands on both sides of them.
@@ -44,7 +45,7 @@ function Stat({ value, failed, label, onPress }: StatProps) {
       accessibilityRole="button"
       accessibilityLabel={`${label}: ${value ?? ''}`}
       onPress={onPress}
-      className="flex-1 items-center gap-1 px-3 py-3 active:opacity-60">
+      className="flex-1 items-center gap-1 px-3 py-3">
       {value === undefined && !failed ? (
         <Skeleton className="my-1 h-7 w-10" />
       ) : (
@@ -108,49 +109,43 @@ export default function Home() {
         </View>
       }
     >
-      <View
-        // The numbers rest at the foot of the page, just above the shortcuts.
-        className="grow justify-end gap-page p-page"
+      {/* The numbers rest at the foot of the page, just above the shortcuts; the insights fill the room above them.
+          On a screen too short for both, the page scrolls instead of squeezing the insights. */}
+      <ScrollView
+        bounces={false}
+        overScrollMode="never"
         showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={dashboard.isRefetching && !dashboard.isLoading}
-            onRefresh={() => void dashboard.refetch()}
-            tintColor={colors.primary}
-          />
-        }>
-
-        <View className="gap-page">
-          {/* Edge to edge: it takes back the margin of the page, and the three thirds are equal. */}
-          <View className="-mx-page flex-row">
-            <Stat
-              value={data?.active_orders}
-              failed={dashboard.isError}
-              label={t('stat_active')}
-              onPress={() => router.navigate({ pathname: '/orders', params: { status: 'active' } })}
-            />
-            <StatDivider />
-            <Stat
-              value={data?.ready_for_pickup}
-              failed={dashboard.isError}
-              label={t('stat_ready')}
-              onPress={() => router.navigate({ pathname: '/orders', params: { status: 'ready' } })}
-            />
-            <StatDivider />
-            <Stat
-              value={data?.completed_this_month}
-              failed={dashboard.isError}
-              label={t('stat_completed_month')}
-              onPress={() => router.navigate({ pathname: '/orders', params: { status: 'completed' } })}
-            />
-          </View>
-
-          {/* The numbers above are all there is to load here, so a failure gets its retry here. */}
-          {dashboard.isError && !data ? (
+        contentContainerClassName="grow p-page">
+        {/* When the numbers cannot be loaded, the retry takes the place of the insights: both need the same connection. */}
+        {dashboard.isError && !data ? (
+          <View className="flex-1 justify-center">
             <ErrorState error={dashboard.error} onRetry={() => dashboard.refetch()} />
-          ) : null}
+          </View>
+        ) : (
+          <HomeInsights />
+        )}
+
+        {/* Edge to edge: it takes back the margin of the page, and the three thirds are equal. */}
+        <View className="-mx-page flex-row">
+          <Stat
+            value={data?.active_orders}
+            failed={dashboard.isError}
+            label={t('stat_active')}
+          />
+          <StatDivider />
+          <Stat
+            value={data?.ready_for_pickup}
+            failed={dashboard.isError}
+            label={t('stat_ready')}
+          />
+          <StatDivider />
+          <Stat
+            value={data?.completed_this_month}
+            failed={dashboard.isError}
+            label={t('stat_completed_month')}
+          />
         </View>
-      </View>
+      </ScrollView>
     </Screen>
   );
 }

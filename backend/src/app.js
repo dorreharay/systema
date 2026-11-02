@@ -7,6 +7,7 @@ import { errorHandler, notFoundHandler } from './middleware/error.js';
 import authRouter from './routes/auth.js';
 import clientsRouter from './routes/clients.js';
 import dashboardRouter from './routes/dashboard.js';
+import insightsRouter from './routes/insights.js';
 import ordersRouter from './routes/orders.js';
 import photosRouter from './routes/photos.js';
 import racketsRouter from './routes/rackets.js';
@@ -29,6 +30,7 @@ export function createApp() {
 
   app.use('/api/auth', authRouter);
   app.use('/api/dashboard', dashboardRouter);
+  app.use('/api/insights', insightsRouter);
   app.use('/api/clients', clientsRouter);
   app.use('/api/rackets', racketsRouter);
   app.use('/api/strings', stringsRouter);

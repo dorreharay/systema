@@ -15,6 +15,7 @@ import { useState, type ReactNode } from 'react';
 import { Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import CallButton from '@/components/call-button';
 import ContactSheet from '@/components/contact-sheet';
 import { useDueText } from '@/components/order-card';
 import ReadyMessageSheet from '@/components/ready-message-sheet';
@@ -34,7 +35,7 @@ import StatusSteps from '@/components/ui/status-steps';
 import { Text } from '@/components/ui/text';
 import { useToast } from '@/components/ui/toast';
 import { useAuth } from '@/lib/auth';
-import { callPhone, copyText, emailTo } from '@/lib/contact';
+import { copyText, emailTo } from '@/lib/contact';
 import { describeError } from '@/lib/errors';
 import {
   formatMoney,
@@ -189,7 +190,12 @@ export default function OrderDetails() {
       <DetailHeader
         floating
         title={t('order_title', { number: orderNumber(order.number) })}
-        right={<IconButton icon={MoreHorizontal} label={t('more_actions')} onPress={() => setMenu(true)} />}
+        right={
+          <>
+            {order.client.phone ? <CallButton phone={order.client.phone} /> : null}
+            <IconButton icon={MoreHorizontal} label={t('more_actions')} onPress={() => setMenu(true)} />
+          </>
+        }
       />
       <DetailScroll
         contentContainerClassName="gap-4 p-page pb-28"
@@ -226,31 +232,15 @@ export default function OrderDetails() {
                 </Text>
               </View>
             </Pressable>
-            {hasContact ? (
-              <View className="flex-row flex-wrap gap-2">
-                {order.client.phone ? (
-                  <Shortcut
-                    compact
-                    className="min-w-[46%] flex-1"
-                    icon={Phone}
-                    label={t('call')}
-                    color={colors.primarySoft}
-                    contentColor={colors.ink}
-                    onPress={() => void callPhone(order.client.phone!)}
-                  />
-                ) : null}
-                {!order.client.phone && order.client.email ? (
-                  <Shortcut
-                    compact
-                    className="min-w-[46%] flex-1"
-                    icon={Mail}
-                    label={t('field_email')}
-                    color={colors.primarySoft}
-                    contentColor={colors.ink}
-                    onPress={() => void emailTo(order.client.email!)}
-                  />
-                ) : null}
-              </View>
+            {!order.client.phone && order.client.email ? (
+              <Shortcut
+                compact
+                icon={Mail}
+                label={t('field_email')}
+                color={colors.surface}
+                contentColor={colors.ink}
+                onPress={() => void emailTo(order.client.email!)}
+              />
             ) : null}
           </View>
         </Card>
@@ -359,7 +349,7 @@ export default function OrderDetails() {
                 compact
                 icon={Check}
                 label={t('mark_paid')}
-                color={colors.primarySoft}
+                color={colors.surface}
                 contentColor={colors.ink}
                 onPress={() => setPaid(true)}
                 loading={update.isPending && update.variables?.is_paid === true}
