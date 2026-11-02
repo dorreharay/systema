@@ -11,7 +11,7 @@ import {
   Tags
 } from 'lucide-react-native';
 import { useState } from 'react';
-import { ScrollView, Switch, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 
 import {
   AccountSheet,
@@ -20,8 +20,8 @@ import {
   ProfileSheet,
   WorkshopSheet,
 } from '@/components/settings-sheets';
+import AppSwitch from '@/components/ui/app-switch';
 import { Segmented } from '@/components/ui/chips';
-import { colors } from '@/components/ui/colors';
 import { useConfirm } from '@/components/ui/confirm';
 import ListRow, { ListGroup } from '@/components/ui/list-row';
 import { Screen, ScreenHeader } from '@/components/ui/screen';
@@ -105,12 +105,10 @@ export default function Settings() {
             icon={Bell}
             label={t('settings_notifications')}
             trailing={
-              <Switch
+              <AppSwitch
                 accessibilityLabel={t('settings_notifications')}
                 value={user.notifications_enabled}
                 onValueChange={(enabled) => void changeReminders(enabled)}
-                trackColor={{ false: '#d0d5dd', true: colors.primary }}
-                thumbColor="#ffffff"
               />
             }
           />

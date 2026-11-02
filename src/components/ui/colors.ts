@@ -10,6 +10,12 @@ export const colors = {
   surface: '#f4f5f6',
   danger: '#d92d20',
   white: '#ffffff',
+  // The track of a switch that is off: 3.6:1 on white, where the pale grey it replaces was 1.5:1 and the
+  // switch vanished into the page (a control needs 3:1).
+  switchOff: '#7c8799',
   // The dark band under the pages (see global.css).
   chrome: '#1A1A1A',
+  // The New Order shortcut: a soft blue, as light and as muted as the yellow of Clients and the green of
+  // Catalog beside it (see home.tsx).
+  newOrder: '#C3DDF0',
 } as const;

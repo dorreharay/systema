@@ -13,7 +13,7 @@ export default function PillButton({ icon: Icon, label, onPress }: PillButtonPro
       accessibilityRole="button"
       accessibilityLabel={label}
       onPress={onPress}
-      className="min-h-11 flex-row items-center gap-1.5 rounded-full bg-primary px-4 active:opacity-85">
+      className="min-h-11 flex-row items-center gap-1.5 rounded-lg bg-primary px-4 active:opacity-85">
       <Icon size={18} color={colors.white} />
       <Text className="text-[15px] font-semibold text-white" numberOfLines={1}>
         {label}

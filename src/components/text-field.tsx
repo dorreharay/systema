@@ -82,6 +82,7 @@ export default function TextField({
           placeholderTextColor="rgba(255, 255, 255, 0.55)"
           selectionColor="#ffffff"
           keyboardAppearance="dark"
+          textAlignVertical="center"
           autoCorrect={false}
           spellCheck={false}
           className={`absolute inset-0 pl-4 ios:pb-1 text-[1.125rem] font-normal text-white outline-none ${

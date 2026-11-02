@@ -37,7 +37,7 @@ export function Input({
     <View className={`gap-1.5 ${className}`}>
       {label ? <Text className="text-[13px] font-medium text-muted">{label}</Text> : null}
       <View
-        className={`flex-row rounded-xl border bg-white px-3.5 ${
+        className={`flex-row rounded-lg border bg-white px-3.5 ${
           multiline ? 'min-h-24 items-start' : 'min-h-12 items-center'
         } ${error ? 'border-danger' : focused ? 'border-primary' : 'border-line'} ${
           editable ? '' : 'bg-surface'

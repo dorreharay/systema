@@ -11,6 +11,8 @@ type ToastState = { id: number; message: string; tone: ToastTone };
 type ToastApi = { success: (message: string) => void; error: (message: string) => void };
 
 const DURATION_MS = 3000;
+// How far the toast is from the foot of the safe area at the top. It was 8; it is 10 higher now.
+const TOP_OFFSET = -2;
 const ToastContext = createContext<ToastApi | null>(null);
 
 export function useToast() {
@@ -46,7 +48,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       <View
         pointerEvents="none"
         className="absolute inset-x-0 top-0 z-50 items-center px-4"
-        style={{ paddingTop: insets.top + 8 }}>
+        style={{ paddingTop: Math.max(insets.top + TOP_OFFSET, 0) }}>
         {toast ? (
           <Animated.View
             key={toast.id}

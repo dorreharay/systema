@@ -1,5 +1,6 @@
-import { Switch, View } from 'react-native';
+import { View } from 'react-native';
 
+import AppSwitch from '@/components/ui/app-switch';
 import { Text } from '@/components/ui/text';
 
 type SwitchRowProps = {
@@ -16,13 +17,7 @@ export default function SwitchRow({ label, description, value, onValueChange }: 
         <Text className="text-base font-medium">{label}</Text>
         {description ? <Text className="text-[13px] text-muted">{description}</Text> : null}
       </View>
-      <Switch
-        accessibilityLabel={label}
-        value={value}
-        onValueChange={onValueChange}
-        trackColor={{ false: '#d0d5dd', true: '#173c32' }}
-        thumbColor="#ffffff"
-      />
+      <AppSwitch accessibilityLabel={label} value={value} onValueChange={onValueChange} />
     </View>
   );
 }

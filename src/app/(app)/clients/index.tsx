@@ -4,11 +4,12 @@ import { useEffect, useState } from 'react';
 import { FlatList, RefreshControl, TextInput, View } from 'react-native';
 
 import ClientFormSheet from '@/components/client-form-sheet';
+import AppButton from '@/components/ui/app-button';
 import Avatar from '@/components/ui/avatar';
+import BottomBar from '@/components/ui/bottom-bar';
 import Card from '@/components/ui/card';
 import { colors } from '@/components/ui/colors';
-import PillButton from '@/components/ui/pill-button';
-import { Screen, ScreenHeader } from '@/components/ui/screen';
+import { DetailHeader, Screen } from '@/components/ui/screen';
 import { ListSkeleton } from '@/components/ui/skeleton';
 import { EmptyState, ErrorState, NoResults } from '@/components/ui/states';
 import { Text } from '@/components/ui/text';
@@ -36,12 +37,9 @@ export default function Clients() {
 
   return (
     <Screen>
-      <ScreenHeader
-        title={t('tab_clients')}
-        right={<PillButton icon={Plus} label={t('add_client')} onPress={() => setAdding(true)} />}
-      />
-      <View className="px-page pb-3">
-        <View className="min-h-12 flex-row items-center gap-2 rounded-xl border border-line bg-white px-3.5">
+      <DetailHeader title={t('tab_clients')} />
+      <View className="px-page py-3">
+        <View className="min-h-12 flex-row items-center gap-2 rounded-lg border border-line bg-white px-3.5">
           <Search size={18} color={colors.muted} />
           <TextInput
             value={text}
@@ -53,6 +51,7 @@ export default function Clients() {
             autoCorrect={false}
             returnKeyType="search"
             accessibilityLabel={t('search')}
+            textAlignVertical="center"
             className="min-w-0 flex-1 py-3 font-normal text-base text-ink outline-none"
           />
         </View>
@@ -61,7 +60,7 @@ export default function Clients() {
       <FlatList
         data={clients.data ?? []}
         keyExtractor={(client) => client.id}
-        contentContainerClassName="gap-3 px-page pb-8"
+        contentContainerClassName="gap-3 px-page pb-28"
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         refreshControl={
@@ -115,6 +114,15 @@ export default function Clients() {
           )
         }
       />
+
+      <BottomBar>
+        <AppButton
+          large
+          title={t('add_client')}
+          icon={<Plus size={20} color={colors.white} />}
+          onPress={() => setAdding(true)}
+        />
+      </BottomBar>
 
       <ClientFormSheet
         visible={adding}

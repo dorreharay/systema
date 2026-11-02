@@ -63,7 +63,7 @@ function PickerBody<T>({
   return (
     <View className="flex-1">
       <View className="px-page pb-3">
-        <View className="min-h-12 flex-row items-center gap-2 rounded-xl border border-line bg-surface px-3.5">
+        <View className="min-h-12 flex-row items-center gap-2 rounded-lg border border-line bg-surface px-3.5">
           <Search size={18} color={colors.muted} />
           <TextInput
             autoFocus
@@ -76,6 +76,7 @@ function PickerBody<T>({
             autoCorrect={false}
             returnKeyType="search"
             accessibilityLabel={placeholder}
+            textAlignVertical="center"
             className="min-w-0 flex-1 py-3 font-normal text-base text-ink outline-none"
           />
           {query ? (

@@ -1,7 +1,6 @@
-import { BlurView } from 'expo-blur';
+import { usePathname } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Text, View, useWindowDimensions } from 'react-native';
-import { styled } from 'react-native-css';
 import Animated, {
   Easing,
   Extrapolation,
@@ -16,12 +15,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import IntroBackdrop from '@/components/intro-backdrop';
 import { useAuth } from '@/lib/auth';
 
-const HeaderBlur = styled(BlurView);
-
 const TITLE = 're:string';
 // The title is typed out once per launch, signed in or not. If the header is mounted again it is already docked.
 let introPlayed = false;
 export const HEADER_HEIGHT = 64;
+// Inside the app only the home page has the logo in its header; the header of the other pages is empty, and half as tall.
+export const COMPACT_HEADER_HEIGHT = HEADER_HEIGHT / 2;
+const HOME_PATH = '/home';
 const HEADER_FONT_SIZE = 24;
 const INTRO_TEXT_COLOR = '#ffffff';
 const HEADER_TEXT_COLOR = '#000000';
@@ -32,9 +32,10 @@ const HOLD_MS = 480;
 const DOCK_MS = 534;
 
 // Types the title over a dark photo backdrop, then shrinks it into the page header: white over the
-// photo of the sign-in screens, black over the pages of the app.
+// photo of the sign-in screens, black on the home page of the app. The header has no colour of its own.
 export default function AppHeader() {
   const { status } = useAuth();
+  const pathname = usePathname();
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const [skipIntro] = useState(introPlayed);
@@ -42,6 +43,9 @@ export default function AppHeader() {
   const [docked, setDocked] = useState(skipIntro);
   const [introGone, setIntroGone] = useState(skipIntro);
   const progress = useSharedValue(skipIntro ? 1 : 0);
+  const visible = useSharedValue(1);
+  // Someone signed in sees the logo in the header on the home page only. It can go once the intro is over.
+  const hidden = status === 'signedIn' && introGone && pathname !== HOME_PATH;
 
   const introFontSize = Math.min(72, width * 0.14);
   const targetScale = HEADER_FONT_SIZE / introFontSize;
@@ -82,6 +86,11 @@ export default function AppHeader() {
     return () => clearTimeout(gone);
   }, [docked, skipIntro, progress]);
 
+  useEffect(() => {
+    // It goes at once; it comes back with a short fade.
+    visible.set(hidden ? 0 : withTiming(1, { duration: 150 }));
+  }, [hidden, visible]);
+
   const backdropStyle = useAnimatedStyle(() => ({
     opacity: interpolate(progress.get(), [0, 0.75], [1, 0], Extrapolation.CLAMP),
   }));
@@ -89,6 +98,7 @@ export default function AppHeader() {
   const titleStyle = useAnimatedStyle(() => {
     const p = progress.get();
     return {
+      opacity: visible.get(),
       // Turns dark, for someone who is signed in, while the backdrop is still fading: the page under the title is light.
       color: interpolateColor(p, [0.3, 0.65], [INTRO_TEXT_COLOR, headerTextColor]),
       transform: [

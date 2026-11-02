@@ -211,7 +211,7 @@ export default function AuthLayout({
                 accessibilityRole="link"
                 accessibilityLabel={t('back')}
                 hitSlop={8}
-                className="h-11 w-11 items-center justify-center rounded-full bg-white/10 active:bg-white/20">
+                className="h-11 w-11 items-center justify-center rounded-lg bg-white/10 active:bg-white/20">
                 <ArrowLeft size={22} color="#ffffff" />
               </Pressable>
             </AuthLink>

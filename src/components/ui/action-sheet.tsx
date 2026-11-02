@@ -38,7 +38,7 @@ export default function ActionSheet({ visible, onClose, title, actions }: Action
           // will not show two modals at once.
           setTimeout(action.onPress, CLOSE_WAIT_MS);
         }}
-        className="min-h-14 flex-row items-center gap-3 rounded-xl px-2 active:bg-surface">
+        className="min-h-14 flex-row items-center gap-3 rounded-lg px-2 active:bg-surface">
         {Icon ? <Icon size={22} color={color} /> : null}
         <Text className={`text-base font-medium ${action.destructive ? 'text-danger' : 'text-ink'}`}>
           {action.label}

@@ -82,6 +82,7 @@ import {
   useUploadPhotos,
 } from '@/lib/queries';
 import type { CatalogString, Client, OrderDetail, Racket } from '@/lib/types';
+import { useKeyboardHeight } from '@/lib/use-keyboard';
 import { useUnsavedChangesGuard } from '@/lib/use-unsaved-guard';
 
 const MAX_PHOTOS = 10;
@@ -138,6 +139,7 @@ export default function OrderForm({ initial, order }: OrderFormProps) {
   const { t, language } = useI18n();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const keyboardOpen = useKeyboardHeight() > 0;
   const toast = useToast();
   const confirm = useConfirm();
   const request = useRequest();
@@ -472,7 +474,7 @@ export default function OrderForm({ initial, order }: OrderFormProps) {
               accessibilityRole="button"
               accessibilityState={{ expanded: advancedOpen }}
               onPress={() => setAdvancedOpen((open) => !open)}
-              className="min-h-12 flex-row items-center justify-between rounded-xl bg-surface px-3.5 active:opacity-70">
+              className="min-h-12 flex-row items-center justify-between rounded-lg bg-surface px-3.5 active:opacity-70">
               <Text className="text-base font-medium">{t('advanced_setup')}</Text>
               {advancedOpen ? (
                 <ChevronUp size={20} color={colors.muted} />
@@ -562,7 +564,7 @@ export default function OrderForm({ initial, order }: OrderFormProps) {
                         accessibilityRole="button"
                         accessibilityState={{ selected }}
                         onPress={() => toggleExtra(service.id, service.name, service.price)}
-                        className={`min-h-10 flex-row items-center gap-1.5 rounded-full border px-4 ${
+                        className={`min-h-10 flex-row items-center gap-1.5 rounded-lg border px-4 ${
                           selected ? 'border-primary bg-primary' : 'border-line bg-white active:bg-surface'
                         }`}>
                         {selected ? null : <Plus size={16} color={colors.ink} />}
@@ -665,7 +667,7 @@ export default function OrderForm({ initial, order }: OrderFormProps) {
                     accessibilityRole="button"
                     accessibilityLabel={t('photo_add')}
                     onPress={() => setPhotoMenu(true)}
-                    className="aspect-square w-[31%] items-center justify-center gap-1 rounded-xl border border-dashed border-neutral-300 active:bg-surface">
+                    className="aspect-square w-[31%] items-center justify-center gap-1 rounded-lg border border-dashed border-neutral-300 active:bg-surface">
                     <ImagePlus size={24} color={colors.muted} />
                     <Text className="text-xs text-muted">{t('photo_add')}</Text>
                   </Pressable>
@@ -677,17 +679,19 @@ export default function OrderForm({ initial, order }: OrderFormProps) {
           {formError ? <FormError message={formError} /> : null}
         </ScrollView>
 
-        {/* Always in reach, above the keyboard. */}
-        <View
-          className="border-t border-line bg-white px-page pt-3"
-          style={{ paddingBottom: Math.max(insets.bottom, 12) }}>
-          <AppButton
-            large
-            title={editing ? t('save_changes') : t('create_order')}
-            onPress={submit}
-            loading={submitting}
-          />
-        </View>
+        {/* Always in reach at the foot of the page, but not above the keyboard: it goes while one is open. */}
+        {keyboardOpen ? null : (
+          <View
+            className="border-t border-line bg-white px-page pt-3"
+            style={{ paddingBottom: Math.max(insets.bottom, 12) }}>
+            <AppButton
+              large
+              title={editing ? t('save_changes') : t('create_order')}
+              onPress={submit}
+              loading={submitting}
+            />
+          </View>
+        )}
       </KeyboardAvoidingView>
 
       <SearchPicker

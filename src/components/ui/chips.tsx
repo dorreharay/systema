@@ -27,7 +27,7 @@ export function FilterChips<T extends string>({ options, value, onChange }: Chip
             accessibilityState={{ selected }}
             hitSlop={{ top: 4, bottom: 4 }}
             onPress={() => onChange(option.value)}
-            className={`min-h-10 justify-center rounded-full border px-4 ${
+            className={`min-h-10 justify-center rounded-lg border px-4 ${
               selected ? 'border-primary bg-primary' : 'border-line bg-white active:bg-surface'
             }`}>
             <Text className={`text-[15px] font-medium ${selected ? 'text-white' : 'text-ink'}`}>

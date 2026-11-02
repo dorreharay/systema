@@ -22,7 +22,7 @@ function RemoveButton({ onRemove }: { onRemove: () => void }) {
       accessibilityLabel={t('photo_remove')}
       hitSlop={8}
       onPress={onRemove}
-      className="absolute right-1.5 top-1.5 size-7 items-center justify-center rounded-full bg-black/60">
+      className="absolute right-1.5 top-1.5 size-7 items-center justify-center rounded-lg bg-black/60">
       <X size={16} color={colors.white} />
     </Pressable>
   );
@@ -66,7 +66,7 @@ export function PhotoViewer({ id, onClose }: { id: string | null; onClose: () =>
         onPress={onClose}
         className="flex-1 items-center justify-center bg-black/90">
         {id ? <ViewerImage id={id} /> : null}
-        <View className="absolute right-4 top-14 size-11 items-center justify-center rounded-full bg-white/20">
+        <View className="absolute right-4 top-14 size-11 items-center justify-center rounded-lg bg-white/20">
           <X size={24} color={colors.white} />
         </View>
       </Pressable>

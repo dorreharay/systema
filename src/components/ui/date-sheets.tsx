@@ -86,7 +86,7 @@ function Calendar({
               onPress={() => onPick(iso)}
               className="h-11 w-[14.2857%] items-center justify-center">
               <View
-                className={`size-10 items-center justify-center rounded-full ${
+                className={`size-10 items-center justify-center rounded-lg ${
                   selected ? 'bg-primary' : iso === today ? 'border border-primary' : ''
                 }`}>
                 <Text
@@ -127,7 +127,7 @@ export function DateSheet({ visible, onClose, title, value, today, onChange, cle
               key={preset.label}
               accessibilityRole="button"
               onPress={() => pick(preset.iso)}
-              className={`min-h-10 justify-center rounded-full border px-4 ${
+              className={`min-h-10 justify-center rounded-lg border px-4 ${
                 value === preset.iso ? 'border-primary bg-primary' : 'border-line bg-white active:bg-surface'
               }`}>
               <Text
@@ -175,7 +175,7 @@ export function TimeSheet({ visible, onClose, value, onChange }: TimeSheetProps)
               key={time}
               accessibilityRole="button"
               onPress={() => pick(time)}
-              className={`min-h-11 min-w-[22%] flex-1 items-center justify-center rounded-xl border ${
+              className={`min-h-11 min-w-[22%] flex-1 items-center justify-center rounded-lg border ${
                 value === time ? 'border-primary bg-primary' : 'border-line bg-white active:bg-surface'
               }`}>
               <Text className={`text-[15px] font-medium ${value === time ? 'text-white' : 'text-ink'}`}>

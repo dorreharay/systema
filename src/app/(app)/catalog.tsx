@@ -5,12 +5,13 @@ import { FlatList, RefreshControl, TextInput, View } from 'react-native';
 
 import RacketFormSheet from '@/components/racket-form-sheet';
 import StringFormSheet from '@/components/string-form-sheet';
+import AppButton from '@/components/ui/app-button';
 import { Badge } from '@/components/ui/badge';
+import BottomBar from '@/components/ui/bottom-bar';
 import Card from '@/components/ui/card';
 import { Segmented } from '@/components/ui/chips';
 import { colors } from '@/components/ui/colors';
-import PillButton from '@/components/ui/pill-button';
-import { Screen, ScreenHeader } from '@/components/ui/screen';
+import { DetailHeader, Screen } from '@/components/ui/screen';
 import { ListSkeleton } from '@/components/ui/skeleton';
 import { EmptyState, ErrorState, NoResults } from '@/components/ui/states';
 import { Text } from '@/components/ui/text';
@@ -51,16 +52,7 @@ export default function Catalog() {
 
   return (
     <Screen>
-      <ScreenHeader
-        title={t('tab_catalog')}
-        right={
-          <PillButton
-            icon={Plus}
-            label={racketsTab ? t('add_racket') : t('add_string')}
-            onPress={() => (racketsTab ? setAddingRacket(true) : setEditingString('new'))}
-          />
-        }
-      />
+      <DetailHeader title={t('tab_catalog')} />
       <View className="gap-3 px-page pb-3">
         <Segmented
           options={[
@@ -70,7 +62,7 @@ export default function Catalog() {
           value={tab}
           onChange={changeTab}
         />
-        <View className="min-h-12 flex-row items-center gap-2 rounded-xl border border-line bg-white px-3.5">
+        <View className="min-h-12 flex-row items-center gap-2 rounded-lg border border-line bg-white px-3.5">
           <Search size={18} color={colors.muted} />
           <TextInput
             value={text}
@@ -82,6 +74,7 @@ export default function Catalog() {
             autoCorrect={false}
             returnKeyType="search"
             accessibilityLabel={t('search')}
+            textAlignVertical="center"
             className="min-w-0 flex-1 py-3 font-normal text-base text-ink outline-none"
           />
         </View>
@@ -92,7 +85,7 @@ export default function Catalog() {
           key="rackets"
           data={rackets.data ?? []}
           keyExtractor={(racket) => racket.id}
-          contentContainerClassName="gap-3 px-page pb-8"
+          contentContainerClassName="gap-3 px-page pb-28"
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           refreshControl={
@@ -138,7 +131,7 @@ export default function Catalog() {
           key="strings"
           data={strings.data ?? []}
           keyExtractor={(string) => string.id}
-          contentContainerClassName="gap-3 px-page pb-8"
+          contentContainerClassName="gap-3 px-page pb-28"
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           refreshControl={
@@ -180,6 +173,15 @@ export default function Catalog() {
           }
         />
       )}
+
+      <BottomBar>
+        <AppButton
+          large
+          title={racketsTab ? t('add_racket') : t('add_string')}
+          icon={<Plus size={20} color={colors.white} />}
+          onPress={() => (racketsTab ? setAddingRacket(true) : setEditingString('new'))}
+        />
+      </BottomBar>
 
       {/* A racket made here still needs its owner, chosen in the sheet. */}
       <RacketFormSheet

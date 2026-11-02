@@ -8,6 +8,7 @@ import { FilterChips } from '@/components/ui/chips';
 import { colors } from '@/components/ui/colors';
 import IconButton from '@/components/ui/icon-button';
 import { Screen, ScreenHeader } from '@/components/ui/screen';
+import Shortcut from '@/components/ui/shortcut';
 import { ListSkeleton } from '@/components/ui/skeleton';
 import { EmptyState, ErrorState, NoResults } from '@/components/ui/states';
 import { useI18n } from '@/lib/i18n';
@@ -59,24 +60,34 @@ export default function Orders() {
   ];
 
   return (
-    <Screen>
+    <Screen
+      dock={
+        <View className="flex-row w-full gap-1">
+          <Shortcut
+            icon={Plus}
+            label={t('new_order')}
+            color={colors.newOrder}
+            contentColor="#000000"
+            className="px-5 py-5 w-full"
+            onPress={() => router.push('/orders/new')}
+          />
+        </View>
+      }
+    >
       <ScreenHeader
         title={t('tab_orders')}
         right={
-          <>
-            <IconButton
-              icon={searching ? X : Search}
-              label={searching ? t('close_search') : t('search')}
-              onPress={searching ? closeSearch : () => setSearching(true)}
-            />
-            <IconButton icon={Plus} label={t('new_order')} onPress={() => router.push('/orders/new')} filled />
-          </>
+          <IconButton
+            icon={searching ? X : Search}
+            label={searching ? t('close_search') : t('search')}
+            onPress={searching ? closeSearch : () => setSearching(true)}
+          />
         }
       />
 
       {searching ? (
         <View className="px-page pb-3">
-          <View className="min-h-12 flex-row items-center gap-2 rounded-xl border border-line bg-white px-3.5">
+          <View className="min-h-12 flex-row items-center gap-2 rounded-lg border border-line bg-white px-3.5">
             <Search size={18} color={colors.muted} />
             <TextInput
               autoFocus
@@ -89,6 +100,7 @@ export default function Orders() {
               autoCorrect={false}
               returnKeyType="search"
               accessibilityLabel={t('search')}
+              textAlignVertical="center"
               className="min-w-0 flex-1 py-3 font-normal text-base text-ink outline-none"
             />
           </View>
@@ -102,7 +114,7 @@ export default function Orders() {
       <FlatList
         data={items}
         keyExtractor={(order) => order.id}
-        contentContainerClassName="gap-3 px-page pb-8"
+        contentContainerClassName="gap-3 px-page pb-28"
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         refreshControl={

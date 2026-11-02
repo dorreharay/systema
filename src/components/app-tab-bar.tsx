@@ -17,8 +17,8 @@ import { useKeyboardHeight } from '@/lib/use-keyboard';
 
 type TabBarProps = Parameters<NonNullable<ComponentProps<typeof Tabs>['tabBar']>>[0];
 
-// Three places are in the bar. Clients and the catalog are opened from the home screen; they are still
-// tabs, so they open without a slide, and the pill is hidden while one of them is shown.
+// The three places that are in the bar. (Clients and the catalog are opened from the home screen, over
+// the bar.)
 type NavIcon = ComponentType<{ size?: number; color?: string }>;
 
 const ICONS: Record<string, NavIcon> = {

@@ -52,7 +52,7 @@ export default function AppButton({
       accessibilityLabel={title}
       accessibilityState={{ busy: loading, disabled: !!inactive }}
       disabled={inactive}
-      className={`flex-row items-center justify-center gap-2 rounded-xl px-4 ${
+      className={`flex-row items-center justify-center gap-2 rounded-lg px-4 ${
         large ? 'min-h-[52px]' : 'min-h-12'
       } ${classes.container} ${inactive ? 'opacity-60' : ''} ${className}`}
       {...props}>

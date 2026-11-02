@@ -27,7 +27,7 @@ export default function IconButton({
       accessibilityLabel={label}
       disabled={disabled}
       onPress={onPress}
-      className={`size-11 items-center justify-center rounded-full active:opacity-60 ${
+      className={`size-11 items-center justify-center rounded-lg active:opacity-60 ${
         filled ? 'bg-primary' : ''
       } ${disabled ? 'opacity-40' : ''}`}>
       <Icon size={22} color={filled ? colors.white : color} />

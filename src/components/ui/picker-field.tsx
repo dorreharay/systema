@@ -35,7 +35,7 @@ export default function PickerField({
         accessibilityLabel={label ? `${label}: ${value ?? placeholder}` : (value ?? placeholder)}
         disabled={disabled}
         onPress={onPress}
-        className={`min-h-12 flex-row items-center gap-2 rounded-xl border bg-white px-3.5 py-2.5 active:bg-surface ${
+        className={`min-h-12 flex-row items-center gap-2 rounded-lg border bg-white px-3.5 py-2.5 active:bg-surface ${
           error ? 'border-danger' : 'border-line'
         } ${disabled ? 'opacity-50' : ''}`}>
         {icon}

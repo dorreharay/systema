@@ -1,11 +1,11 @@
 import { Plus, Tags } from 'lucide-react-native';
 import { useState } from 'react';
-import { ScrollView, Switch, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 
 import ServiceFormSheet from '@/components/service-form-sheet';
+import AppSwitch from '@/components/ui/app-switch';
 import { Badge } from '@/components/ui/badge';
 import Card from '@/components/ui/card';
-import { colors } from '@/components/ui/colors';
 import PillButton from '@/components/ui/pill-button';
 import Section from '@/components/ui/section';
 import { DetailHeader, Screen } from '@/components/ui/screen';
@@ -52,12 +52,10 @@ export default function ServicesAndPricing() {
           {service.kind === 'labor' ? <Badge label={t('service_labor')} tone="success" /> : null}
         </View>
       </View>
-      <Switch
+      <AppSwitch
         accessibilityLabel={t('service_active_toggle', { name: service.name })}
         value={service.active}
         onValueChange={(active) => void setActive(service, active)}
-        trackColor={{ false: '#d0d5dd', true: colors.primary }}
-        thumbColor="#ffffff"
       />
     </Card>
   );
