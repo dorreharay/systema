@@ -185,7 +185,7 @@ function ProfileForm({ onClose }: { onClose: () => void }) {
         {formError ? <FormError message={formError} /> : null}
       </View>
       <View className="pt-4">
-        <Shortcut icon={Check} label={t('save')} color={colors.primarySoft} contentColor={colors.ink} onPress={save} loading={saving} />
+        <Shortcut icon={Check} label={t('save')} color={colors.primary} contentColor={colors.white} onPress={save} loading={saving} />
       </View>
       <TimeZoneSheet
         visible={choosingZone}
@@ -243,7 +243,7 @@ function WorkshopForm({ onClose }: { onClose: () => void }) {
         {formError ? <FormError message={formError} /> : null}
       </View>
       <View className="pt-4">
-        <Shortcut icon={Check} label={t('save')} color={colors.primarySoft} contentColor={colors.ink} onPress={save} loading={saving} />
+        <Shortcut icon={Check} label={t('save')} color={colors.primary} contentColor={colors.white} onPress={save} loading={saving} />
       </View>
     </>
   );
@@ -288,7 +288,7 @@ function AccountBody({ onClose }: { onClose: () => void }) {
         compact
         icon={KeyRound}
         label={t('account_reset_password')}
-        color={colors.primarySoft} contentColor={colors.ink}
+        color={colors.primary} contentColor={colors.white}
         onPress={sendReset}
         loading={sending}
       />

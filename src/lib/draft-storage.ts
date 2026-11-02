@@ -33,12 +33,3 @@ export async function removeDraftFile(key: string) {
     // nothing to remove
   }
 }
-
-/** Whether a picture that a draft points at is still there: the system clears the cache it was taken to. */
-export function pictureExists(uri: string) {
-  try {
-    return new File(uri).exists;
-  } catch {
-    return false;
-  }
-}

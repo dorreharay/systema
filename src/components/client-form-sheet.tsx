@@ -133,7 +133,7 @@ function ClientForm({ client, initialName, onClose, onSaved }: Omit<ClientFormSh
         <Shortcut
           icon={client ? Check : PlusIcon}
           label={client ? t('save') : t('add_client')}
-          color={colors.clients} contentColor={colors.ink}
+          color={colors.primary} contentColor={colors.white}
           onPress={save}
           loading={saving}
         />

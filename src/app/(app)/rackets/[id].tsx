@@ -94,17 +94,7 @@ export default function RacketDetails() {
       <DetailHeader
         floating
         title={racketName(racket)}
-        right={
-          <>
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => setEditing(true)}
-              className="min-h-11 justify-center px-3 active:opacity-60">
-              <Text className="text-[14px] font-semibold text-primary">{t('edit')}</Text>
-            </Pressable>
-            <IconButton icon={MoreHorizontal} label={t('more_actions')} onPress={() => setMenu(true)} />
-          </>
-        }
+        right={<IconButton icon={MoreHorizontal} label={t('more_actions')} onPress={() => setMenu(true)} />}
       />
       <DetailScroll contentContainerClassName="gap-page p-page pb-28" showsVerticalScrollIndicator={false}>
         <Card className="gap-3">

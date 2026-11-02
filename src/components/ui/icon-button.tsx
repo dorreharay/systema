@@ -9,8 +9,8 @@ type IconButtonProps = {
   onPress: () => void;
   color?: string;
   filled?: boolean;
-  // The icon in a round, light grey outline: the close button of a sheet.
-  outlined?: boolean;
+  // The icon on a round, light grey ground: the close button of a sheet.
+  round?: boolean;
   disabled?: boolean;
 };
 
@@ -21,7 +21,7 @@ export default function IconButton({
   onPress,
   color = colors.ink,
   filled = false,
-  outlined = false,
+  round = false,
   disabled,
 }: IconButtonProps) {
   return (
@@ -32,10 +32,10 @@ export default function IconButton({
       onPress={onPress}
       hitSlop={8}
       className={`size-12 items-center justify-center active:opacity-60 ${
-        outlined ? '' : 'rounded-lg'
-      } ${filled && !outlined ? 'bg-primary' : ''} ${disabled ? 'opacity-40' : ''}`}>
-      {outlined ? (
-        <View className="size-9 items-center justify-center rounded-full border border-line">
+        round ? '' : 'rounded-lg'
+      } ${filled && !round ? 'bg-primary' : ''} ${disabled ? 'opacity-40' : ''}`}>
+      {round ? (
+        <View className="size-9 items-center justify-center rounded-full bg-[#ECEEF1]">
           <Icon size={18} color={color} />
         </View>
       ) : (

@@ -7,7 +7,7 @@ import {
 } from '@tanstack/react-query';
 import { useCallback } from 'react';
 
-import { api, apiBlob, apiUpload, type RequestOptions } from '@/lib/api';
+import { api, apiBlob, type RequestOptions } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import type {
   CatalogString,
@@ -17,7 +17,6 @@ import type {
   Order,
   OrderDetail,
   OrderInput,
-  OrderPhoto,
   OrderStatus,
   Racket,
   RacketDetail,
@@ -254,33 +253,3 @@ export const useUpdateService = () =>
 
 export const useDeletePhoto = () =>
   useAction((request, id: string) => request<{ ok: true }>(`/api/photos/${id}`, { method: 'DELETE' }));
-
-/** A picture chosen on the phone, not yet sent. */
-export type LocalPhoto = { uri: string; mimeType?: string | null };
-
-/** Sends pictures to an order one by one; returns how many could not be sent. */
-export function useUploadPhotos() {
-  const { token } = useAuth();
-  const queryClient = useQueryClient();
-  return useCallback(
-    async (orderId: string, photos: LocalPhoto[]) => {
-      let failed = 0;
-      for (const photo of photos) {
-        try {
-          const blob = await (await fetch(photo.uri)).blob();
-          await apiUpload<OrderPhoto>(
-            `/api/orders/${orderId}/photos`,
-            blob,
-            photo.mimeType || blob.type || 'image/jpeg',
-            token
-          );
-        } catch {
-          failed += 1;
-        }
-      }
-      void queryClient.invalidateQueries({ queryKey: ['order', orderId] });
-      return failed;
-    },
-    [queryClient, token]
-  );
-}

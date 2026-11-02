@@ -30,6 +30,8 @@ type SearchPickerProps<T> = {
   onCreate?: (query: string) => void;
   // Shown instead of "no results" when there is nothing at all to pick from.
   emptyHint?: string;
+  // How the keyboard capitalises what is typed: names start with a capital.
+  autoCapitalize?: 'none' | 'sentences' | 'words';
 };
 
 function PickerBody<T>({
@@ -46,6 +48,7 @@ function PickerBody<T>({
   createLabel,
   onCreate,
   emptyHint,
+  autoCapitalize = 'none',
 }: Omit<SearchPickerProps<T>, 'visible' | 'onClose' | 'title'>) {
   const { t } = useI18n();
   const [query, setQuery] = useState('');
@@ -72,7 +75,7 @@ function PickerBody<T>({
             placeholder={placeholder}
             placeholderTextColor={colors.placeholder}
             selectionColor={colors.primary}
-            autoCapitalize="none"
+            autoCapitalize={autoCapitalize}
             autoCorrect={false}
             returnKeyType="search"
             accessibilityLabel={placeholder}

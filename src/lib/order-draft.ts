@@ -14,7 +14,6 @@ import {
   unitToKg,
 } from '@/lib/format';
 import type { TKey } from '@/lib/i18n';
-import type { LocalPhoto } from '@/lib/queries';
 import type {
   CatalogString,
   LastSetup,
@@ -52,7 +51,6 @@ export type Draft = {
   dueDate: string | null;
   dueTime: string | null;
   notes: string;
-  photos: LocalPhoto[];
 };
 
 export const MIN_TENSION_KG = 10;
@@ -88,7 +86,6 @@ export function emptyDraft(today: string, unit: TensionUnit): Draft {
     dueDate: null,
     dueTime: null,
     notes: '',
-    photos: [],
   };
 }
 
@@ -341,4 +338,4 @@ export function buildInput(draft: Draft, prices: Pricing): OrderInput {
 }
 
 /** A draft that can be compared with the one it started as, to know whether anything was changed. */
-export const draftSnapshot = (draft: Draft) => JSON.stringify({ ...draft, photos: draft.photos.map((p) => p.uri) });
+export const draftSnapshot = (draft: Draft) => JSON.stringify(draft);

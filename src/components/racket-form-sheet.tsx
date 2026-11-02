@@ -128,7 +128,7 @@ function RacketForm({ racket, owner: knownOwner, onClose, onSaved }: Omit<Racket
         <Shortcut
           icon={racket ? Check : PlusIcon}
           label={racket ? t('save') : t('add_racket')}
-          color={colors.catalog} contentColor={colors.ink}
+          color={colors.primary} contentColor={colors.white}
           onPress={save}
           loading={saving}
         />

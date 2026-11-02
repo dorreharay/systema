@@ -1,7 +1,7 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Mail, MessageSquare, MoreHorizontal, Pencil, Phone, Trash2 } from 'lucide-react-native';
+import { Mail, MoreHorizontal, Pencil, Phone, Trash2 } from 'lucide-react-native';
 import { useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import ClientFormSheet from '@/components/client-form-sheet';
@@ -9,7 +9,6 @@ import OrderCard from '@/components/order-card';
 import RacketFormSheet from '@/components/racket-form-sheet';
 import ActionSheet from '@/components/ui/action-sheet';
 import PlusIcon from '@/components/icons/plus-icon';
-import Avatar from '@/components/ui/avatar';
 import Card from '@/components/ui/card';
 import { colors } from '@/components/ui/colors';
 import { useConfirm } from '@/components/ui/confirm';
@@ -21,7 +20,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ErrorState } from '@/components/ui/states';
 import { Text } from '@/components/ui/text';
 import { useToast } from '@/components/ui/toast';
-import { callPhone, emailTo, textPhone } from '@/lib/contact';
+import { callPhone, emailTo } from '@/lib/contact';
 import { describeError } from '@/lib/errors';
 import { racketName } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
@@ -92,69 +91,47 @@ export default function ClientDetails() {
       <DetailHeader
         floating
         title={client.name}
-        right={
-          <>
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => setEditing(true)}
-              className="min-h-11 justify-center px-3 active:opacity-60">
-              <Text className="text-[14px] font-semibold text-primary">{t('edit')}</Text>
-            </Pressable>
-            <IconButton icon={MoreHorizontal} label={t('more_actions')} onPress={() => setMenu(true)} />
-          </>
-        }
+        right={<IconButton icon={MoreHorizontal} label={t('more_actions')} onPress={() => setMenu(true)} />}
       />
       <DetailScroll contentContainerClassName="gap-page p-page pb-28" showsVerticalScrollIndicator={false}>
-        <Card className="gap-3">
-          <View className="flex-row items-center gap-3">
-            <Avatar name={client.name} size={52} />
-            <View className="flex-1 gap-0.5">
-              <Text className="text-[20.9px] font-semibold" numberOfLines={2}>
-                {client.name}
-              </Text>
-              {client.phone ? <Text className="text-[16.5px] text-muted">{client.phone}</Text> : null}
-              {client.email ? <Text className="text-[16.5px] text-muted">{client.email}</Text> : null}
-            </View>
-          </View>
-          {client.phone || client.email ? (
-            <View className="flex-row flex-wrap gap-2">
-              {client.phone ? (
-                <Shortcut
-                  compact
-                  className="min-w-[46%] flex-1"
-                  icon={Phone}
-                  label={t('call')}
-                  color={colors.primarySoft}
-                  contentColor={colors.ink}
-                  onPress={() => void callPhone(client.phone!)}
-                />
-              ) : null}
-              {client.phone ? (
-                <Shortcut
-                  compact
-                  className="min-w-[46%] flex-1"
-                  icon={MessageSquare}
-                  label={t('message')}
-                  color={colors.primarySoft}
-                  contentColor={colors.ink}
-                  onPress={() => void textPhone(client.phone!)}
-                />
-              ) : null}
-              {client.email ? (
-                <Shortcut
-                  compact
-                  className="min-w-[46%] flex-1"
-                  icon={Mail}
-                  label={t('field_email')}
-                  color={colors.primarySoft}
-                  contentColor={colors.ink}
-                  onPress={() => void emailTo(client.email!)}
-                />
-              ) : null}
-            </View>
-          ) : null}
-          {client.notes ? <Text className="text-[16.5px] text-muted">{client.notes}</Text> : null}
-        </Card>
+        {/* The name is the title of the header; what is left of the profile is how to reach the client. */}
+        {client.phone || client.email || client.notes ? (
+          <Card className="gap-3">
+            {client.phone || client.email ? (
+              <View className="gap-0.5">
+                {client.phone ? <Text className="text-[16.5px] text-muted">{client.phone}</Text> : null}
+                {client.email ? <Text className="text-[16.5px] text-muted">{client.email}</Text> : null}
+              </View>
+            ) : null}
+            {client.phone || client.email ? (
+              <View className="flex-row flex-wrap gap-2">
+                {client.phone ? (
+                  <Shortcut
+                    compact
+                    className="min-w-[46%] flex-1"
+                    icon={Phone}
+                    label={t('call')}
+                    color={colors.primarySoft}
+                    contentColor={colors.ink}
+                    onPress={() => void callPhone(client.phone!)}
+                  />
+                ) : null}
+                {client.email ? (
+                  <Shortcut
+                    compact
+                    className="min-w-[46%] flex-1"
+                    icon={Mail}
+                    label={t('field_email')}
+                    color={colors.primarySoft}
+                    contentColor={colors.ink}
+                    onPress={() => void emailTo(client.email!)}
+                  />
+                ) : null}
+              </View>
+            ) : null}
+            {client.notes ? <Text className="text-[16.5px] text-muted">{client.notes}</Text> : null}
+          </Card>
+        ) : null}
 
         <Section title={t('section_rackets')} actionLabel={t('add')} onAction={() => setAddingRacket(true)}>
           {client.rackets.length === 0 ? (

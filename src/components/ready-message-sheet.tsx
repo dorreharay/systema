@@ -36,7 +36,7 @@ export default function ReadyMessageSheet({ visible, onClose, message, phone }: 
           </Text>
         </View>
         <View className="gap-2">
-          <Shortcut icon={Copy} label={t('copy_message')} color={colors.newOrder} contentColor={colors.ink} onPress={copy} />
+          <Shortcut icon={Copy} label={t('copy_message')} color={colors.primary} contentColor={colors.white} onPress={copy} />
           {phone ? (
             <Shortcut
               compact

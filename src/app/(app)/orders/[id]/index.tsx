@@ -1,5 +1,19 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Check, Copy, Mail, MoreHorizontal, Pencil, Phone, Repeat, Trash2, Undo2, UserRound } from 'lucide-react-native';
+import {
+  Check,
+  Copy,
+  Mail,
+  MoreHorizontal,
+  PackageCheck,
+  Pencil,
+  Phone,
+  Play,
+  Repeat,
+  Trash2,
+  Undo2,
+  UserRound,
+  type LucideIcon,
+} from 'lucide-react-native';
 import { useState, type ReactNode } from 'react';
 import { Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -10,7 +24,7 @@ import ReadyMessageSheet from '@/components/ready-message-sheet';
 import ActionSheet from '@/components/ui/action-sheet';
 import { Badge, StatusBadge } from '@/components/ui/badge';
 import Card from '@/components/ui/card';
-import { colors } from '@/components/ui/colors';
+import { colors, statusButton } from '@/components/ui/colors';
 import { useConfirm } from '@/components/ui/confirm';
 import IconButton from '@/components/ui/icon-button';
 import { PhotoViewer, ServerPhoto } from '@/components/ui/photo';
@@ -19,6 +33,7 @@ import { DetailHeader, DetailScroll, Screen } from '@/components/ui/screen';
 import Shortcut from '@/components/ui/shortcut';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ErrorState } from '@/components/ui/states';
+import StatusSteps from '@/components/ui/status-steps';
 import { Text } from '@/components/ui/text';
 import { useToast } from '@/components/ui/toast';
 import { useAuth } from '@/lib/auth';
@@ -38,10 +53,15 @@ import { useDeleteOrder, useOrder, useUpdateOrder } from '@/lib/queries';
 import type { OrderStatus } from '@/lib/types';
 
 // What the main button does for each status: where the order goes next.
-const NEXT: Partial<Record<OrderStatus, { status: OrderStatus; label: 'action_start' | 'action_ready' | 'action_complete' }>> = {
-  received: { status: 'in_progress', label: 'action_start' },
-  in_progress: { status: 'ready', label: 'action_ready' },
-  ready: { status: 'completed', label: 'action_complete' },
+const NEXT: Partial<
+  Record<
+    OrderStatus,
+    { status: OrderStatus; label: 'action_start' | 'action_ready' | 'action_complete'; icon: LucideIcon }
+  >
+> = {
+  received: { status: 'in_progress', label: 'action_start', icon: Play },
+  in_progress: { status: 'ready', label: 'action_ready', icon: Check },
+  ready: { status: 'completed', label: 'action_complete', icon: PackageCheck },
 };
 
 function Row({ label, children }: { label: string; children: ReactNode }) {
@@ -106,7 +126,8 @@ export default function OrderDetails() {
 
   const move = async (status: OrderStatus) => {
     try {
-      await update.mutateAsync({ id: order.id, status });
+      // Handing the racket over closes the order: it is paid for, too.
+      await update.mutateAsync({ id: order.id, status, ...(status === 'completed' && !order.is_paid && { is_paid: true }) });
       // The racket is done: offer the customer a message that is already written.
       if (status === 'ready') setReadyOpen(true);
       else toast.success(t('order_status_changed', { status: t(`status_${status}`) }));
@@ -161,10 +182,10 @@ export default function OrderDetails() {
       dock={
         next ? (
           <Shortcut
-            icon={Check}
+            icon={next.icon}
             label={t(next.label)}
-            color={colors.newOrder}
-            contentColor={colors.ink}
+            color={statusButton[next.status].fill}
+            contentColor={statusButton[next.status].ink}
             className="px-5 py-5 w-full"
             onPress={() => move(next.status)}
             loading={update.isPending && update.variables?.status === next.status}
@@ -188,6 +209,8 @@ export default function OrderDetails() {
           />
           {overdue ? <Badge label={t('order_overdue')} tone="danger" /> : null}
         </View>
+
+        <StatusSteps status={order.status} />
 
         <Card className="gap-3">
           <Pressable
@@ -236,12 +259,14 @@ export default function OrderDetails() {
 
         <Section title={t('section_racket_setup')}>
           <Card className="gap-1.5">
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => router.push({ pathname: '/rackets/[id]', params: { id: order.racket.id } })}
-              className="active:opacity-60">
-              <Text className="pb-1 text-[18.7px] font-semibold">{racketName(order.racket)}</Text>
-            </Pressable>
+            <Row label={t('field_racket')}>
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => router.push({ pathname: '/rackets/[id]', params: { id: order.racket.id } })}
+                className="active:opacity-60">
+                <Text className="text-right text-[16.5px] font-medium">{racketName(order.racket)}</Text>
+              </Pressable>
+            </Row>
             <Row label={order.hybrid ? t('field_main_strings') : t('field_strings')}>
               {order.hybrid ? (order.main_string_name ?? '—') : strungWith}
             </Row>

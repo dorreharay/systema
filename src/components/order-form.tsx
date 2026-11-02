@@ -1,12 +1,10 @@
 import { useRouter } from 'expo-router';
 import {
   Calendar,
-  Camera,
   Check,
   ChevronDown,
   ChevronUp,
   Clock,
-  ImagePlus,
   Plus,
   RotateCcw,
   UserRound,
@@ -26,13 +24,12 @@ import ClientFormSheet from '@/components/client-form-sheet';
 import PlusIcon from '@/components/icons/plus-icon';
 import RacketFormSheet from '@/components/racket-form-sheet';
 import StringFormSheet from '@/components/string-form-sheet';
-import ActionSheet from '@/components/ui/action-sheet';
 import { Segmented } from '@/components/ui/chips';
 import { colors } from '@/components/ui/colors';
 import { useConfirm } from '@/components/ui/confirm';
 import { DateSheet, TimeSheet } from '@/components/ui/date-sheets';
 import { FormError, Input, NumberInput } from '@/components/ui/input';
-import { LocalPhotoThumb, ServerPhoto } from '@/components/ui/photo';
+import { ServerPhoto } from '@/components/ui/photo';
 import PickerField from '@/components/ui/picker-field';
 import { DetailHeader, DetailScroll, Screen, useDetailContentTop } from '@/components/ui/screen';
 import SearchPicker from '@/components/ui/search-picker';
@@ -71,7 +68,6 @@ import {
   type RacketChoice,
 } from '@/lib/order-draft';
 import { describeSetup } from '@/lib/order-text';
-import { pickFromLibrary, takePhoto } from '@/lib/photos';
 import {
   useClients,
   useCreateOrder,
@@ -81,12 +77,10 @@ import {
   useServices,
   useStrings,
   useUpdateOrder,
-  useUploadPhotos,
 } from '@/lib/queries';
 import { clearSavedDraft, saveDraft, type SavedDraft } from '@/lib/saved-draft';
 import type { CatalogString, Client, OrderDetail, Racket } from '@/lib/types';
 
-const MAX_PHOTOS = 10;
 // How long after the last change the draft is written to the device.
 const AUTOSAVE_MS = 400;
 
@@ -152,7 +146,6 @@ export default function OrderForm({ initial, order, draftKey, saved }: OrderForm
   const createOrder = useCreateOrder();
   const updateOrder = useUpdateOrder();
   const deletePhoto = useDeletePhoto();
-  const uploadPhotos = useUploadPhotos();
   const editing = !!order;
 
   const currency = user?.currency ?? 'USD';
@@ -173,7 +166,6 @@ export default function OrderForm({ initial, order, draftKey, saved }: OrderForm
   >(null);
   const [dateTarget, setDateTarget] = useState<'received' | 'due' | null>(null);
   const [timeOpen, setTimeOpen] = useState(false);
-  const [photoMenu, setPhotoMenu] = useState(false);
   const [removedPhotos, setRemovedPhotos] = useState<string[]>(saved?.removedPhotos ?? []);
 
   const [clientQuery, setClientQuery] = useState('');
@@ -301,23 +293,8 @@ export default function OrderForm({ initial, order, draftKey, saved }: OrderForm
 
   // --- Photos --------------------------------------------------------------------------------
 
+  // Photos are no longer added here; the ones an order already has can still be taken off it.
   const existingPhotos = (order?.photos ?? []).filter((photo) => !removedPhotos.includes(photo.id));
-  const photoRoom = MAX_PHOTOS - existingPhotos.length - draft.photos.length;
-
-  const addPhotos = async (source: 'camera' | 'library') => {
-    if (photoRoom <= 0) {
-      toast.error(t('error_photo_limit'));
-      return;
-    }
-    const result = source === 'camera' ? await takePhoto() : await pickFromLibrary(photoRoom);
-    if ('error' in result) {
-      toast.error(result.error === 'denied' ? t('photo_denied') : t('photo_unavailable'));
-      return;
-    }
-    if (result.photos.length > 0) {
-      update({ photos: [...draft.photos, ...result.photos].slice(0, draft.photos.length + photoRoom) });
-    }
-  };
 
   const removeServerPhoto = async (id: string) => {
     const ok = await confirm({
@@ -355,19 +332,14 @@ export default function OrderForm({ initial, order, draftKey, saved }: OrderForm
         ? await updateOrder.mutateAsync({ id: order.id, ...input })
         : await createOrder.mutateAsync(input);
 
-      // Photos go after the order exists. The order is already saved if one cannot be sent.
+      // Photos taken off go after the order exists.
       for (const id of removedPhotos) await deletePhoto.mutateAsync(id).catch(() => undefined);
-      const failed = draft.photos.length > 0 ? await uploadPhotos(saved.id, draft.photos) : 0;
 
-      if (failed > 0) {
-        toast.error(t('photos_failed', { count: failed }));
-      } else {
-        toast.success(
-          editing
-            ? t('order_saved', { number: orderNumber(saved.number) })
-            : t('order_created', { number: orderNumber(saved.number) })
-        );
-      }
+      toast.success(
+        editing
+          ? t('order_saved', { number: orderNumber(saved.number) })
+          : t('order_created', { number: orderNumber(saved.number) })
+      );
       // The order is saved: the draft of it is not needed, and the form is left.
       submitted.current = true;
       await clearSavedDraft(draftKey);
@@ -469,6 +441,7 @@ export default function OrderForm({ initial, order, draftKey, saved }: OrderForm
                       mainTension: undefined,
                       crossTension: undefined,
                     }));
+                    toast.success(t('previous_setup_applied'));
                   }}
                   className="bg-white"
                 />
@@ -700,8 +673,8 @@ export default function OrderForm({ initial, order, draftKey, saved }: OrderForm
             ) : null}
           </FormSection>
 
-          {/* Notes and photos */}
-          <FormSection title={t('section_notes_photos')}>
+          {/* Notes */}
+          <FormSection title={t('order_notes')}>
             <Input
               label={`${t('order_notes')} · ${t('optional')}`}
               value={draft.notes}
@@ -709,39 +682,21 @@ export default function OrderForm({ initial, order, draftKey, saved }: OrderForm
               placeholder={t('order_notes_placeholder')}
               multiline
             />
-            <View className="gap-2">
-              <Text className="text-[14.3px] font-medium text-muted">{t('field_photos')}</Text>
-              <View className="flex-row flex-wrap gap-2">
-                {existingPhotos.map((photo) => (
-                  <ServerPhoto
-                    key={photo.id}
-                    id={photo.id}
-                    className="w-[31%]"
-                    onRemove={() => removeServerPhoto(photo.id)}
-                  />
-                ))}
-                {draft.photos.map((photo) => (
-                  <LocalPhotoThumb
-                    key={photo.uri}
-                    uri={photo.uri}
-                    className="w-[31%]"
-                    onRemove={() =>
-                      update({ photos: draft.photos.filter((other) => other.uri !== photo.uri) })
-                    }
-                  />
-                ))}
-                {photoRoom > 0 ? (
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={t('photo_add')}
-                    onPress={() => setPhotoMenu(true)}
-                    className="aspect-square w-[31%] items-center justify-center gap-1 rounded-lg border border-dashed border-neutral-300 active:bg-surface">
-                    <ImagePlus size={24} color={colors.muted} />
-                    <Text className="text-xs text-muted">{t('photo_add')}</Text>
-                  </Pressable>
-                ) : null}
+            {existingPhotos.length > 0 ? (
+              <View className="gap-2">
+                <Text className="text-[14.3px] font-medium text-muted">{t('field_photos')}</Text>
+                <View className="flex-row flex-wrap gap-2">
+                  {existingPhotos.map((photo) => (
+                    <ServerPhoto
+                      key={photo.id}
+                      id={photo.id}
+                      className="w-[31%]"
+                      onRemove={() => removeServerPhoto(photo.id)}
+                    />
+                  ))}
+                </View>
               </View>
-            </View>
+            ) : null}
           </FormSection>
 
           {formError ? <FormError message={formError} /> : null}
@@ -754,6 +709,7 @@ export default function OrderForm({ initial, order, draftKey, saved }: OrderForm
         onClose={() => setPicking(null)}
         title={t('field_client')}
         placeholder={t('clients_search_placeholder')}
+        autoCapitalize="words"
         items={clients.data ?? []}
         keyOf={(client) => client.id}
         selectedKey={draft.client?.id}
@@ -898,16 +854,6 @@ export default function OrderForm({ initial, order, draftKey, saved }: OrderForm
         onClose={() => setTimeOpen(false)}
         value={draft.dueTime}
         onChange={(dueTime) => update({ dueTime })}
-      />
-
-      <ActionSheet
-        visible={photoMenu}
-        onClose={() => setPhotoMenu(false)}
-        title={t('field_photos')}
-        actions={[
-          { label: t('photo_take'), icon: Camera, onPress: () => void addPhotos('camera') },
-          { label: t('photo_choose'), icon: ImagePlus, onPress: () => void addPhotos('library') },
-        ]}
       />
     </Screen>
   );

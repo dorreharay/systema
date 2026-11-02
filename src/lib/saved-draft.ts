@@ -4,7 +4,7 @@
  */
 import { useEffect, useState } from 'react';
 
-import { pictureExists, readDraftFile, removeDraftFile, writeDraftFile } from '@/lib/draft-storage';
+import { readDraftFile, removeDraftFile, writeDraftFile } from '@/lib/draft-storage';
 import type { Draft } from '@/lib/order-draft';
 
 // Changes when what is saved can no longer be read by the form: older drafts are then left behind.
@@ -28,11 +28,10 @@ async function loadSavedDraft(key: string): Promise<SavedDraft | null> {
   try {
     const saved = JSON.parse(text) as { v?: number; draft?: Draft; removedPhotos?: string[] };
     if (saved.v !== VERSION || !saved.draft || typeof saved.draft !== 'object') return null;
-    return {
-      // A picture that is gone from the phone is left out.
-      draft: { ...saved.draft, photos: (saved.draft.photos ?? []).filter((photo) => pictureExists(photo.uri)) },
-      removedPhotos: saved.removedPhotos ?? [],
-    };
+    // A draft saved when photos could be added to the form has them in it: they are left out.
+    const draft = { ...saved.draft } as Draft & { photos?: unknown };
+    delete draft.photos;
+    return { draft, removedPhotos: saved.removedPhotos ?? [] };
   } catch {
     return null;
   }

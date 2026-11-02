@@ -37,6 +37,10 @@ const SPREAD = 1;
 const GAP_ABOVE_PILL = 14;
 const MOVE_MS = 200;
 const ICON_SIZE = 27;
+// How far a tab reaches past its column to be pressed: up to the page, down into the room under the bar
+// (the first and the last also to the edge of the screen), so that a thumb need not aim at the icon.
+const HIT_ABOVE = 6;
+const HIT_SIDE = 12;
 
 /** A tab's icon: white, turning dark and a little larger as the light pill arrives under it. */
 function TabIcon({ icon: Icon, focused }: { icon: NavIcon; focused: boolean }) {
@@ -134,11 +138,17 @@ function NavBar({ places, activeKey, onPress }: NavBarProps) {
           style={[{ width: pillWidth, height: PILL_HEIGHT, top: (BAR_HEIGHT - PILL_HEIGHT) / 2 }, pillStyle]}
         />
 
-        {places.map((place) => {
+        {places.map((place, index) => {
           const focused = place.key === activeKey;
           return (
             <Pressable
               key={place.key}
+              hitSlop={{
+                top: HIT_ABOVE,
+                bottom: Math.max(insets.bottom, 12),
+                left: index === 0 ? HIT_SIDE : 0,
+                right: index === places.length - 1 ? HIT_SIDE : 0,
+              }}
               accessibilityRole="tab"
               accessibilityLabel={place.label}
               accessibilityState={{ selected: focused }}

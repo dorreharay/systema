@@ -101,7 +101,7 @@ function ServiceForm({ service, onClose }: Omit<ServiceFormSheetProps, 'visible'
         <Shortcut
           icon={service ? Check : PlusIcon}
           label={service ? t('save') : t('add_service')}
-          color={colors.primarySoft} contentColor={colors.ink}
+          color={colors.primary} contentColor={colors.white}
           onPress={save}
           loading={saving}
         />

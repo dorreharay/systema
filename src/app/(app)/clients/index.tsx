@@ -66,7 +66,7 @@ export default function Clients() {
               placeholder={t('clients_search_placeholder')}
               placeholderTextColor={colors.placeholder}
               selectionColor={colors.primary}
-              autoCapitalize="none"
+              autoCapitalize="words"
               autoCorrect={false}
               returnKeyType="search"
               accessibilityLabel={t('search')}

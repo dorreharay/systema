@@ -175,7 +175,7 @@ function StringForm({ string, initialModel, onClose, onSaved }: Omit<StringFormS
         <Shortcut
           icon={string ? Check : PlusIcon}
           label={string ? t('save') : t('add_string')}
-          color={colors.catalog} contentColor={colors.ink}
+          color={colors.primary} contentColor={colors.white}
           onPress={save}
           loading={saving}
         />

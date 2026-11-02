@@ -11,5 +11,4 @@ export const hasNativeModule = (name: string) => Platform.OS === 'web' || !!requ
 
 // The native names of the modules that are loaded on demand.
 export const NATIVE_NOTIFICATIONS = 'ExpoPushTokenManager';
-export const NATIVE_IMAGE_PICKER = 'ExponentImagePicker';
 export const NATIVE_CLIPBOARD = 'ExpoClipboard';

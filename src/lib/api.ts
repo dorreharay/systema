@@ -3,7 +3,7 @@ import { Platform, TurboModuleRegistry } from 'react-native';
 
 const API_PORT = 4000;
 const REQUEST_TIMEOUT_MS = 10_000;
-// A photo is several megabytes, which a phone on a slow connection takes a while to send.
+// A photo is several megabytes, which a phone on a slow connection takes a while to load.
 const UPLOAD_TIMEOUT_MS = 60_000;
 
 /** The machine that runs Metro. `undefined` when the app was not loaded from one. */
@@ -127,18 +127,6 @@ export async function api<T>(
     timeoutMs,
   });
   return (await response.json().catch(() => undefined)) as T;
-}
-
-/** Sends a file as the body of a POST, and returns the JSON the server answers with. */
-export async function apiUpload<T>(path: string, file: Blob, contentType: string, token?: string | null) {
-  const response = await send(path, {
-    method: 'POST',
-    headers: { 'Content-Type': contentType },
-    body: file,
-    token,
-    timeoutMs: UPLOAD_TIMEOUT_MS,
-  });
-  return (await response.json()) as T;
 }
 
 /** Fetches a file the API serves (an order photo needs the token, so an <Image> cannot load it). */

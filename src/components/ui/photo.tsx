@@ -46,16 +46,6 @@ export function ServerPhoto({ id, onPress, onRemove, className = '' }: ThumbProp
   );
 }
 
-/** A photo just taken or chosen, not yet sent. */
-export function LocalPhotoThumb({ uri, onRemove, className = '' }: ThumbProps & { uri: string }) {
-  return (
-    <View className={`${FRAME} ${className}`}>
-      <Image source={{ uri }} resizeMode="cover" className="size-full" />
-      {onRemove ? <RemoveButton onRemove={onRemove} /> : null}
-    </View>
-  );
-}
-
 /** A photo shown large, over everything, until it is closed. */
 export function PhotoViewer({ id, onClose }: { id: string | null; onClose: () => void }) {
   const { t } = useI18n();

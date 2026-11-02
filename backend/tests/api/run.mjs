@@ -542,6 +542,13 @@ test('Orders', 'payment is separate from the status', async (ctx) => {
   assertEq([unpaid.is_paid, unpaid.paid_at, unpaid.status], [false, null, 'ready'], 'and the other way');
   assertEq((await s.client.post('/api/orders', minimalOrder(s, { is_paid: true }))).data.is_paid, true, 'paid when created');
 });
+test('Orders', 'handing an order over can mark it paid in the same request', async (ctx) => {
+  const s = await shop(ctx);
+  const order = (await s.client.post('/api/orders', minimalOrder(s))).data;
+  const done = (await s.client.patch(`/api/orders/${order.id}`, { status: 'completed', is_paid: true })).data;
+  assertEq([done.status, done.is_paid], ['completed', true], 'both changed');
+  assertTrue(done.completed_at && done.paid_at, 'with their times');
+});
 test('Orders', 'the list filters by status and sorts the queue by due date', async (ctx) => {
   const s = await shop(ctx);
   const make = async (extra) => (await s.client.post('/api/orders', minimalOrder(s, extra))).data;

@@ -17,9 +17,9 @@ export function StatusBadge({ status }: { status: OrderStatus }) {
   return (
     <View
       accessibilityLabel={t('order_status_label', { status: t(`status_${status}`) })}
-      className={`flex-row items-center gap-1.5 self-start rounded-full px-2.5 py-1 ${style.container}`}>
-      <View className={`size-1.5 rounded-full ${style.dot}`} />
-      <Text className={`text-xs font-medium ${style.label}`} maxFontSizeMultiplier={1.3}>
+      className={`flex-row items-center gap-2 self-start rounded-full px-3.5 py-1.5 ${style.container}`}>
+      <View className={`size-2.5 rounded-full ${style.dot}`} />
+      <Text className={`text-[15px] font-medium ${style.label}`} maxFontSizeMultiplier={1.3}>
         {t(`status_${status}`)}
       </Text>
     </View>
@@ -36,8 +36,8 @@ const TONES: Record<Tone, { container: string; label: string }> = {
 
 export function Badge({ label, tone = 'neutral' }: { label: string; tone?: Tone }) {
   return (
-    <View className={`self-start rounded-full px-2.5 py-1 ${TONES[tone].container}`}>
-      <Text className={`text-xs font-medium ${TONES[tone].label}`} maxFontSizeMultiplier={1.3}>
+    <View className={`self-start rounded-full px-3.5 py-1.5 ${TONES[tone].container}`}>
+      <Text className={`text-[15px] font-medium ${TONES[tone].label}`} maxFontSizeMultiplier={1.3}>
         {label}
       </Text>
     </View>

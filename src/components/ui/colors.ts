@@ -26,3 +26,13 @@ export const colors = {
   dangerSoft: '#FBE4E1',
   dangerInk: '#B42318',
 } as const;
+
+// The button that moves an order to a status has a colour for that status: its fill, and the text on it. It
+// follows the badge in badge.tsx, except for "completed": the badge is grey, which on a button reads as
+// disabled, so the hand-over is violet.
+export const statusButton = {
+  received: { fill: '#DBEAFE', ink: '#1E40AF' },
+  in_progress: { fill: '#FDE68A', ink: '#78350F' },
+  ready: { fill: '#A7F3D0', ink: '#064E3B' },
+  completed: { fill: '#DDD6FE', ink: '#4C1D95' },
+} as const;

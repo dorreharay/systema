@@ -229,10 +229,10 @@ export default function Sheet({
               </View>
               {title ? (
                 <View className="flex-row items-center justify-between pb-1 pl-page pr-4 pt-4">
-                  <Text accessibilityRole="header" className="flex-1 text-[19px] font-semibold">
+                  <Text accessibilityRole="header" className="flex-1 text-[24px] font-semibold">
                     {title}
                   </Text>
-                  <IconButton icon={X} label={t('close')} onPress={onClose} outlined />
+                  <IconButton icon={X} label={t('close')} onPress={onClose} round />
                 </View>
               ) : null}
             </View>

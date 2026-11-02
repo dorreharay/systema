@@ -23,8 +23,3 @@ export async function removeDraftFile(key: string) {
     // nothing to remove
   }
 }
-
-// A picture of the web is a link that lasts as long as the page: it cannot be told here.
-export function pictureExists() {
-  return true;
-}
