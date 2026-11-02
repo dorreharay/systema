@@ -1,4 +1,4 @@
-import { Pressable, ScrollView, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
 import { Text } from '@/components/ui/text';
 
@@ -9,36 +9,6 @@ type ChipsProps<T extends string> = {
   value: T;
   onChange: (value: T) => void;
 };
-
-/** A row of filters that scrolls sideways; the chosen one is filled with the accent color. */
-export function FilterChips<T extends string>({ options, value, onChange }: ChipsProps<T>) {
-  return (
-    <ScrollView bounces={false} overScrollMode="never"
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      contentContainerClassName="gap-2 px-page"
-      keyboardShouldPersistTaps="handled">
-      {options.map((option) => {
-        const selected = option.value === value;
-        return (
-          <Pressable
-            key={option.value}
-            accessibilityRole="button"
-            accessibilityState={{ selected }}
-            hitSlop={{ top: 4, bottom: 4 }}
-            onPress={() => onChange(option.value)}
-            className={`min-h-10 justify-center rounded-lg border px-4 ${
-              selected ? 'border-primary bg-primary active:bg-primary' : 'border-line bg-white active:bg-surface'
-            }`}>
-            <Text className={`text-[15px] font-medium ${selected ? 'text-white' : 'text-ink'}`}>
-              {option.label}
-            </Text>
-          </Pressable>
-        );
-      })}
-    </ScrollView>
-  );
-}
 
 /** Two to four choices side by side, one always chosen: kg | lbs, Rackets | Strings. */
 export function Segmented<T extends string>({ options, value, onChange }: ChipsProps<T>) {

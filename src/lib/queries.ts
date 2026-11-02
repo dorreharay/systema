@@ -24,7 +24,8 @@ import type {
   StringType,
 } from '@/lib/types';
 
-const ORDERS_PAGE = 30;
+// How many orders the list asks for at a time; the next page is asked for when the end of it is near.
+const ORDERS_PAGE = 20;
 
 /** `api()` with the signed-in person's token. */
 export function useRequest() {

@@ -104,8 +104,6 @@ export const en = {
   create_first_order: "Create Your First Order",
   orders_search_placeholder: "Customer, racket or order number",
   close_search: "Close search",
-  filter_all: "All",
-  filter_active: "Active",
   status_received: "Created",
   status_in_progress: "In Progress",
   status_ready: "Ready",

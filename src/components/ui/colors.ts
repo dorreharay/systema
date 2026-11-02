@@ -27,13 +27,12 @@ export const colors = {
   dangerInk: '#B42318',
 } as const;
 
-// The colours of a status on the buttons and the steps: the fill of the button that moves an order to the status
-// (the text on it is black), and the solid colour of the step the order is at (a white number on it), with the line
-// that leads to it. Each follows the badge of that status in badge.tsx, except for "completed": its badge is grey,
-// which on a button reads as disabled, so the hand-over is violet.
+// The colour of the button that moves an order to a status (the text on it is black). It follows the badge of that
+// status in badge.tsx, except for "completed": its badge is grey, which on a button reads as disabled, so the
+// hand-over is violet. (The steps of the status scale are in the brand colour, not in these.)
 export const statusColors = {
-  received: { fill: '#DBEAFE', solid: '#2563EB' },
-  in_progress: { fill: '#FDE68A', solid: '#D97706' },
-  ready: { fill: '#A7F3D0', solid: '#059669' },
-  completed: { fill: '#DDD6FE', solid: '#7C3AED' },
+  received: { fill: '#DBEAFE' },
+  in_progress: { fill: '#FDE68A' },
+  ready: { fill: '#A7F3D0' },
+  completed: { fill: '#DDD6FE' },
 } as const;

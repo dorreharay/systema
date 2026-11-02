@@ -106,8 +106,6 @@ export const uk: Record<keyof typeof en, string> & Record<string, string> = {
   create_first_order: "Створіть перше замовлення",
   orders_search_placeholder: "Клієнт, ракетка або номер замовлення",
   close_search: "Закрити пошук",
-  filter_all: "Усі",
-  filter_active: "Активні",
   status_received: "Створено",
   status_in_progress: "У роботі",
   status_ready: "Готово",

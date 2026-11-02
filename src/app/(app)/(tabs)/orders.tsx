@@ -1,4 +1,4 @@
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { ClipboardList, Plus, Search, X } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import {
@@ -12,7 +12,6 @@ import {
 } from 'react-native';
 
 import OrderCard from '@/components/order-card';
-import { FilterChips } from '@/components/ui/chips';
 import { colors } from '@/components/ui/colors';
 import IconButton from '@/components/ui/icon-button';
 import { Screen, ScreenHeader, useDetailContentTop } from '@/components/ui/screen';
@@ -22,14 +21,10 @@ import { EmptyState, ErrorState, NoResults } from '@/components/ui/states';
 import { useI18n } from '@/lib/i18n';
 import { useOrders } from '@/lib/queries';
 import { usePullRefresh } from '@/lib/use-pull-refresh';
-import { ORDER_STATUSES, type OrderStatus } from '@/lib/types';
-
-type Filter = 'all' | 'active' | OrderStatus;
-
-const isFilter = (value: unknown): value is Filter =>
-  value === 'all' || value === 'active' || ORDER_STATUSES.includes(value as OrderStatus);
 
 const SEARCH_DEBOUNCE_MS = 250;
+// The title of the page stands this much lower than the usual place of a page title, under the notch.
+const HEADER_DROP = 16;
 // The search field comes and goes at the head of the list: the cards slide to make room for it, not jump.
 const SEARCH_SLIDE_MS = 200;
 const slideList = () =>
@@ -38,28 +33,18 @@ const slideList = () =>
 export default function Orders() {
   const { t } = useI18n();
   const router = useRouter();
-  const params = useLocalSearchParams<{ status?: string }>();
-  const [filter, setFilter] = useState<Filter>(isFilter(params.status) ? params.status : 'all');
-  const [seenStatus, setSeenStatus] = useState(params.status);
   const [searching, setSearching] = useState(false);
   const [text, setText] = useState('');
   const [query, setQuery] = useState('');
-
-  // The home screen sends people here already filtered ("Ready for Pickup"), also when this tab is
-  // already open: a new value in the route replaces the filter.
-  if (params.status !== seenStatus) {
-    setSeenStatus(params.status);
-    if (isFilter(params.status)) setFilter(params.status);
-  }
 
   useEffect(() => {
     const timer = setTimeout(() => setQuery(text), SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(timer);
   }, [text]);
 
-  const orders = useOrders({ status: filter === 'all' ? undefined : filter, q: query });
+  const orders = useOrders({ q: query });
   const items = orders.data?.pages.flatMap((page) => page.items) ?? [];
-  const contentTop = useDetailContentTop();
+  const contentTop = useDetailContentTop(HEADER_DROP);
 
   const pull = usePullRefresh(orders.refetch);
 
@@ -75,28 +60,22 @@ export default function Orders() {
     setQuery('');
   };
 
-  const options: { value: Filter; label: string }[] = [
-    { value: 'all', label: t('filter_all') },
-    ...(filter === 'active' ? [{ value: 'active' as const, label: t('filter_active') }] : []),
-    ...ORDER_STATUSES.map((status) => ({ value: status, label: t(`status_${status}`) })),
-  ];
-
   // The list goes up under the floating header. On iOS the room is an inset, so that the pull to refresh opens
   // under the header, not behind it.
   const underHeader =
     Platform.OS === 'ios'
       ? {
-          contentInset: { top: contentTop },
+          contentInset: { top: contentTop - 20 },
           contentOffset: { x: 0, y: -contentTop },
           scrollIndicatorInsets: { top: contentTop },
         }
       : { contentContainerStyle: { paddingTop: contentTop } };
 
   const listHeader = (
-    <View>
+    <View className="pb-3">
       {searching ? (
-        <View className="pb-3">
-          <View className="min-h-12 flex-row items-center gap-2 rounded-lg border border-line bg-white px-3.5">
+        <View>
+          <View className="min-h-12 flex-row items-center gap-2 rounded-lg border border-line bg-white mt-6 px-3.5">
             <Search size={18} color={colors.muted} />
             <TextInput
               autoFocus
@@ -115,9 +94,6 @@ export default function Orders() {
           </View>
         </View>
       ) : null}
-      <View className="-mx-page pb-3">
-        <FilterChips options={options} value={filter} onChange={setFilter} />
-      </View>
     </View>
   );
 
@@ -139,6 +115,7 @@ export default function Orders() {
     >
       <ScreenHeader
         floating
+        drop={HEADER_DROP}
         title={t('tab_orders')}
         right={
           <IconButton
@@ -178,7 +155,7 @@ export default function Orders() {
             <ListSkeleton />
           ) : orders.isError ? (
             <ErrorState error={orders.error} onRetry={() => orders.refetch()} />
-          ) : filter === 'all' && !query ? (
+          ) : !query ? (
             <EmptyState
               icon={ClipboardList}
               title={t('orders_empty_title')}

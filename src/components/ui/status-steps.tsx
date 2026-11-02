@@ -1,7 +1,7 @@
 import { Check } from 'lucide-react-native';
 import { View } from 'react-native';
 
-import { colors, statusColors } from '@/components/ui/colors';
+import { colors } from '@/components/ui/colors';
 import { Text } from '@/components/ui/text';
 import { useI18n } from '@/lib/i18n';
 import { ORDER_STATUSES, type OrderStatus } from '@/lib/types';
@@ -10,8 +10,9 @@ const DOT = 28;
 const LINE = 3;
 
 /**
- * Where an order is on its way, as steps: the ones behind it are ticked, the one it is at is filled with the colour of
- * its status, with its number in white, and the ones ahead have theirs. A handed-over order has every step ticked.
+ * Where an order is on its way, as steps: the ones behind it are ticked, the one it is at is filled, with its number
+ * in white, and the ones ahead have theirs. All in the brand colour, whatever the status. A handed-over order has
+ * every step ticked.
  */
 export default function StatusSteps({ status }: { status: OrderStatus }) {
   const { t } = useI18n();
@@ -26,12 +27,8 @@ export default function StatusSteps({ status }: { status: OrderStatus }) {
       {ORDER_STATUSES.map((step, index) => {
         const done = index < current || finished;
         const here = index === current && !finished;
-        const color = statusColors[step];
-        // A line between two steps is solid once the order has got past the first of them. The one that leads to the
-        // step the order is at has the colour of that step; the ones further back are green.
-        const reached = (to: number) => to <= current;
-        const lineColor = (to: number) =>
-          !reached(to) ? colors.line : to === current && !finished ? statusColors[ORDER_STATUSES[to]].solid : colors.primary;
+        // A line between two steps is solid once the order has got to the second of them.
+        const lineColor = (to: number) => (to <= current ? colors.primary : colors.line);
 
         return (
           <View key={step} className="flex-1 items-center gap-2">
@@ -57,7 +54,7 @@ export default function StatusSteps({ status }: { status: OrderStatus }) {
               ) : here ? (
                 <View
                   className="items-center justify-center rounded-full"
-                  style={{ width: DOT, height: DOT, backgroundColor: color.solid }}>
+                  style={{ width: DOT, height: DOT, backgroundColor: colors.primary }}>
                   <Text className="text-[13px] font-semibold text-white">{index + 1}</Text>
                 </View>
               ) : (

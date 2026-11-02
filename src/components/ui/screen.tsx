@@ -79,10 +79,13 @@ type ScreenHeaderProps = {
   right?: ReactNode;
   // Stays at the top of the page while it is scrolled, on a blurred ground, as a floating `DetailHeader` does.
   floating?: boolean;
+  // How much lower than the usual place under the notch the title stands (a floating header only); the page then
+  // asks `useDetailContentTop` for the same.
+  drop?: number;
 };
 
 // The title of a main tab, with its actions on the right: the row of a `DetailHeader` without the back button.
-export function ScreenHeader({ title, subtitle, right, floating }: ScreenHeaderProps) {
+export function ScreenHeader({ title, subtitle, right, floating, drop }: ScreenHeaderProps) {
   const content = (
     <>
       <View className="flex-1">
@@ -100,7 +103,11 @@ export function ScreenHeader({ title, subtitle, right, floating }: ScreenHeaderP
   );
 
   if (floating) {
-    return <FloatingBar className="px-page">{content}</FloatingBar>;
+    return (
+      <FloatingBar className="px-page" drop={drop}>
+        {content}
+      </FloatingBar>
+    );
   }
 
   return (
@@ -112,20 +119,20 @@ export function ScreenHeader({ title, subtitle, right, floating }: ScreenHeaderP
 
 // The bar of a floating header: it reaches the top of the screen, on a blur with a tint, and the row of the header
 // is under the notch.
-function FloatingBar({ children, className }: { children: ReactNode; className: string }) {
+function FloatingBar({ children, className, drop = 0 }: { children: ReactNode; className: string; drop?: number }) {
   const insets = useSafeAreaInsets();
 
   return (
     <View
       pointerEvents="box-none"
       className="absolute inset-x-0 top-0 z-10 overflow-hidden"
-      style={{ height: insets.top + HEADER_TOP_GAP + HEADER_ROW_HEIGHT }}>
+      style={{ height: insets.top + HEADER_TOP_GAP + drop + HEADER_ROW_HEIGHT }}>
       <BackBlur intensity={50} tint="light" className="absolute inset-0" pointerEvents="none" />
       <View className="absolute inset-0 bg-surface/70" pointerEvents="none" />
       <View
         pointerEvents="box-none"
         className={`${HEADER_ROW} ${className}`}
-        style={{ marginTop: insets.top + HEADER_TOP_GAP, height: HEADER_ROW_HEIGHT }}>
+        style={{ marginTop: insets.top + HEADER_TOP_GAP + drop, height: HEADER_ROW_HEIGHT }}>
         {children}
       </View>
     </View>
@@ -136,9 +143,9 @@ function FloatingBar({ children, className }: { children: ReactNode; className: 
 const DETAIL_CONTENT_GAP = 0;
 
 /** How tall a floating `DetailHeader` is, from the top of the screen; the bar reaches the top of the screen. */
-export function useDetailHeaderHeight() {
+export function useDetailHeaderHeight(drop = 0) {
   const insets = useSafeAreaInsets();
-  return insets.top + HEADER_TOP_GAP + HEADER_ROW_HEIGHT;
+  return insets.top + HEADER_TOP_GAP + drop + HEADER_ROW_HEIGHT;
 }
 
 /**
@@ -158,8 +165,8 @@ export function DetailScroll({ contentContainerStyle, ...props }: ScrollViewProp
 }
 
 /** The top room a list with a floating `DetailHeader` needs, for its own `contentContainerStyle`. */
-export function useDetailContentTop() {
-  return useDetailHeaderHeight() + DETAIL_CONTENT_GAP;
+export function useDetailContentTop(drop = 0) {
+  return useDetailHeaderHeight(drop) + DETAIL_CONTENT_GAP;
 }
 
 type DetailHeaderProps = {
