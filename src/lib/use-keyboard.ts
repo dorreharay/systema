@@ -22,3 +22,19 @@ export function useKeyboardHeight() {
 
   return height;
 }
+
+/**
+ * How tall the keyboard was the last time it was up: it stays when the keyboard goes down again. For what
+ * is sized to leave room for the keyboard and must not change size as it comes and goes. Until a keyboard
+ * has been seen it is `fallback`.
+ */
+export function useLastKeyboardHeight(fallback: number) {
+  const current = useKeyboardHeight();
+  const [last, setLast] = useState(0);
+
+  if (current > 0 && current !== last) {
+    setLast(current);
+  }
+
+  return last || fallback;
+}

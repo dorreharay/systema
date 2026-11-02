@@ -27,7 +27,9 @@ export default function ListRow({ icon: Icon, label, value, onPress, destructive
           {value}
         </Text>
       ) : null}
-      {trailing}
+      <View className="items-center justify-center">
+        {trailing}
+      </View>
       {onPress && !destructive ? <ChevronRight size={18} color={colors.muted} /> : null}
     </>
   );

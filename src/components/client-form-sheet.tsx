@@ -29,7 +29,7 @@ function ClientForm({ client, initialName, onClose, onSaved }: Omit<ClientFormSh
   const [phone, setPhone] = useState(client?.phone ?? '');
   const [email, setEmail] = useState(client?.email ?? '');
   const [notes, setNotes] = useState(client?.notes ?? '');
-  const [errors, setErrors] = useState<{ name?: string; email?: string }>({});
+  const [errors, setErrors] = useState<{ name?: string; phone?: string; email?: string }>({});
   const [formError, setFormError] = useState<string>();
   const [saving, setSaving] = useState(false);
   const phoneRef = useRef<InputRef>(null);
@@ -38,14 +38,17 @@ function ClientForm({ client, initialName, onClose, onSaved }: Omit<ClientFormSh
 
   const save = async () => {
     if (saving) return;
-    const next = { name: name.trim() ? undefined : t('error_name_required') };
+    const next = {
+      name: name.trim() ? undefined : t('error_name_required'),
+      phone: phone.trim() ? undefined : t('error_phone_required'),
+    };
     setErrors(next);
     setFormError(undefined);
-    if (next.name) return;
+    if (next.name || next.phone) return;
 
     setSaving(true);
     try {
-      const input = { name, phone: phone || null, email: email || null, notes: notes || null };
+      const input = { name, phone, email: email || null, notes: notes || null };
       const saved = client
         ? await update.mutateAsync({ id: client.id, ...input })
         : await create.mutateAsync(input);
@@ -54,8 +57,13 @@ function ClientForm({ client, initialName, onClose, onSaved }: Omit<ClientFormSh
       onSaved?.(saved);
     } catch (error) {
       const emailProblem = fieldError(error, 'email');
-      if (emailProblem) setErrors({ email: t('error_email_invalid') });
-      else setFormError(describeError(error, t));
+      const phoneProblem = fieldError(error, 'phone');
+      if (emailProblem || phoneProblem) {
+        setErrors({
+          email: emailProblem ? t('error_email_invalid') : undefined,
+          phone: phoneProblem ? t('error_phone_required') : undefined,
+        });
+      } else setFormError(describeError(error, t));
       setSaving(false);
     }
   };
@@ -80,9 +88,13 @@ function ClientForm({ client, initialName, onClose, onSaved }: Omit<ClientFormSh
         />
         <Input
           ref={phoneRef}
-          label={`${t('field_phone')} · ${t('optional')}`}
+          label={t('field_phone')}
           value={phone}
-          onChangeText={setPhone}
+          onChangeText={(value) => {
+            setPhone(value);
+            setErrors((current) => ({ ...current, phone: undefined }));
+          }}
+          error={errors.phone}
           keyboardType="phone-pad"
           autoComplete="tel"
           returnKeyType="next"
@@ -126,13 +138,14 @@ function ClientForm({ client, initialName, onClose, onSaved }: Omit<ClientFormSh
   );
 }
 
-// Add or edit a client. Only the name is needed: the rest can be filled in when it comes up.
+// Add or edit a client. The name and the phone are needed: the rest can be filled in when it comes up.
 export default function ClientFormSheet({ visible, onClose, ...rest }: ClientFormSheetProps) {
   const { t } = useI18n();
   return (
     <Sheet
       visible={visible}
       onClose={onClose}
+      form
       title={rest.client ? t('edit_client') : t('add_client')}>
       <ClientForm onClose={onClose} {...rest} />
     </Sheet>

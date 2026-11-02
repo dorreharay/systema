@@ -18,4 +18,8 @@ export const colors = {
   // The New Order shortcut: a soft blue, as light and as muted as the yellow of Clients and the green of
   // Catalog beside it (see home.tsx).
   newOrder: '#C3DDF0',
+  // The colours of the Clients and the Catalog shortcuts on the home screen, and of the buttons that add to
+  // them (a client, a racket, a string).
+  clients: '#F3D590',
+  catalog: '#CCE7AC',
 } as const;

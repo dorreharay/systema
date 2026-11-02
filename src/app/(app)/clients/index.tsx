@@ -1,15 +1,16 @@
 import { useRouter } from 'expo-router';
-import { Plus, Search, Users } from 'lucide-react-native';
+import { Search, Users } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import { FlatList, RefreshControl, TextInput, View } from 'react-native';
 
+import { StackNavBar } from '@/components/app-tab-bar';
 import ClientFormSheet from '@/components/client-form-sheet';
-import AppButton from '@/components/ui/app-button';
+import PlusIcon from '@/components/icons/plus-icon';
 import Avatar from '@/components/ui/avatar';
-import BottomBar from '@/components/ui/bottom-bar';
 import Card from '@/components/ui/card';
 import { colors } from '@/components/ui/colors';
 import { DetailHeader, Screen } from '@/components/ui/screen';
+import Shortcut from '@/components/ui/shortcut';
 import { ListSkeleton } from '@/components/ui/skeleton';
 import { EmptyState, ErrorState, NoResults } from '@/components/ui/states';
 import { Text } from '@/components/ui/text';
@@ -36,7 +37,18 @@ export default function Clients() {
   }, [text]);
 
   return (
-    <Screen>
+    <Screen
+      dock={
+        <Shortcut
+          icon={PlusIcon}
+          label={t('add_client')}
+          color={colors.clients}
+          contentColor="#000000"
+          className="px-5 py-5 w-full"
+          onPress={() => setAdding(true)}
+        />
+      }
+      footer={<StackNavBar />}>
       <DetailHeader title={t('tab_clients')} />
       <View className="px-page py-3">
         <View className="min-h-12 flex-row items-center gap-2 rounded-lg border border-line bg-white px-3.5">
@@ -52,7 +64,7 @@ export default function Clients() {
             returnKeyType="search"
             accessibilityLabel={t('search')}
             textAlignVertical="center"
-            className="min-w-0 flex-1 py-3 font-normal text-base text-ink outline-none"
+            className="min-w-0 flex-1 py-3 ios:pb-3.5 ios:pt-2.5 font-normal text-base text-ink outline-none"
           />
         </View>
       </View>
@@ -60,7 +72,7 @@ export default function Clients() {
       <FlatList
         data={clients.data ?? []}
         keyExtractor={(client) => client.id}
-        contentContainerClassName="gap-3 px-page pb-28"
+        contentContainerClassName="gap-3 px-page pb-page"
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         refreshControl={
@@ -114,15 +126,6 @@ export default function Clients() {
           )
         }
       />
-
-      <BottomBar>
-        <AppButton
-          large
-          title={t('add_client')}
-          icon={<Plus size={20} color={colors.white} />}
-          onPress={() => setAdding(true)}
-        />
-      </BottomBar>
 
       <ClientFormSheet
         visible={adding}

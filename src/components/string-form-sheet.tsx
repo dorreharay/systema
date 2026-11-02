@@ -182,7 +182,7 @@ function StringForm({ string, initialModel, onClose, onSaved }: Omit<StringFormS
 export default function StringFormSheet({ visible, onClose, ...rest }: StringFormSheetProps) {
   const { t } = useI18n();
   return (
-    <Sheet visible={visible} onClose={onClose} title={rest.string ? t('edit_string') : t('add_string')}>
+    <Sheet visible={visible} onClose={onClose} form title={rest.string ? t('edit_string') : t('add_string')}>
       <StringForm onClose={onClose} {...rest} />
     </Sheet>
   );

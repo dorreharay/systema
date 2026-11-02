@@ -105,7 +105,7 @@ function ServiceForm({ service, onClose }: Omit<ServiceFormSheetProps, 'visible'
 export default function ServiceFormSheet({ visible, onClose, ...rest }: ServiceFormSheetProps) {
   const { t } = useI18n();
   return (
-    <Sheet visible={visible} onClose={onClose} title={rest.service ? t('edit_service') : t('add_service')}>
+    <Sheet visible={visible} onClose={onClose} form title={rest.service ? t('edit_service') : t('add_service')}>
       <ServiceForm onClose={onClose} {...rest} />
     </Sheet>
   );

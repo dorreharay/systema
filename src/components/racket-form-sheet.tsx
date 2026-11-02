@@ -158,7 +158,7 @@ function RacketForm({ racket, owner: knownOwner, onClose, onSaved }: Omit<Racket
 export default function RacketFormSheet({ visible, onClose, ...rest }: RacketFormSheetProps) {
   const { t } = useI18n();
   return (
-    <Sheet visible={visible} onClose={onClose} title={rest.racket ? t('edit_racket') : t('add_racket')}>
+    <Sheet visible={visible} onClose={onClose} form title={rest.racket ? t('edit_racket') : t('add_racket')}>
       <RacketForm onClose={onClose} {...rest} />
     </Sheet>
   );

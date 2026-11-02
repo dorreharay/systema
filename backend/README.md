@@ -105,7 +105,7 @@ orders that used it (an old order never loses its history); an order is deleted 
 
 | | | |
 |---|---|---|
-| `GET` `POST` | `/api/clients` | `?q=` searches name and phone. A client needs only a `name`; `phone`, `email`, `notes` are optional. Each has `rackets_count`, `orders_count`, `last_order_date` |
+| `GET` `POST` | `/api/clients` | `?q=` searches name and phone. A client needs a `name` and a `phone`; `email` and `notes` are optional. Each has `rackets_count`, `orders_count`, `last_order_date` |
 | `GET` `PATCH` `DELETE` | `/api/clients/:id` | `GET` adds the client's `rackets` and `orders` (history) |
 | `GET` `POST` | `/api/rackets` | `?q=` (brand, model, owner) and `?client_id=`. `{ client_id, brand, model, notes? }`. Each has `orders_count` and `last_setup`: how it was last strung, to prefill a new order |
 | `GET` `PATCH` `DELETE` | `/api/rackets/:id` | `GET` adds the racket's `orders`, newest first |

@@ -62,7 +62,7 @@ function PickerBody<T>({
 
   return (
     <View className="flex-1">
-      <View className="px-page pb-3">
+      <View className="px-page pb-3 pt-1">
         <View className="min-h-12 flex-row items-center gap-2 rounded-lg border border-line bg-surface px-3.5">
           <Search size={18} color={colors.muted} />
           <TextInput
@@ -77,7 +77,7 @@ function PickerBody<T>({
             returnKeyType="search"
             accessibilityLabel={placeholder}
             textAlignVertical="center"
-            className="min-w-0 flex-1 py-3 font-normal text-base text-ink outline-none"
+            className="min-w-0 flex-1 py-3 ios:pb-3.5 ios:pt-2.5 font-normal text-base text-ink outline-none"
           />
           {query ? (
             <Pressable
@@ -112,6 +112,10 @@ function PickerBody<T>({
           data={items}
           keyExtractor={keyOf}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          // The keyboard covers the foot of the sheet: the list leaves room for it, so the last items can
+          // be scrolled up above it.
+          automaticallyAdjustKeyboardInsets
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
             loading ? (
@@ -138,7 +142,11 @@ function PickerBody<T>({
   );
 }
 
-/** A sheet to find one thing in a list that is searched as you type, or to make a new one. */
+/**
+ * A list to find one thing in, searched as you type, or to make a new one. It is a sheet of its own, with
+ * the cursor in the search field from the start: the keyboard comes up over its foot and the sheet does not
+ * move. A tap outside it closes it, like any other sheet.
+ */
 export default function SearchPicker<T>({ visible, onClose, title, ...body }: SearchPickerProps<T>) {
   return (
     <Sheet visible={visible} onClose={onClose} title={title} tall scroll={false}>

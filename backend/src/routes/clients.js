@@ -17,7 +17,7 @@ rejectMalformedIds(router);
 
 const clientSchema = z.object({
   name: requiredText(120, 'Enter the name'),
-  phone: optionalText(40),
+  phone: requiredText(40, 'Enter the phone number'),
   email: optionalEmail,
   notes: optionalText(2000),
 });

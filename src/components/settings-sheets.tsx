@@ -200,7 +200,7 @@ function ProfileForm({ onClose }: { onClose: () => void }) {
 export function ProfileSheet({ visible, onClose }: SheetProps) {
   const { t } = useI18n();
   return (
-    <Sheet visible={visible} onClose={onClose} title={t('settings_profile')}>
+    <Sheet visible={visible} onClose={onClose} form title={t('settings_profile')}>
       <ProfileForm onClose={onClose} />
     </Sheet>
   );
@@ -252,7 +252,7 @@ function WorkshopForm({ onClose }: { onClose: () => void }) {
 export function WorkshopSheet({ visible, onClose }: SheetProps) {
   const { t } = useI18n();
   return (
-    <Sheet visible={visible} onClose={onClose} title={t('settings_workshop')}>
+    <Sheet visible={visible} onClose={onClose} form title={t('settings_workshop')}>
       <WorkshopForm onClose={onClose} />
     </Sheet>
   );

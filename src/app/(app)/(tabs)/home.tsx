@@ -60,10 +60,6 @@ function StatDivider() {
   return <View className="my-3 w-px bg-line" />;
 }
 
-// The colours of the two shortcuts.
-const CLIENTS_COLOR = '#F3D590';
-const CATALOG_COLOR = '#CCE7AC';
-
 // A way into a part of the app that is not in the navigation bar: half the width of the page. Its
 // corners are those of the container it is in (see Screen).
 const SHORTCUT_SIZE = 'flex-1 px-8 py-6';
@@ -96,14 +92,14 @@ export default function Home() {
             <Shortcut
               icon={UserIcon}
               label={t('tab_clients')}
-              color={CLIENTS_COLOR}
+              color={colors.clients}
               className={SHORTCUT_SIZE}
               onPress={() => router.navigate('/clients')}
             />
             <Shortcut
               icon={() => <CatalogIcon size={28} />}
               label={t('tab_catalog')}
-              color={CATALOG_COLOR}
+              color={colors.catalog}
               className={SHORTCUT_SIZE}
               onPress={() => router.navigate('/catalog')}
             />

@@ -40,7 +40,7 @@ export default function PickerField({
         } ${disabled ? 'opacity-50' : ''}`}>
         {icon}
         <Text
-          className={`flex-1 text-base ${value ? 'text-ink' : 'text-neutral-400'}`}
+          className={`flex-1 text-base ios:pb-1 ${value ? 'text-ink' : 'text-neutral-400'}`}
           numberOfLines={1}>
           {value ?? placeholder}
         </Text>

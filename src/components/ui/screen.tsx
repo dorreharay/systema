@@ -9,6 +9,7 @@ import { colors } from '@/components/ui/colors';
 import IconButton from '@/components/ui/icon-button';
 import { Text } from '@/components/ui/text';
 import { useI18n } from '@/lib/i18n';
+import { useKeyboardHeight } from '@/lib/use-keyboard';
 
 type ScreenProps = {
   children: ReactNode;
@@ -18,6 +19,8 @@ type ScreenProps = {
   // Something set apart from the page: it sits under it, edge to edge, a gap of 1 below, in a rounded
   // container of its own, on the same dark ground as the navigation.
   dock?: ReactNode;
+  // Under the dock, on the same dark ground: the navigation, on the pages that are not in the tabs.
+  footer?: ReactNode;
 };
 
 /**
@@ -26,8 +29,10 @@ type ScreenProps = {
  * page is rounded by the tabs layout (it stands over the navigation); with a `dock` the page is rounded
  * at the bottom here, as the dock sits under it, on the dark ground of the navigation.
  */
-export function Screen({ children, dock, logo }: ScreenProps) {
+export function Screen({ children, dock, footer, logo }: ScreenProps) {
   const insets = useSafeAreaInsets();
+  // With the keyboard up, the dock and what is under it step aside: on Android they would ride on top of it.
+  const keyboardOpen = useKeyboardHeight() > 0;
   const paddingTop = insets.top + (logo ? HEADER_HEIGHT : COMPACT_HEADER_HEIGHT);
 
   if (!dock) {
@@ -44,7 +49,12 @@ export function Screen({ children, dock, logo }: ScreenProps) {
       <View className="flex-1 overflow-hidden rounded-b-[18px] bg-surface" style={{ paddingTop }}>
         {children}
       </View>
-      <View className="mt-1 overflow-hidden rounded-[18px]">{dock}</View>
+      {keyboardOpen ? null : (
+        <>
+          <View className="mt-1 overflow-hidden rounded-[18px]">{dock}</View>
+          {footer}
+        </>
+      )}
     </View>
   );
 }

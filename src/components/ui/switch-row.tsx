@@ -10,14 +10,19 @@ type SwitchRowProps = {
   onValueChange: (value: boolean) => void;
 };
 
+// The switch is on the line of the label, and stays there when there is a hint under it: the first line of the
+// text and the switch have the same middle, 24 pt from the top of the row.
 export default function SwitchRow({ label, description, value, onValueChange }: SwitchRowProps) {
   return (
-    <View className="min-h-12 flex-row items-center justify-between gap-4">
-      <View className="flex-1">
-        <Text className="text-base font-medium">{label}</Text>
+    <View className="flex-row items-start justify-between gap-4">
+      <View className="flex-1 py-3">
+        <Text className="text-base font-medium leading-[24px]">{label}</Text>
         {description ? <Text className="text-[13px] text-muted">{description}</Text> : null}
       </View>
-      <AppSwitch accessibilityLabel={label} value={value} onValueChange={onValueChange} />
+      {/* The text of this font sits a little low in its line: the switch goes down with it. */}
+      <View className="h-12 justify-center ios:pt-1">
+        <AppSwitch accessibilityLabel={label} value={value} onValueChange={onValueChange} />
+      </View>
     </View>
   );
 }

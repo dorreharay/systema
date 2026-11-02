@@ -277,18 +277,21 @@ async function shop(ctx) {
 }
 const minimalOrder = (s, extra = {}) => ({ client_id: s.customer.id, racket_id: s.racket.id, ...extra });
 
-test('Clients', 'only the name is required; phone, email and notes are optional', async (ctx) => {
+test('Clients', 'the name and the phone are required; email and notes are optional', async (ctx) => {
   const { client } = await register(ctx);
   assertStatus(await client.post('/api/clients', {}), 400);
-  assertStatus(await client.post('/api/clients', { name: '   ' }), 400);
-  const res = await client.post('/api/clients', { name: ' Ann ', phone: '', email: '' });
+  assertStatus(await client.post('/api/clients', { name: '   ', phone: '+380501112233' }), 400);
+  assertStatus(await client.post('/api/clients', { name: 'Ann' }), 400);
+  assertStatus(await client.post('/api/clients', { name: 'Ann', phone: '   ' }), 400);
+  const res = await client.post('/api/clients', { name: ' Ann ', phone: ' +380501112233 ', email: '' });
   assertStatus(res, 201);
-  assertEq([res.data.name, res.data.phone, res.data.email], ['Ann', null, null], 'trimmed, empty is null');
-  assertStatus(await client.post('/api/clients', { name: 'Bob', email: 'not-an-email' }), 400);
+  assertEq([res.data.name, res.data.phone, res.data.email], ['Ann', '+380501112233', null], 'trimmed, empty is null');
+  assertStatus(await client.post('/api/clients', { name: 'Bob', phone: '+380509998877', email: 'not-an-email' }), 400);
+  assertStatus(await client.patch(`/api/clients/${res.data.id}`, { phone: '' }), 400);
 });
 test('Clients', 'the list searches by name and phone and counts rackets', async (ctx) => {
   const s = await shop(ctx);
-  await s.client.post('/api/clients', { name: 'Zed' });
+  await s.client.post('/api/clients', { name: 'Zed', phone: '+380671234567' });
   assertEq((await s.client.get('/api/clients')).data.items.map((c) => c.name), ['Maria Sharapova', 'Zed'], 'sorted by name');
   assertEq((await s.client.get('/api/clients?q=shara')).data.items.length, 1, 'by name');
   assertEq((await s.client.get('/api/clients?q=0501')).data.items.length, 1, 'by phone');
@@ -309,7 +312,8 @@ test('Clients', 'editing changes only the fields sent', async (ctx) => {
   const res = await s.client.patch(`/api/clients/${s.customer.id}`, { notes: 'Left-handed' });
   assertStatus(res, 200);
   assertEq([res.data.name, res.data.phone, res.data.notes], ['Maria Sharapova', '+380501112233', 'Left-handed'], 'kept');
-  assertEq((await s.client.patch(`/api/clients/${s.customer.id}`, { phone: null })).data.phone, null, 'null clears');
+  assertEq((await s.client.patch(`/api/clients/${s.customer.id}`, { notes: null })).data.notes, null, 'null clears');
+  assertStatus(await s.client.patch(`/api/clients/${s.customer.id}`, { phone: null }), 400);
 });
 test('Clients', 'deleting hides the client and their rackets, and keeps their orders', async (ctx) => {
   const s = await shop(ctx);
@@ -345,7 +349,7 @@ test('Rackets', 'brand, model and a client are required', async (ctx) => {
 });
 test('Rackets', 'the list can be filtered by owner and searched by brand and model', async (ctx) => {
   const s = await shop(ctx);
-  const other = (await s.client.post('/api/clients', { name: 'Iga' })).data;
+  const other = (await s.client.post('/api/clients', { name: 'Iga', phone: '+380631110000' })).data;
   await s.client.post('/api/rackets', { client_id: other.id, brand: 'Babolat', model: 'Pure Aero' });
   assertEq((await s.client.get('/api/rackets')).data.items.length, 2, 'all');
   assertEq((await s.client.get(`/api/rackets?client_id=${other.id}`)).data.items.map((r) => r.brand), ['Babolat'], 'by owner');
@@ -367,7 +371,7 @@ test('Rackets', 'the racket carries the setup of its latest order and its histor
 });
 test('Rackets', 'deleting hides the racket; the owner can be changed', async (ctx) => {
   const s = await shop(ctx);
-  const other = (await s.client.post('/api/clients', { name: 'Iga' })).data;
+  const other = (await s.client.post('/api/clients', { name: 'Iga', phone: '+380631110000' })).data;
   const moved = await s.client.patch(`/api/rackets/${s.racket.id}`, { client_id: other.id });
   assertEq([moved.status, moved.data.client_name], [200, 'Iga'], 'new owner');
   assertStatus(await s.client.delete(`/api/rackets/${s.racket.id}`), 200);
@@ -494,7 +498,7 @@ test('Orders', 'an order keeps the string name it was made with', async (ctx) =>
 });
 test('Orders', 'checks what an order points at', async (ctx) => {
   const s = await shop(ctx);
-  const other = (await s.client.post('/api/clients', { name: 'Iga' })).data;
+  const other = (await s.client.post('/api/clients', { name: 'Iga', phone: '+380631110000' })).data;
   const wrongOwner = await s.client.post('/api/orders', { client_id: other.id, racket_id: s.racket.id });
   assertStatus(wrongOwner, 400);
   assertTrue(wrongOwner.data.fields.racket_id, 'the racket is named');
@@ -557,7 +561,7 @@ test('Orders', 'the list filters by status and sorts the queue by due date', asy
 });
 test('Orders', 'search finds a customer, a racket model, a string or an order number', async (ctx) => {
   const s = await shop(ctx);
-  const iga = (await s.client.post('/api/clients', { name: 'Iga Swiatek' })).data;
+  const iga = (await s.client.post('/api/clients', { name: 'Iga Swiatek', phone: '+380631110000' })).data;
   const racket = (await s.client.post('/api/rackets', { client_id: iga.id, brand: 'Tecnifibre', model: 'TF40' })).data;
   await s.client.post('/api/orders', minimalOrder(s, { main_string_id: s.string.id }));
   const second = (await s.client.post('/api/orders', { client_id: iga.id, racket_id: racket.id })).data;

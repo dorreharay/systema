@@ -82,10 +82,12 @@ import {
   useUploadPhotos,
 } from '@/lib/queries';
 import type { CatalogString, Client, OrderDetail, Racket } from '@/lib/types';
+import { clearSavedDraft, saveDraft, type SavedDraft } from '@/lib/saved-draft';
 import { useKeyboardHeight } from '@/lib/use-keyboard';
-import { useUnsavedChangesGuard } from '@/lib/use-unsaved-guard';
 
 const MAX_PHOTOS = 10;
+// How long after the last change the draft is written to the device.
+const AUTOSAVE_MS = 400;
 
 type SectionKey = 'customer' | 'strings' | 'pricing';
 
@@ -128,13 +130,17 @@ type OrderFormProps = {
   initial: Draft;
   // Set when editing: the order that is saved over, and whose photos are shown.
   order?: OrderDetail;
+  // Where the draft of this form is kept on the device, and the draft that was kept there, if there was one: the
+  // form then starts from it, and not from `initial`.
+  draftKey: string;
+  saved: SavedDraft | null;
 };
 
 /**
  * The order form, which is for creating and for editing. The common order (an existing customer and
  * racket, the setup of last time) is a few taps; everything else is below or folded away.
  */
-export default function OrderForm({ initial, order }: OrderFormProps) {
+export default function OrderForm({ initial, order, draftKey, saved }: OrderFormProps) {
   const { user } = useAuth();
   const { t, language } = useI18n();
   const router = useRouter();
@@ -152,12 +158,15 @@ export default function OrderForm({ initial, order }: OrderFormProps) {
   const currency = user?.currency ?? 'USD';
   const today = todayIso(user?.timezone);
 
-  const [draft, setDraft] = useState(initial);
+  // A saved draft may come from an older shape of the form: what it does not have is taken from `initial`.
+  const [start] = useState(() => (saved ? { ...initial, ...saved.draft } : initial));
+  const [draft, setDraft] = useState(start);
+  const [restored, setRestored] = useState(!!saved);
   const [initialSnapshot] = useState(() => draftSnapshot(initial));
   const [errors, setErrors] = useState<DraftErrors>({});
   const [formError, setFormError] = useState<string>();
   const [submitting, setSubmitting] = useState(false);
-  const [advancedOpen, setAdvancedOpen] = useState(() => usesAdvanced(initial));
+  const [advancedOpen, setAdvancedOpen] = useState(() => usesAdvanced(start));
   const [picking, setPicking] = useState<'client' | 'racket' | 'main' | 'cross' | null>(null);
   const [creating, setCreating] = useState<
     { kind: 'client' | 'racket' | 'string'; name: string; target?: 'main' | 'cross' } | null
@@ -165,7 +174,7 @@ export default function OrderForm({ initial, order }: OrderFormProps) {
   const [dateTarget, setDateTarget] = useState<'received' | 'due' | null>(null);
   const [timeOpen, setTimeOpen] = useState(false);
   const [photoMenu, setPhotoMenu] = useState(false);
-  const [removedPhotos, setRemovedPhotos] = useState<string[]>([]);
+  const [removedPhotos, setRemovedPhotos] = useState<string[]>(saved?.removedPhotos ?? []);
 
   const [clientQuery, setClientQuery] = useState('');
   const [racketQuery, setRacketQuery] = useState('');
@@ -189,15 +198,43 @@ export default function OrderForm({ initial, order }: OrderFormProps) {
   };
 
   const dirty = draftSnapshot(draft) !== initialSnapshot || removedPhotos.length > 0;
-  const { allowed, allowLeave } = useUnsavedChangesGuard(dirty);
-  // Set once the order is saved; the page is left in the effect below, after the guard has been lifted.
-  const [savedId, setSavedId] = useState<string | null>(null);
+  // Set once the order is saved: from then on nothing of the form is kept as a draft.
+  const submitted = useRef(false);
 
+  // What is typed is kept on the device as it goes, so leaving the form never loses it, and nothing asks before
+  // leaving. Back to what the form started as, there is nothing to keep.
   useEffect(() => {
-    if (!savedId || !allowed) return;
-    if (editing) router.back();
-    else router.replace({ pathname: '/orders/[id]', params: { id: savedId } });
-  }, [savedId, allowed, editing, router]);
+    if (submitted.current) return;
+    if (!dirty) {
+      void clearSavedDraft(draftKey);
+      return;
+    }
+    const timer = setTimeout(() => void saveDraft(draftKey, draft, removedPhotos), AUTOSAVE_MS);
+    return () => clearTimeout(timer);
+  }, [dirty, draft, removedPhotos, draftKey]);
+
+  // Leaving within a moment of the last change: that change goes too.
+  const latest = useRef({ dirty, draft, removedPhotos });
+  useEffect(() => {
+    latest.current = { dirty, draft, removedPhotos };
+  });
+  useEffect(
+    () => () => {
+      const { dirty: changed, draft: current, removedPhotos: removed } = latest.current;
+      if (changed && !submitted.current) void saveDraft(draftKey, current, removed);
+    },
+    [draftKey]
+  );
+
+  const startOver = () => {
+    setDraft(initial);
+    setRemovedPhotos([]);
+    setErrors({});
+    setFormError(undefined);
+    setAdvancedOpen(usesAdvanced(initial));
+    setRestored(false);
+    void clearSavedDraft(draftKey);
+  };
 
   const update = (patch: Partial<Draft>, clear?: (keyof DraftErrors)[]) => {
     setDraft((current) => ({ ...current, ...patch }));
@@ -329,8 +366,11 @@ export default function OrderForm({ initial, order }: OrderFormProps) {
             : t('order_created', { number: orderNumber(saved.number) })
         );
       }
-      allowLeave();
-      setSavedId(saved.id);
+      // The order is saved: the draft of it is not needed, and the form is left.
+      submitted.current = true;
+      await clearSavedDraft(draftKey);
+      if (editing) router.back();
+      else router.replace({ pathname: '/orders/[id]', params: { id: saved.id } });
     } catch (error) {
       // What was typed stays: nothing here resets the draft.
       setFormError(describeError(error, t));
@@ -358,6 +398,15 @@ export default function OrderForm({ initial, order }: OrderFormProps) {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
           contentContainerClassName="gap-4 p-page pb-8">
+          {restored ? (
+            <View className="flex-row items-center justify-between gap-3 rounded-lg bg-primary-soft px-3.5 py-2.5">
+              <Text className="flex-1 text-[14px] text-primary">{t('draft_restored')}</Text>
+              <Pressable accessibilityRole="button" hitSlop={8} onPress={startOver}>
+                <Text className="text-[14px] font-semibold text-primary">{t('draft_start_over')}</Text>
+              </Pressable>
+            </View>
+          ) : null}
+
           {/* Customer and racket */}
           <FormSection title={t('section_customer_racket')} onLayout={trackSection('customer')}>
             <PickerField

@@ -101,7 +101,7 @@ export default function Orders() {
               returnKeyType="search"
               accessibilityLabel={t('search')}
               textAlignVertical="center"
-              className="min-w-0 flex-1 py-3 font-normal text-base text-ink outline-none"
+              className="min-w-0 flex-1 py-3 ios:pb-3.5 ios:pt-2.5 font-normal text-base text-ink outline-none"
             />
           </View>
         </View>
