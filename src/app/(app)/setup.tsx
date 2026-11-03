@@ -5,6 +5,7 @@ import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { TimeZoneSheet } from '@/components/settings-sheets';
+import { BLOCK, BLOCK_ROOM } from '@/components/ui/card';
 import { Segmented } from '@/components/ui/chips';
 import { colors } from '@/components/ui/colors';
 import { FormError, Input } from '@/components/ui/input';
@@ -79,7 +80,7 @@ export default function Setup() {
             <Text className="text-base text-muted">{t('setup_subtitle')}</Text>
           </View>
 
-          <View className="gap-4 rounded-2xl border border-line bg-white p-4">
+          <View className={`${BLOCK} ${BLOCK_ROOM} gap-4`}>
             <Input
               label={t('field_full_name')}
               value={name}

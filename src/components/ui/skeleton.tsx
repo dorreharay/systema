@@ -8,6 +8,8 @@ import Animated, {
 } from 'react-native-reanimated';
 import { View, type StyleProp, type ViewStyle } from 'react-native';
 
+import { BLOCK, BLOCK_ROOM, BLOCK_SHAPE } from '@/components/ui/card';
+
 // A grey block that pulses where something is still loading.
 export function Skeleton({ className = '', style }: { className?: string; style?: StyleProp<ViewStyle> }) {
   const pulse = useSharedValue(0);
@@ -21,9 +23,19 @@ export function Skeleton({ className = '', style }: { className?: string; style?
   return <Animated.View className={`rounded-md bg-neutral-200 ${className}`} style={[style, pulseStyle]} />;
 }
 
+/** A grey block the shape of a white block of a page (from edge to edge), for a page that is still loading. */
+export function BlockSkeleton({ className = '' }: { className?: string }) {
+  // The rounding is the wrapper's: the block inside is square, and is cut to it.
+  return (
+    <View className={`${BLOCK_SHAPE} overflow-hidden`}>
+      <Skeleton className={className} />
+    </View>
+  );
+}
+
 export function OrderCardSkeleton() {
   return (
-    <View className="gap-3 rounded-2xl border border-line bg-white p-4" accessibilityLabel="Loading">
+    <View className={`${BLOCK} ${BLOCK_ROOM} gap-3`} accessibilityLabel="Loading">
       <View className="flex-row items-center justify-between">
         <Skeleton className="h-5 w-36" />
         <Skeleton className="h-6 w-20 rounded-full" />
@@ -40,7 +52,7 @@ export function OrderCardSkeleton() {
 
 export function RowSkeleton() {
   return (
-    <View className="flex-row items-center gap-3 rounded-2xl border border-line bg-white p-4">
+    <View className={`${BLOCK} ${BLOCK_ROOM} flex-row items-center gap-3`}>
       <Skeleton className="size-11 rounded-full" />
       <View className="flex-1 gap-2">
         <Skeleton className="h-4 w-40" />

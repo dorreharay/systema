@@ -3,7 +3,7 @@ import { View } from 'react-native';
 
 import OrderForm from '@/components/order-form';
 import { DetailHeader, Screen } from '@/components/ui/screen';
-import { Skeleton } from '@/components/ui/skeleton';
+import { BlockSkeleton } from '@/components/ui/skeleton';
 import { ErrorState } from '@/components/ui/states';
 import { useAuth } from '@/lib/auth';
 import { todayIso } from '@/lib/format';
@@ -54,8 +54,8 @@ export default function NewOrder() {
           <ErrorState error={failed.error} onRetry={() => needed.forEach((item) => item.refetch())} />
         ) : (
           <View className="gap-4 p-page">
-            <Skeleton className="h-40 w-full rounded-2xl" />
-            <Skeleton className="h-56 w-full rounded-2xl" />
+            <BlockSkeleton className="h-40" />
+            <BlockSkeleton className="h-56" />
           </View>
         )}
       </Screen>

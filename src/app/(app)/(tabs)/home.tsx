@@ -109,43 +109,47 @@ export default function Home() {
         </View>
       }
     >
-      {/* The numbers rest at the foot of the page, just above the shortcuts; the insights fill the room above them.
-          On a screen too short for both, the page scrolls instead of squeezing the insights. */}
-      <ScrollView
-        bounces={false}
-        overScrollMode="never"
-        showsVerticalScrollIndicator={false}
-        contentContainerClassName="grow p-page">
-        {/* When the numbers cannot be loaded, the retry takes the place of the insights: both need the same connection. */}
-        {dashboard.isError && !data ? (
-          <View className="flex-1 justify-center">
-            <ErrorState error={dashboard.error} onRetry={() => dashboard.refetch()} />
-          </View>
-        ) : (
-          <HomeInsights />
-        )}
+      {/* All of the page, from under the logo to the shortcuts, is in one white block, rounded at the top and at the
+          foot (the radius of the containers it sits among: see Screen). */}
+      <View className="flex-1 overflow-hidden rounded-[18px] bg-white">
+        {/* The numbers rest at the foot of the page, just above the shortcuts; the insights fill the room above them.
+            On a screen too short for both, the page scrolls instead of squeezing the insights. */}
+        <ScrollView
+          bounces={false}
+          overScrollMode="never"
+          showsVerticalScrollIndicator={false}
+          contentContainerClassName="grow py-page">
+          {/* When the numbers cannot be loaded, the retry takes the place of the insights: both need the same connection. */}
+          {dashboard.isError && !data ? (
+            <View className="flex-1 justify-center">
+              <ErrorState error={dashboard.error} onRetry={() => dashboard.refetch()} />
+            </View>
+          ) : (
+            <HomeInsights />
+          )}
 
-        {/* Edge to edge: it takes back the margin of the page, and the three thirds are equal. */}
-        <View className="-mx-page flex-row">
-          <Stat
-            value={data?.active_orders}
-            failed={dashboard.isError}
-            label={t('stat_active')}
-          />
-          <StatDivider />
-          <Stat
-            value={data?.ready_for_pickup}
-            failed={dashboard.isError}
-            label={t('stat_ready')}
-          />
-          <StatDivider />
-          <Stat
-            value={data?.completed_this_month}
-            failed={dashboard.isError}
-            label={t('stat_completed_month')}
-          />
-        </View>
-      </ScrollView>
+          {/* The three thirds are equal. */}
+          <View className="flex-row">
+            <Stat
+              value={data?.active_orders}
+              failed={dashboard.isError}
+              label={t('stat_active')}
+            />
+            <StatDivider />
+            <Stat
+              value={data?.ready_for_pickup}
+              failed={dashboard.isError}
+              label={t('stat_ready')}
+            />
+            <StatDivider />
+            <Stat
+              value={data?.completed_this_month}
+              failed={dashboard.isError}
+              label={t('stat_completed_month')}
+            />
+          </View>
+        </ScrollView>
+      </View>
     </Screen>
   );
 }

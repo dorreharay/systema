@@ -21,7 +21,7 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { BarChart, type ChartBar } from '@/components/ui/bar-chart';
-import Card from '@/components/ui/card';
+import { BLOCK_ROOM } from '@/components/ui/card';
 import { colors } from '@/components/ui/colors';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ErrorState } from '@/components/ui/states';
@@ -76,12 +76,10 @@ function Dot({ index, title, selected, interval, offset, onPress }: DotProps) {
   );
 }
 
-// Cards side by side, each as wide as the page leaves room for: a swipe moves from one to the next and stops on it, and a
-// dot goes to its own. The cards run across the whole screen, to its edges, so that one going away is not cut at the
-// margin of the page, and the gap between two of them is that margin.
+// Slides side by side, one view wide each, from edge to edge: a swipe moves from one to the next and stops on it, and a dot
+// goes to its own.
 function Pager({ slides }: { slides: Slide[] }) {
-  const [cardWidth, setCardWidth] = useState(0);
-  const [screenWidth, setScreenWidth] = useState(0);
+  const [width, setWidth] = useState(0);
   const [page, setPage] = useState(0);
   const scroller = useAnimatedRef<Animated.ScrollView>();
   const offset = useSharedValue(0);
@@ -89,39 +87,30 @@ function Pager({ slides }: { slides: Slide[] }) {
     offset.set(event.contentOffset.x);
   });
 
-  // The margin of the page, as the page itself has it: what is left of the screen on each side of a card.
-  const margin = Math.max(0, (screenWidth - cardWidth) / 2);
-  const interval = cardWidth + margin;
-  const ready = cardWidth > 0 && screenWidth > 0;
-
   const goTo = (index: number) => {
     setPage(index);
-    scroller.current?.scrollTo({ x: index * interval, animated: true });
+    scroller.current?.scrollTo({ x: index * width, animated: true });
   };
 
   return (
-    <View className="flex-1" onLayout={(event) => setCardWidth(event.nativeEvent.layout.width)}>
+    <View className="flex-1">
       <Animated.ScrollView
         ref={scroller}
         horizontal
-        // It stops on a card, and moves one card at a time, however hard it was swiped.
-        snapToInterval={ready ? interval : undefined}
-        decelerationRate="fast"
-        disableIntervalMomentum
+        pagingEnabled
         bounces={false}
         overScrollMode="never"
         showsHorizontalScrollIndicator={false}
         scrollEventThrottle={16}
         onScroll={onScroll}
-        onMomentumScrollEnd={(event) => setPage(Math.round(event.nativeEvent.contentOffset.x / Math.max(interval, 1)))}
-        onLayout={(event) => setScreenWidth(event.nativeEvent.layout.width)}
-        // Out to the edges of the screen, past the margin of the page.
-        className="-mx-page flex-1"
-        contentContainerStyle={{ paddingHorizontal: margin, gap: margin }}>
-        {ready
+        onMomentumScrollEnd={(event) => setPage(Math.round(event.nativeEvent.contentOffset.x / Math.max(width, 1)))}
+        // A page is as wide as the view: the slides are measured from it.
+        onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
+        className="flex-1">
+        {width > 0
           ? slides.map((slide) => (
-              <View key={slide.key} style={{ width: cardWidth }}>
-                <Card className="flex-1">{slide.content}</Card>
+              <View key={slide.key} className={BLOCK_ROOM} style={{ width }}>
+                {slide.content}
               </View>
             ))
           : null}
@@ -133,7 +122,7 @@ function Pager({ slides }: { slides: Slide[] }) {
             index={index}
             title={slide.title}
             selected={page === index}
-            interval={interval}
+            interval={width}
             offset={offset}
             onPress={() => goTo(index)}
           />
@@ -438,7 +427,7 @@ const SKELETON_BARS = [38, 62, 48, 80, 30, 100, 56, 72, 42, 90, 60, 46];
 
 function InsightsSkeleton() {
   return (
-    <View className="flex-1 gap-3 rounded-2xl border border-line bg-white p-4" accessibilityLabel="Loading">
+    <View className={`flex-1 gap-3 ${BLOCK_ROOM}`} accessibilityLabel="Loading">
       <Skeleton className="h-5 w-36" />
       <Skeleton className="h-8 w-32" />
       <Skeleton className="h-4 w-44" />
@@ -483,9 +472,9 @@ export default function HomeInsights() {
           ]}
         />
       ) : insights.isError ? (
-        <Card className="flex-1 justify-center">
+        <View className="flex-1 justify-center">
           <ErrorState error={insights.error} onRetry={() => insights.refetch()} />
-        </Card>
+        </View>
       ) : (
         <InsightsSkeleton />
       )}

@@ -21,9 +21,9 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import ClientFormSheet from '@/components/client-form-sheet';
-import PlusIcon from '@/components/icons/plus-icon';
 import RacketFormSheet from '@/components/racket-form-sheet';
 import StringFormSheet from '@/components/string-form-sheet';
+import { BLOCK, BLOCK_ROOM } from '@/components/ui/card';
 import { Segmented } from '@/components/ui/chips';
 import { colors } from '@/components/ui/colors';
 import { useConfirm } from '@/components/ui/confirm';
@@ -108,7 +108,7 @@ function FormSection({
   onLayout?: (event: LayoutChangeEvent) => void;
 }) {
   return (
-    <View onLayout={onLayout} className="gap-3 rounded-2xl border border-line bg-white p-4">
+    <View onLayout={onLayout} className={`${BLOCK} ${BLOCK_ROOM} gap-3`}>
       <Text accessibilityRole="header" className="text-[18.7px] font-semibold">
         {title}
       </Text>
@@ -367,7 +367,7 @@ export default function OrderForm({ initial, order, draftKey, saved }: OrderForm
       // Always in reach under the page, like the buttons that add something: it goes while the keyboard is open.
       dock={
         <Shortcut
-          icon={editing ? Check : PlusIcon}
+          icon={editing ? Check : undefined}
           label={editing ? t('save_changes') : t('create_order')}
           color={colors.newOrder}
           contentColor={colors.ink}

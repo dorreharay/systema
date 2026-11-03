@@ -2,6 +2,7 @@ import { ChevronRight, type LucideIcon } from 'lucide-react-native';
 import type { ReactNode } from 'react';
 import { Pressable, View } from 'react-native';
 
+import { BLOCK, BLOCK_ROOM_X } from '@/components/ui/card';
 import { colors } from '@/components/ui/colors';
 import { Text } from '@/components/ui/text';
 
@@ -33,7 +34,7 @@ export default function ListRow({ icon: Icon, label, value, onPress, destructive
       {onPress && !destructive ? <ChevronRight size={18} color={colors.muted} /> : null}
     </>
   );
-  const classes = 'min-h-[59px] flex-row items-center gap-[11px] px-4';
+  const classes = `min-h-[59px] flex-row items-center gap-[11px] ${BLOCK_ROOM_X}`;
   if (!onPress) {
     return <View className={classes}>{content}</View>;
   }
@@ -48,11 +49,11 @@ export default function ListRow({ icon: Icon, label, value, onPress, destructive
   );
 }
 
-/** Rows grouped in one rounded card with hairlines between them. */
+/** Rows grouped in one white block, from edge to edge, with hairlines between them. */
 export function ListGroup({ children }: { children: ReactNode[] | ReactNode }) {
   const rows = (Array.isArray(children) ? children : [children]).filter(Boolean);
   return (
-    <View className="overflow-hidden rounded-2xl border border-line bg-white">
+    <View className={`${BLOCK} overflow-hidden`}>
       {rows.map((row, index) => (
         <View key={index} className={index > 0 ? 'border-t border-line' : ''}>
           {row}

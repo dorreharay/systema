@@ -21,8 +21,12 @@ let introPlayed = false;
 export const HEADER_HEIGHT = 104;
 const HOME_PATH = '/home';
 const HEADER_FONT_SIZE = 24;
-// How far above the middle of the header the logo sits once it has docked.
+// How far above the middle of the header the logo sits once it has docked: beside the back button on the sign-in
+// screens, and higher on the home page of someone who is signed in, where the page starts right under it.
 const LOGO_RAISE = 14;
+const LOGO_RAISE_HOME = 30;
+/** Where the logo of the home page ends, from the top of the header: its middle, and half the height of its letters. */
+export const LOGO_FOOT = HEADER_HEIGHT / 2 - LOGO_RAISE_HOME + HEADER_FONT_SIZE * 0.6;
 const INTRO_TEXT_COLOR = '#ffffff';
 const HEADER_TEXT_COLOR = '#000000';
 
@@ -49,7 +53,8 @@ export default function AppHeader() {
 
   const introFontSize = Math.min(72, width * 0.14);
   const targetScale = HEADER_FONT_SIZE / introFontSize;
-  const targetY = insets.top + HEADER_HEIGHT / 2 - LOGO_RAISE - height / 2;
+  const raise = status === 'signedIn' ? LOGO_RAISE_HOME : LOGO_RAISE;
+  const targetY = insets.top + HEADER_HEIGHT / 2 - raise - height / 2;
   const headerTextColor = status === 'signedIn' ? HEADER_TEXT_COLOR : INTRO_TEXT_COLOR;
 
   useEffect(() => {

@@ -6,7 +6,7 @@ import { Pressable, ScrollView, View, type ScrollViewInstance, type ScrollViewPr
 import { styled } from 'react-native-css';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { HEADER_HEIGHT } from '@/components/app-header';
+import { LOGO_FOOT } from '@/components/app-header';
 import { colors } from '@/components/ui/colors';
 import { Text } from '@/components/ui/text';
 import { useI18n } from '@/lib/i18n';
@@ -20,9 +20,9 @@ const HEADER_ROW_HEIGHT = 56;
 const HEADER_ROW = 'flex-row items-center gap-4 pb-4';
 /** How much lower than the row of a detail header the title of a tab stands (the tabs' headers all have it). */
 export const TAB_HEADER_DROP = 16;
-// The room the logo takes under the notch, on the page that has it. The logo stands in the upper part of the app header
-// (see app-header), so the page can start before the foot of the header: this much sooner.
-const LOGO_ROOM = HEADER_HEIGHT - 40;
+// The room the logo takes under the notch, on the page that has it: the page starts a little below the foot of the logo
+// (see app-header), not below the whole of the header.
+const LOGO_ROOM = LOGO_FOOT + 16;
 
 type ScreenProps = {
   children: ReactNode;

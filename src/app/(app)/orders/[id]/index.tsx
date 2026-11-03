@@ -29,7 +29,7 @@ import { PhotoViewer, ServerPhoto } from '@/components/ui/photo';
 import Section from '@/components/ui/section';
 import { DetailHeader, DetailScroll, Screen } from '@/components/ui/screen';
 import Shortcut from '@/components/ui/shortcut';
-import { Skeleton } from '@/components/ui/skeleton';
+import { BlockSkeleton } from '@/components/ui/skeleton';
 import { ErrorState } from '@/components/ui/states';
 import StatusSteps from '@/components/ui/status-steps';
 import { Text } from '@/components/ui/text';
@@ -105,9 +105,9 @@ export default function OrderDetails() {
           <ErrorState error={query.error} onRetry={() => query.refetch()} />
         ) : (
           <View className="gap-4 p-page">
-            <Skeleton className="h-16 w-full rounded-2xl" />
-            <Skeleton className="h-32 w-full rounded-2xl" />
-            <Skeleton className="h-40 w-full rounded-2xl" />
+            <BlockSkeleton className="h-16" />
+            <BlockSkeleton className="h-32" />
+            <BlockSkeleton className="h-40" />
           </View>
         )}
       </Screen>

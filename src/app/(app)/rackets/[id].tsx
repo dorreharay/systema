@@ -15,7 +15,7 @@ import IconButton from '@/components/ui/icon-button';
 import Section from '@/components/ui/section';
 import { DetailHeader, DetailScroll, Screen } from '@/components/ui/screen';
 import Shortcut from '@/components/ui/shortcut';
-import { Skeleton } from '@/components/ui/skeleton';
+import { BlockSkeleton } from '@/components/ui/skeleton';
 import { ErrorState } from '@/components/ui/states';
 import { Text } from '@/components/ui/text';
 import { useToast } from '@/components/ui/toast';
@@ -49,8 +49,8 @@ export default function RacketDetails() {
           <ErrorState error={query.error} onRetry={() => query.refetch()} />
         ) : (
           <View className="gap-4 p-page">
-            <Skeleton className="h-28 w-full rounded-2xl" />
-            <Skeleton className="h-40 w-full rounded-2xl" />
+            <BlockSkeleton className="h-28" />
+            <BlockSkeleton className="h-40" />
           </View>
         )}
       </Screen>
