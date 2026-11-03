@@ -1,8 +1,9 @@
-import { ChevronDown } from 'lucide-react-native';
 import type { ReactNode } from 'react';
 import { Pressable, View } from 'react-native';
 
+import { ChevronDown } from '@/components/icons';
 import { colors } from '@/components/ui/colors';
+import { FIELD_TEXT_LIFT } from '@/components/ui/field-text';
 import { Text } from '@/components/ui/text';
 
 type PickerFieldProps = {
@@ -35,12 +36,14 @@ export default function PickerField({
         accessibilityLabel={label ? `${label}: ${value ?? placeholder}` : (value ?? placeholder)}
         disabled={disabled}
         onPress={onPress}
-        className={`min-h-12 flex-row items-center gap-2 rounded-lg border bg-white px-3.5 py-2.5 active:bg-surface ${
+        // On iOS the room above and below the text is 9.5 pt and the text is lifted by 2 pt of padding under it (see
+        // field-text): that keeps the field as tall as an input.
+        className={`min-h-12 flex-row items-center gap-2 rounded-lg border bg-white px-3.5 py-2.5 ios:py-[9.5px] active:bg-surface ${
           error ? 'border-danger' : 'border-line'
         } ${disabled ? 'opacity-50' : ''}`}>
         {icon}
         <Text
-          className={`flex-1 text-base ios:pb-1 ${value ? 'text-ink' : 'text-neutral-400'}`}
+          className={`flex-1 text-base ${FIELD_TEXT_LIFT} ${value ? 'text-ink' : 'text-neutral-400'}`}
           numberOfLines={1}>
           {value ?? placeholder}
         </Text>

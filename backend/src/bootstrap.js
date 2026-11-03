@@ -9,7 +9,7 @@
 import { config } from './config.js';
 import { db } from './db/index.js';
 import { users } from './db/schema.js';
-import { createDefaultServices } from './utils/defaults.js';
+import { createDefaultServices, createStarterCatalog } from './utils/defaults.js';
 import { hashPassword } from './utils/password.js';
 
 export async function bootstrapAdmin() {
@@ -26,6 +26,7 @@ export async function bootstrapAdmin() {
       .values({ email, full_name: name, password_hash, role: 'admin' })
       .returning({ id: users.id });
     await createDefaultServices(tx, admin.id);
+    await createStarterCatalog(tx, admin.id);
   });
   console.log(`[bootstrap] Created the first admin: ${email}`);
 }

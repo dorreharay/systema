@@ -14,7 +14,7 @@ import ListIcon from '@/components/icons/list-icon';
 import SettingsIcon from '@/components/icons/settings-icon';
 import { colors } from '@/components/ui/colors';
 import { useI18n } from '@/lib/i18n';
-import { useKeyboardHeight } from '@/lib/use-keyboard';
+import { useKeyboardTakesRoom } from '@/lib/use-keyboard';
 
 type TabBarProps = Parameters<NonNullable<ComponentProps<typeof Tabs>['tabBar']>>[0];
 
@@ -35,7 +35,8 @@ const BAR_HEIGHT = 60;
 const SPREAD = 1;
 // From the page above down to the top of the pill (it was 23.5, then 21, now ten percent less again).
 const GAP_ABOVE_PILL = 14;
-const MOVE_MS = 200;
+// How long the pill takes to move to a tab, and the icons to change with it (it was 200: half as fast again is 133).
+const MOVE_MS = 133;
 const ICON_SIZE = 27;
 // How far a tab reaches past its column to be pressed: up to the page, down into the room under the bar
 // (the first and the last also to the edge of the screen), so that a thumb need not aim at the icon.
@@ -82,7 +83,7 @@ type NavBarProps = {
  */
 function NavBar({ places, activeKey, onPress }: NavBarProps) {
   const insets = useSafeAreaInsets();
-  const keyboardHeight = useKeyboardHeight();
+  const keyboardOpen = useKeyboardTakesRoom();
 
   const activeIndex = places.findIndex((place) => place.key === activeKey);
 
@@ -115,7 +116,7 @@ function NavBar({ places, activeKey, onPress }: NavBarProps) {
     transform: [{ translateX: x.get() }],
   }));
 
-  if (keyboardHeight > 0) {
+  if (keyboardOpen) {
     return null;
   }
 

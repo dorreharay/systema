@@ -1,5 +1,4 @@
 import { useRouter } from 'expo-router';
-import { ArrowRight } from 'lucide-react-native';
 import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -67,7 +66,20 @@ export default function Setup() {
   );
 
   return (
-    <Screen>
+    <Screen
+      // The way on stands under the page, on the dark ground, like the buttons of the other pages: it steps aside
+      // while the keyboard is up.
+      dock={
+        <Shortcut
+          label={t('continue')}
+          color={colors.newOrder}
+          contentColor={colors.ink}
+          className="px-5 py-5 w-full"
+          onPress={save}
+          loading={saving}
+        />
+      }
+      footer={<View style={{ height: Math.max(insets.bottom, 12) + 24 }} />}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1">
         <ScrollView bounces={false} overScrollMode="never"
           keyboardShouldPersistTaps="handled"
@@ -128,19 +140,6 @@ export default function Setup() {
           <Text className="px-1 text-[14.3px] text-muted">{t('setup_hint')}</Text>
           {formError ? <FormError message={formError} /> : null}
         </ScrollView>
-
-        <View
-          className="border-t border-line bg-white px-page pt-3"
-          style={{ paddingBottom: Math.max(insets.bottom, 12) }}>
-          <Shortcut
-            icon={ArrowRight}
-            label={t('continue')}
-            color={colors.newOrder}
-            contentColor={colors.ink}
-            onPress={save}
-            loading={saving}
-          />
-        </View>
       </KeyboardAvoidingView>
 
       <SearchPicker

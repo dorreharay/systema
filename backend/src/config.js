@@ -60,6 +60,9 @@ export function loadConfig(env = process.env) {
       fromAddress: text(env.SMTP_FROM_ADDRESS) ?? text(env.SMTP_USER),
     },
 
+    // Whether a new account starts with a catalog of common rackets and strings, none in stock (see utils/defaults.js).
+    starterCatalog: flag(env.STARTER_CATALOG, true),
+
     // First admin, created on start when there are no users yet (see bootstrap.js).
     seedAdmin: {
       email: text(env.SEED_ADMIN_EMAIL)?.toLowerCase(),

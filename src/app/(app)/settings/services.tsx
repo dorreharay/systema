@@ -1,8 +1,8 @@
-import { Tags } from 'lucide-react-native';
 import { useState } from 'react';
 import { View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { Tags } from '@/components/icons';
 import PlusIcon from '@/components/icons/plus-icon';
 import ServiceFormSheet from '@/components/service-form-sheet';
 import AppSwitch from '@/components/ui/app-switch';

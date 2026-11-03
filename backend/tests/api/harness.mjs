@@ -116,6 +116,15 @@ export function resetDatabase() {
  * a test reads an email (without SMTP settings the server prints it instead of sending it).
  */
 export async function startServer({ port = CONFIG.port, env = {} } = {}) {
+  const base = `http://127.0.0.1:${port}`;
+  // A server that is already on the port (the dev server is on 4000) would answer for the new one, and the tests would
+  // run against it, and its database, without anyone being told.
+  const taken = await fetch(`${base}/api/health`).then(
+    () => true,
+    () => false
+  );
+  if (taken) throw new Error(`Port ${port} is in use: the tests need a port of their own (TEST_PORT)`);
+
   const child = spawn('node', ['src/index.js'], {
     cwd: BACKEND,
     env: {
@@ -132,6 +141,8 @@ export async function startServer({ port = CONFIG.port, env = {} } = {}) {
       SEED_ADMIN_EMAIL: CONFIG.seedAdmin.email,
       SEED_ADMIN_PASSWORD: CONFIG.seedAdmin.password,
       SEED_ADMIN_NAME: CONFIG.seedAdmin.name,
+      // The tests of everything else start from an empty catalog; the ones of the starter catalog turn it on.
+      STARTER_CATALOG: 'false',
       ...env,
     },
   });
@@ -140,7 +151,6 @@ export async function startServer({ port = CONFIG.port, env = {} } = {}) {
   child.stdout.on('data', (chunk) => (output += chunk));
   child.stderr.on('data', (chunk) => (output += chunk));
 
-  const base = `http://127.0.0.1:${port}`;
   for (let attempt = 0; attempt < 100; attempt++) {
     if (child.exitCode !== null) throw new Error(`The server exited early:\n${output}`);
     try {

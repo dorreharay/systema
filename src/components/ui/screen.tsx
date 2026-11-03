@@ -1,16 +1,16 @@
 import { BlurView } from 'expo-blur';
 import { useRouter } from 'expo-router';
-import { ArrowLeft } from 'lucide-react-native';
 import type { ReactNode, Ref } from 'react';
 import { Pressable, ScrollView, View, type ScrollViewInstance, type ScrollViewProps } from 'react-native';
 import { styled } from 'react-native-css';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { LOGO_FOOT } from '@/components/app-header';
+import { ArrowLeft } from '@/components/icons';
 import { colors } from '@/components/ui/colors';
 import { Text } from '@/components/ui/text';
 import { useI18n } from '@/lib/i18n';
-import { useKeyboardHeight } from '@/lib/use-keyboard';
+import { useKeyboardTakesRoom } from '@/lib/use-keyboard';
 
 const BackBlur = styled(BlurView);
 
@@ -48,7 +48,7 @@ type ScreenProps = {
 export function Screen({ children, dock, footer, logo, flush }: ScreenProps) {
   const insets = useSafeAreaInsets();
   // With the keyboard up, the dock and what is under it step aside: on Android they would ride on top of it.
-  const keyboardOpen = useKeyboardHeight() > 0;
+  const keyboardOpen = useKeyboardTakesRoom();
   const paddingTop = flush ? 0 : insets.top + (logo ? LOGO_ROOM : HEADER_TOP_GAP);
 
   if (!dock) {

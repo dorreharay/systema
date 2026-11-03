@@ -11,6 +11,7 @@ import insightsRouter from './routes/insights.js';
 import ordersRouter from './routes/orders.js';
 import photosRouter from './routes/photos.js';
 import racketsRouter from './routes/rackets.js';
+import referenceRouter from './routes/reference.js';
 import servicesRouter from './routes/services.js';
 import stringsRouter from './routes/strings.js';
 
@@ -34,6 +35,7 @@ export function createApp() {
   app.use('/api/clients', clientsRouter);
   app.use('/api/rackets', racketsRouter);
   app.use('/api/strings', stringsRouter);
+  app.use('/api/reference', referenceRouter);
   app.use('/api/services', servicesRouter);
   app.use('/api/orders', ordersRouter);
   app.use('/api/photos', photosRouter);

@@ -99,7 +99,7 @@ export default function Home() {
               onPress={() => router.navigate('/clients')}
             />
             <Shortcut
-              icon={() => <CatalogIcon size={28} />}
+              icon={CatalogIcon}
               label={t('tab_catalog')}
               color={colors.catalog}
               className={SHORTCUT_SIZE}

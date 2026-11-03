@@ -24,9 +24,10 @@ backend/
     config.js             every environment variable, with defaults
     bootstrap.js          creates the first admin when there are no users
     db/                   schema.js, index.js (pool + drizzle), migrate.js
+    data/                 the reference catalog: rackets.json, strings.json (names only, no photos)
     middleware/           auth (requireAuth, requireRole), validate, rateLimit, error
-    routes/               one file per resource: auth, clients, rackets, strings, services, orders, photos, dashboard, insights
-    utils/                http (HttpError), password, tokens, session, email, emailTemplates, emailFailure
+    routes/               one file per resource: auth, clients, rackets, strings, reference, services, orders, photos, dashboard, insights
+    utils/                http (HttpError), password, tokens, session, email, emailTemplates, emailFailure, reference (search)
     scripts/seed.js
   drizzle/                generated SQL migrations (commit them)
   tests/                  api/ (integration, real server + test database), unit/
@@ -107,10 +108,13 @@ orders that used it (an old order never loses its history); an order is deleted 
 |---|---|---|
 | `GET` `POST` | `/api/clients` | `?q=` searches name and phone. A client needs a `name` and a `phone`; `email` and `notes` are optional. Each has `rackets_count`, `orders_count`, `last_order_date` |
 | `GET` `PATCH` `DELETE` | `/api/clients/:id` | `GET` adds the client's `rackets` and `orders` (history) |
-| `GET` `POST` | `/api/rackets` | `?q=` (brand, model, owner) and `?client_id=`. `{ client_id, brand, model, notes? }`. Each has `orders_count` and `last_setup`: how it was last strung, to prefill a new order |
+| `GET` `POST` | `/api/rackets` | `?q=` (brand, model, owner), `?client_id=`, `?kind=client` or `catalog`, `?in_stock=1`. `{ client_id?, brand, model, notes?, track_stock?, stock? }`: with a `client_id` it is that client's racket; without one it is a catalog racket, one the stringer keeps in stock (see Stock below). Each has `orders_count` and, for a client's racket, `last_setup`: how it was last strung, to prefill a new order |
 | `GET` `PATCH` `DELETE` | `/api/rackets/:id` | `GET` adds the racket's `orders`, newest first |
-| `GET` `POST` | `/api/strings` | the stringer's catalog. `?q=` (brand, model). `{ brand, model, gauge?, type, default_price? }`, `type`: `polyester`, `multifilament`, `synthetic_gut`, `natural_gut`, `other` |
+| `GET` `POST` | `/api/strings` | the stringer's catalog. `?q=` (brand, model), `?in_stock=1`. `{ brand, model, gauge?, type, default_price?, track_stock?, stock? }`, `type`: `polyester`, `multifilament`, `synthetic_gut`, `natural_gut`, `other` |
 | `GET` `PATCH` `DELETE` | `/api/strings/:id` | |
+| `GET` | `/api/reference` | what the reference catalog holds: `updated`, and for `rackets` and `strings` the `count` and the `brands` |
+| `GET` | `/api/reference/rackets` | the rackets that exist, to find one by a part of its name. `?q=`, `?brand=`, `?limit=` (1 to 50, 20 by default), `?offset=` → `{ items, has_more }`, each item `{ id, brand, model }` |
+| `GET` | `/api/reference/strings` | the same for strings, and `?type=`. Each item is `{ id, brand, model, type, gauges }`: `gauges` are the sizes in mm, from the thinnest, empty when they are not known |
 | `GET` `POST` | `/api/services` | what the stringer charges for: `{ name, price?, kind: labor\|extra, active }`. New accounts start with Stringing Labor, Grip Replacement and Overgrip Installation, without prices |
 | `PATCH` | `/api/services/:id` | `active: false` archives a service (it is no longer offered on new orders), `true` brings it back |
 | `GET` `POST` | `/api/orders` | `?status=` (`received`, `in_progress`, `ready`, `completed`, or `active` for the first three), `?q=` (customer, racket, string, `#number`), `?client_id=`, `?racket_id=`, `?limit=&offset=` → `{ items, has_more }`. The queue is by due date, then finished orders, newest first |
@@ -120,7 +124,13 @@ orders that used it (an old order never loses its history); an order is deleted 
 | `GET` | `/api/dashboard` | `active_orders`, `ready_for_pickup`, `completed_this_month` (the stringer's month, in their time zone) and the next orders `active` by due date |
 | `GET` | `/api/insights` | what the home screen charts, in the stringer's time zone: `revenue` (what was paid this month day by day, and `previous_total` for the same days of last month), `workload` (the work still to do on each of the next seven days, and `overdue`) and `receivables` (what is unpaid, `debtors`, and the best `top_clients`) |
 
-An order needs a `client_id` and a `racket_id` of that client and nothing else. **Tension is always in
+An order needs a `client_id` and a `racket_id` (one of that client's rackets, or a catalog racket, which
+goes with any client) and nothing else. Instead of a `racket_id` it can carry `new_racket: { brand, model }`, for
+a racket that the client does not have yet (the app picks one from the reference list): it is the client's racket
+of that name when they have one (names are compared without regard to case, spaces, dashes or accents), and
+otherwise it is made **in the same transaction as the order**, so an order that fails (out of stock, say) leaves
+no racket behind, and a racket that was picked for an order that was never made is never saved. `PATCH` takes it
+too. Sending both a `racket_id` and a `new_racket`, or neither on a new order, is a `400`. **Tension is always in
 kilograms** (`main_tension`, `cross_tension`, 5 to 60); `tension_unit` in the profile only changes how the
 app shows and types it, so a change of unit never touches an old order. The setup (string names, tension,
 knots, prices) is copied into the order: editing the catalog later does not rewrite old orders.
@@ -128,6 +138,40 @@ knots, prices) is copied into the order: editing the catalog later does not rewr
 has a price). Orders are numbered 1, 2, 3... for each stringer. Payment (`is_paid`) is independent of the
 status. Strings the customer brings (`customer_strings`) have no catalog string and no price; a hybrid
 (`hybrid`) has a second string for the crosses.
+
+**Stock.** A catalog racket and a string can be counted: `track_stock: true` and a `stock`, in pieces for a
+racket and in sets for a string (whole or half). What is not counted is always there, so data from before
+the stock existed is untouched; every item has `available` for the pickers. (A client's racket is never
+counted: it is theirs, not for sale.) An order takes what it uses when it is created: one catalog racket,
+one set of its string (half a set of each for a hybrid, nothing for strings the customer brings), and
+`stock_used` keeps exactly what it took. Changing the racket or the strings of an order gives back what it
+took and takes the new ones; deleting the order gives it back; any other edit leaves the stock alone. When
+there is not enough, nothing is saved and the answer is a `409` with `code: "out_of_stock"` and `fields`
+naming `racket_id`, `main_string_id` or `cross_string_id`. Taking is a single conditional update, so two
+orders for the last item cannot both get it.
+
+**Starter catalog.** A new account (a sign-up, or the first admin made on start) begins with a catalog of the rackets
+and strings that are in most workshops: about sixty of each, a string once for each size, every one counted and with
+none in stock, so that what comes in is a matter of setting a count and not of typing a name. They are listed in
+`src/data/starter-catalog.json` as names of the reference list, and a name or a size that the list does not have stops
+the server from starting. It is made with the account, in the same transaction, and `STARTER_CATALOG=false` turns it
+off. Accounts that already exist are not changed.
+
+**Reference catalog.** `/api/reference` is a list of the rackets and strings that exist, to fill in a new racket
+or string of the stringer's own catalog from a part of its name. It is not the stringer's data: it is the same for
+everyone and the routes above never touch it. It is read once from `src/data/rackets.json` and
+`src/data/strings.json` when the server starts and searched in memory (no table, nothing to migrate), so it is
+light, and an answer may be kept for an hour. A search is by words: every word of `q` has to be the start of a word
+of the name or be inside it, so `pure dr` finds Pure Drive; case, accents, spaces and dashes do not matter
+(`hyperg` finds Hyper-G) and `98+` is not `98`. A gauge can be typed `1.25`, `1,25` or `125`, and the type of a
+string can be searched too (`poly`). Brands are found by their Ukrainian spelling as well (`бабола`), and the
+initials and versions that people say (`ps97`, `v14`) are aliases of a model. What fits a search equally well goes
+by the length of the model, so the base model comes before its variants (`Pure Drive`, then `Pure Drive Lite`).
+Without `q` the answer is the list itself, by brand and model. It holds names, never photos. It was written by hand, not copied from a shop or a
+brand's site, and it is a starting point rather than everything that was ever made: a model that is not in it is
+added to the catalog by typing it, as before. To add one, put it in the JSON file; `npm run test:unit` checks the
+files (a duplicate, an empty alias or a wrong gauge also stops the server from starting). `npm run dev` restarts on
+a change of code, not of a JSON file: restart it after editing the list.
 
 ### Adding a resource
 

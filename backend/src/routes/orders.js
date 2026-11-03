@@ -13,6 +13,8 @@ import { detectImageType } from '../utils/images.js';
 import {
   orderColumns, orderTotal, serializeOrder, toNumber, withOrderJoins,
 } from '../utils/orders.js';
+import { nameKey } from '../utils/reference.js';
+import { giveBackStock, stockWanted, takeStock } from '../utils/stock.js';
 import {
   isoDate, matchesWords, money, optionalText, requiredText, searchText, tensionKg, timeOfDay, uuid,
 } from '../utils/validators.js';
@@ -26,9 +28,21 @@ const MAX_PHOTO_BYTES = 8 * 1024 * 1024;
 
 const ACTIVE = ['received', 'in_progress', 'ready'];
 
-const orderSchema = z.object({
+// What an order takes from the stock depends only on these: changing any other field never moves any stock.
+const STOCK_FIELDS = ['racket_id', 'customer_strings', 'hybrid', 'main_string_id', 'cross_string_id'];
+
+// A racket of the client that is named instead of pointed at, for one that is not in the client's rackets yet. It is the
+// client's racket of that name if they have one; otherwise it is made together with the order, in the same transaction,
+// so that an order that is not made leaves no racket behind.
+const newRacket = z.object({
+  brand: requiredText(80, 'Enter the brand'),
+  model: requiredText(120, 'Enter the model'),
+});
+
+const orderFields = z.object({
   client_id: uuid,
-  racket_id: uuid,
+  racket_id: uuid.optional(),
+  new_racket: newRacket.optional(),
   received_date: isoDate.optional(),
   due_date: isoDate.nullish(),
   due_time: timeOfDay.nullish(),
@@ -52,7 +66,18 @@ const orderSchema = z.object({
   is_paid: z.boolean().optional(),
 });
 
-const updateSchema = orderSchema.partial().extend({ status: z.enum(ORDER_STATUSES).optional() });
+const bothRackets = { error: 'Send either racket_id or new_racket', path: ['racket_id'] };
+
+// An order is for one racket, pointed at or named.
+const orderSchema = orderFields
+  .refine((body) => !!body.racket_id || !!body.new_racket, { error: 'Choose a racket', path: ['racket_id'] })
+  .refine((body) => !(body.racket_id && body.new_racket), bothRackets);
+
+// An edit may leave the racket alone.
+const updateSchema = orderFields
+  .partial()
+  .extend({ status: z.enum(ORDER_STATUSES).optional() })
+  .refine((body) => !(body.racket_id && body.new_racket), bothRackets);
 
 const listQuery = z.object({
   status: z.enum([...ORDER_STATUSES, 'active']).optional(),
@@ -126,8 +151,54 @@ async function resolveString(userId, { id, name, previousId, previousName, field
 }
 
 /**
- * Checks the references of an order against this stringer's data and works out what is stored: the
- * string names, which fields apply to this kind of setup, and the total.
+ * The racket of an order: `{ id, client_id }`, and `make` when it does not exist yet. A racket that is pointed at must
+ * be this stringer's and go with this client (a client's racket goes with its owner; a catalog racket, one with no
+ * owner, goes with any client). One that is named (`new_racket`) is the client's racket of that name when they have
+ * it, and otherwise is to be made: `make` is its brand and model, and the route makes it inside the transaction of the
+ * order, because a racket that is made before the order is made stays when the order is not.
+ */
+async function resolveRacket(userId, next, previous) {
+  if (next.new_racket) {
+    const owned = await db
+      .select({ id: rackets.id, brand: rackets.brand, model: rackets.model })
+      .from(rackets)
+      .where(and(eq(rackets.user_id, userId), eq(rackets.client_id, next.client_id), isNull(rackets.deleted_at)));
+    const key = nameKey(next.new_racket.brand, next.new_racket.model);
+    const have = owned.find((row) => nameKey(row.brand, row.model) === key);
+    return { racket: { id: have?.id ?? null, client_id: next.client_id }, make: have ? null : next.new_racket };
+  }
+
+  const [racket] = await db
+    .select({ id: rackets.id, client_id: rackets.client_id })
+    .from(rackets)
+    .where(
+      and(
+        eq(rackets.id, next.racket_id),
+        eq(rackets.user_id, userId),
+        previous?.racket_id === next.racket_id ? undefined : isNull(rackets.deleted_at)
+      )
+    )
+    .limit(1);
+  if (!racket) throw fieldError('racket_id', 'Unknown racket');
+  if (racket.client_id !== null && racket.client_id !== next.client_id) {
+    throw fieldError('racket_id', 'This racket belongs to another client');
+  }
+  return { racket, make: null };
+}
+
+/** A racket of a client, made inside the transaction `tx` of the order that names it. Answers with its id. */
+async function makeRacket(tx, userId, clientId, { brand, model }) {
+  const [made] = await tx
+    .insert(rackets)
+    .values({ user_id: userId, client_id: clientId, brand, model })
+    .returning({ id: rackets.id });
+  return made.id;
+}
+
+/**
+ * Checks the references of an order against this stringer's data and works out what is stored (`values`): the
+ * string names, which fields apply to this kind of setup, and the total; what it wants from the stock (`wanted`); and,
+ * when the racket is named and does not exist yet, what it is to be made from (`make`).
  */
 async function prepare(userId, next, previous) {
   const [client] = await db
@@ -143,21 +214,7 @@ async function prepare(userId, next, previous) {
     .limit(1);
   if (!client) throw fieldError('client_id', 'Unknown client');
 
-  const [racket] = await db
-    .select({ id: rackets.id, client_id: rackets.client_id })
-    .from(rackets)
-    .where(
-      and(
-        eq(rackets.id, next.racket_id),
-        eq(rackets.user_id, userId),
-        previous?.racket_id === next.racket_id ? undefined : isNull(rackets.deleted_at)
-      )
-    )
-    .limit(1);
-  if (!racket) throw fieldError('racket_id', 'Unknown racket');
-  if (racket.client_id !== next.client_id) {
-    throw fieldError('racket_id', 'This racket belongs to another client');
-  }
+  const { racket, make } = await resolveRacket(userId, next, previous);
 
   if (next.due_time && !next.due_date) throw fieldError('due_time', 'Choose a date first');
 
@@ -190,25 +247,36 @@ async function prepare(userId, next, previous) {
 
   const string_price = next.customer_strings ? null : next.string_price;
   return {
-    client_id: next.client_id,
-    racket_id: next.racket_id,
-    received_date: next.received_date,
-    due_date: next.due_date,
-    due_time: next.due_time,
-    customer_strings: next.customer_strings,
-    hybrid: next.hybrid,
-    main_string_id: main.id,
-    main_string_name: main.name,
-    cross_string_id: cross.id,
-    cross_string_name: cross.name,
-    main_tension: next.main_tension,
-    cross_tension: next.cross_tension,
-    knots: next.knots,
-    stringing_notes: next.stringing_notes,
-    notes: next.notes,
-    labor_price: next.labor_price,
-    string_price,
-    total: orderTotal({ labor_price: next.labor_price, string_price, services: next.services }),
+    make,
+    values: {
+      client_id: next.client_id,
+      // Not known yet for a racket that is still to be made: the route fills it in once it has.
+      racket_id: racket.id,
+      received_date: next.received_date,
+      due_date: next.due_date,
+      due_time: next.due_time,
+      customer_strings: next.customer_strings,
+      hybrid: next.hybrid,
+      main_string_id: main.id,
+      main_string_name: main.name,
+      cross_string_id: cross.id,
+      cross_string_name: cross.name,
+      main_tension: next.main_tension,
+      cross_tension: next.cross_tension,
+      knots: next.knots,
+      stringing_notes: next.stringing_notes,
+      notes: next.notes,
+      labor_price: next.labor_price,
+      string_price,
+      total: orderTotal({ labor_price: next.labor_price, string_price, services: next.services }),
+    },
+    wanted: stockWanted({
+      catalogRacketId: racket.client_id === null ? racket.id : null,
+      customer_strings: next.customer_strings,
+      hybrid: next.hybrid,
+      main_string_id: main.id,
+      cross_string_id: cross.id,
+    }),
   };
 }
 
@@ -301,7 +369,7 @@ router.post('/', validateBody(orderSchema), async (req, res) => {
     services: [],
     ...Object.fromEntries(Object.entries(body).filter(([, value]) => value !== undefined)),
   };
-  const values = await prepare(req.user.id, next, undefined);
+  const { values, wanted, make } = await prepare(req.user.id, next, undefined);
 
   const id = await db.transaction(async (tx) => {
     // The counter is only ever read and raised by this one statement, so two orders created at once
@@ -312,13 +380,22 @@ router.post('/', validateBody(orderSchema), async (req, res) => {
       .where(eq(users.id, req.user.id))
       .returning({ order_counter: users.order_counter });
 
+    // A racket that was named and is not the client's yet is made here, with the order: it only exists if the order does.
+    const racketId = make ? await makeRacket(tx, req.user.id, values.client_id, make) : values.racket_id;
+
+    // An order that finds too little in the stock fails here, and the number it was given goes back with it, and so
+    // does the racket that was made for it.
+    const taken = await takeStock(tx, req.user.id, wanted);
+
     const now = new Date();
     const [created] = await tx
       .insert(orders)
       .values({
         ...values,
+        racket_id: racketId,
         user_id: req.user.id,
         number: order_counter,
+        stock_used: taken,
         ...(body.is_paid && { is_paid: true, paid_at: now }),
       })
       .returning({ id: orders.id });
@@ -358,13 +435,27 @@ router.patch('/:id', validateBody(updateSchema), async (req, res) => {
     if (value !== undefined && key !== 'services') next[key] = value;
   }
 
-  const values = await prepare(req.user.id, next, previous);
+  const { values: prepared, wanted, make } = await prepare(req.user.id, next, previous);
   const now = new Date();
   await db.transaction(async (tx) => {
+    // A racket that was named and is not the client's yet is made here, with the change: it only exists if the change does.
+    const values = make
+      ? { ...prepared, racket_id: await makeRacket(tx, req.user.id, prepared.client_id, make) }
+      : prepared;
+
+    // What the order took goes back and what it needs now is taken, but only when what it points at has changed:
+    // an order that is only moved on, or paid, leaves the stock alone.
+    const stockChange = {};
+    if (STOCK_FIELDS.some((field) => previous[field] !== values[field])) {
+      await giveBackStock(tx, req.user.id, previous.stock_used);
+      stockChange.stock_used = await takeStock(tx, req.user.id, wanted);
+    }
+
     await tx
       .update(orders)
       .set({
         ...values,
+        ...stockChange,
         ...(body.status && statusChanges(body.status, previous, now)),
         ...paymentChanges(body.is_paid, previous, now),
       })
@@ -379,10 +470,13 @@ router.patch('/:id', validateBody(updateSchema), async (req, res) => {
   res.json(await orderDetail(previous.id, req.user.id));
 });
 
-// DELETE /api/orders/:id: the order with its services and photos
+// DELETE /api/orders/:id: the order with its services and photos; what it took from the stock goes back
 router.delete('/:id', async (req, res) => {
-  await loadOrder(req.params.id, req.user.id);
-  await db.delete(orders).where(ownedOrder(req.params.id, req.user.id));
+  const { order } = await loadOrder(req.params.id, req.user.id);
+  await db.transaction(async (tx) => {
+    await giveBackStock(tx, req.user.id, order.stock_used);
+    await tx.delete(orders).where(ownedOrder(req.params.id, req.user.id));
+  });
   res.json({ ok: true });
 });
 

@@ -1,18 +1,9 @@
 import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
-import {
-  Banknote,
-  Bell,
-  Gauge,
-  Languages,
-  LogOut,
-  ShieldCheck,
-  Store,
-  Tags
-} from 'lucide-react-native';
 import { useState } from 'react';
 import { ScrollView, View } from 'react-native';
 
+import { Banknote, Bell, Gauge, Languages, LogOut, ShieldCheck, Store, Tags } from '@/components/icons';
 import {
   AccountSheet,
   CurrencySheet,

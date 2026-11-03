@@ -1,0 +1,228 @@
+{
+  "updated": "2026-11-03",
+  "brands": [
+    {
+      "brand": "Luxilon",
+      "aliases": ["люксілон", "люксилон"],
+      "models": [
+        { "model": "ALU Power", "type": "polyester", "gauges": ["1.20", "1.25", "1.30"], "aliases": ["алю пауер", "алу пауер"] },
+        { "model": "ALU Power Rough", "type": "polyester", "gauges": ["1.25", "1.30"] },
+        { "model": "ALU Power Soft", "type": "polyester", "gauges": ["1.25", "1.30"] },
+        { "model": "ALU Power Spin", "type": "polyester", "gauges": ["1.25"] },
+        { "model": "4G", "type": "polyester", "gauges": ["1.25", "1.30"] },
+        { "model": "4G Rough", "type": "polyester", "gauges": ["1.25", "1.30"] },
+        { "model": "4G Soft", "type": "polyester", "gauges": ["1.25", "1.30"] },
+        { "model": "Element", "type": "polyester", "gauges": ["1.25", "1.30"] },
+        { "model": "Big Banger Original", "type": "polyester", "gauges": ["1.30"] },
+        { "model": "M2 Pro", "type": "polyester", "gauges": ["1.25", "1.30"] },
+        { "model": "Savage", "type": "polyester", "gauges": ["1.27"] }
+      ]
+    },
+    {
+      "brand": "Babolat",
+      "aliases": ["бабола", "бабалат"],
+      "models": [
+        { "model": "RPM Blast", "type": "polyester", "gauges": ["1.15", "1.20", "1.25", "1.30", "1.35"], "aliases": ["рпм бласт"] },
+        { "model": "RPM Blast Rough", "type": "polyester", "gauges": ["1.25", "1.30"] },
+        { "model": "RPM Team", "type": "polyester", "gauges": ["1.25", "1.30"] },
+        { "model": "RPM Power", "type": "polyester", "gauges": ["1.25", "1.30"] },
+        { "model": "Pro Hurricane Tour", "type": "polyester", "gauges": ["1.25", "1.30"] },
+        { "model": "Xcel", "type": "multifilament", "gauges": ["1.25", "1.30", "1.35"] },
+        { "model": "Xcel Power", "type": "multifilament", "gauges": ["1.25", "1.30"] },
+        { "model": "Origin", "type": "multifilament", "gauges": ["1.25", "1.30", "1.35"] },
+        { "model": "Tonic+ Ball Feel", "type": "multifilament" },
+        { "model": "Syn Gut", "type": "synthetic_gut", "gauges": ["1.25", "1.30", "1.35"] },
+        { "model": "VS Touch", "type": "natural_gut", "gauges": ["1.25", "1.30", "1.35"] },
+        { "model": "VS Team", "type": "natural_gut", "gauges": ["1.30"] }
+      ]
+    },
+    {
+      "brand": "Wilson",
+      "aliases": ["вілсон", "вилсон", "вільсон"],
+      "models": [
+        { "model": "NXT", "type": "multifilament", "gauges": ["1.25", "1.30", "1.35"] },
+        { "model": "NXT Control", "type": "multifilament" },
+        { "model": "NXT Power", "type": "multifilament" },
+        { "model": "Sensation", "type": "multifilament" },
+        { "model": "Revolve", "type": "polyester", "gauges": ["1.25", "1.30"] },
+        { "model": "Revolve Spin", "type": "polyester" },
+        { "model": "Revolve Twist", "type": "polyester" },
+        { "model": "Natural Gut", "type": "natural_gut" },
+        { "model": "Synthetic Gut Power", "type": "synthetic_gut" }
+      ]
+    },
+    {
+      "brand": "Head",
+      "aliases": ["хед"],
+      "models": [
+        { "model": "Hawk", "type": "polyester", "gauges": ["1.15", "1.20", "1.25", "1.30"] },
+        { "model": "Hawk Touch", "type": "polyester", "gauges": ["1.20", "1.25", "1.30"] },
+        { "model": "Hawk Rough", "type": "polyester", "gauges": ["1.25", "1.30"] },
+        { "model": "Sonic Pro", "type": "polyester", "gauges": ["1.25", "1.30"] },
+        { "model": "Sonic Pro Edge", "type": "polyester", "gauges": ["1.25", "1.30"] },
+        { "model": "Lynx", "type": "polyester", "gauges": ["1.20", "1.25", "1.30"] },
+        { "model": "Lynx Tour", "type": "polyester", "gauges": ["1.25", "1.30"] },
+        { "model": "Lynx Touch", "type": "polyester", "gauges": ["1.25", "1.30"] },
+        { "model": "Velocity MLT", "type": "multifilament", "gauges": ["1.25", "1.30"] },
+        { "model": "Reflex MLT", "type": "multifilament", "gauges": ["1.25", "1.30"] },
+        { "model": "RIP Control", "type": "multifilament", "gauges": ["1.25", "1.30"] }
+      ]
+    },
+    {
+      "brand": "Yonex",
+      "aliases": ["йонекс", "юнекс", "йонех"],
+      "models": [
+        { "model": "Poly Tour Pro", "type": "polyester", "gauges": ["1.15", "1.20", "1.25", "1.30"], "aliases": ["полі тур про"] },
+        { "model": "Poly Tour Spin", "type": "polyester" },
+        { "model": "Poly Tour Rev", "type": "polyester", "gauges": ["1.20", "1.25", "1.30"] },
+        { "model": "Poly Tour Strike", "type": "polyester", "gauges": ["1.20", "1.25", "1.30"] },
+        { "model": "Poly Tour Fire", "type": "polyester" },
+        { "model": "Poly Tour Drive", "type": "polyester" },
+        { "model": "Poly Tour Gear", "type": "polyester" },
+        { "model": "Rexis", "type": "multifilament", "gauges": ["1.25", "1.30"] },
+        { "model": "Rexis Feel", "type": "multifilament" },
+        { "model": "Rexis Speed", "type": "multifilament" }
+      ]
+    },
+    {
+      "brand": "Solinco",
+      "aliases": ["солінко", "солинко"],
+      "models": [
+        { "model": "Hyper-G", "type": "polyester", "gauges": ["1.15", "1.20", "1.25", "1.30"], "aliases": ["хайпер джі", "хайпер г"] },
+        { "model": "Hyper-G Soft", "type": "polyester", "gauges": ["1.20", "1.25", "1.30"] },
+        { "model": "Hyper-G Round", "type": "polyester" },
+        { "model": "Revolution", "type": "polyester", "gauges": ["1.20", "1.25", "1.30"] },
+        { "model": "Tour Bite", "type": "polyester", "gauges": ["1.15", "1.20", "1.25", "1.30"] },
+        { "model": "Tour Bite Soft", "type": "polyester", "gauges": ["1.20", "1.25", "1.30"] },
+        { "model": "Tour Bite Diamond Rough", "type": "polyester", "gauges": ["1.20", "1.25", "1.30"] },
+        { "model": "Confidential", "type": "polyester", "gauges": ["1.20", "1.25", "1.30"] },
+        { "model": "Barb Wire", "type": "polyester", "gauges": ["1.20", "1.25"] },
+        { "model": "Outlast", "type": "polyester" }
+      ]
+    },
+    {
+      "brand": "Tecnifibre",
+      "aliases": ["техніфайбр", "текніфайбр", "технифайбр", "текнифибр", "техніфібр"],
+      "models": [
+        { "model": "Black Code", "type": "polyester", "gauges": ["1.18", "1.24", "1.28", "1.32"], "aliases": ["блек код", "блэк код"] },
+        { "model": "Black Code 4S", "type": "polyester", "gauges": ["1.24", "1.28", "1.32"] },
+        { "model": "Razor Code", "type": "polyester", "gauges": ["1.20", "1.25", "1.30"] },
+        { "model": "Razor Soft", "type": "polyester" },
+        { "model": "Pro Red Code", "type": "polyester" },
+        { "model": "Ice Code", "type": "polyester" },
+        { "model": "X-One Biphase", "type": "multifilament", "gauges": ["1.24", "1.30", "1.35"] },
+        { "model": "NRG2", "type": "multifilament" },
+        { "model": "NRG2 SPL", "type": "multifilament" },
+        { "model": "Multifeel", "type": "multifilament" },
+        { "model": "Duramix HD", "type": "multifilament" }
+      ]
+    },
+    {
+      "brand": "Kirschbaum",
+      "aliases": ["кіршбаум", "киршбаум"],
+      "models": [
+        { "model": "Max Power", "type": "polyester", "gauges": ["1.20", "1.25", "1.30"] },
+        { "model": "Max Power Rough", "type": "polyester", "gauges": ["1.20", "1.25", "1.30"] },
+        { "model": "Pro Line II", "type": "polyester", "gauges": ["1.20", "1.25", "1.30"] },
+        { "model": "Pro Line Evolution", "type": "polyester" },
+        { "model": "Pro Line X", "type": "polyester" },
+        { "model": "Xplosive", "type": "polyester", "gauges": ["1.20", "1.25", "1.30"] },
+        { "model": "Xplosive Speed", "type": "polyester", "gauges": ["1.20", "1.25", "1.30"] },
+        { "model": "Spiky Shape", "type": "polyester" },
+        { "model": "Competition", "type": "polyester" },
+        { "model": "Super Smash", "type": "polyester" }
+      ]
+    },
+    {
+      "brand": "Signum Pro",
+      "aliases": ["сігнум про", "сигнум про", "сігнум", "сигнум"],
+      "models": [
+        { "model": "Poly Plasma", "type": "polyester", "gauges": ["1.18", "1.23", "1.28", "1.33"], "aliases": ["полі плазма"] },
+        { "model": "Tornado", "type": "polyester" },
+        { "model": "Hexonic", "type": "polyester" },
+        { "model": "Firestorm", "type": "polyester" },
+        { "model": "Micronite", "type": "multifilament" }
+      ]
+    },
+    { "brand": "Gamma", "aliases": ["гамма"], "models": [{ "model": "Moto", "type": "polyester" }] },
+    {
+      "brand": "Pacific",
+      "aliases": ["пасифік", "пацифик"],
+      "models": [
+        { "model": "Poly Force", "type": "polyester" },
+        { "model": "Classic Gut", "type": "natural_gut" }
+      ]
+    },
+    {
+      "brand": "Prince",
+      "aliases": ["прінс", "принс"],
+      "models": [
+        { "model": "Lightning XX", "type": "synthetic_gut" },
+        { "model": "Synthetic Gut Duraflex", "type": "synthetic_gut" }
+      ]
+    },
+    {
+      "brand": "Dunlop",
+      "aliases": ["данлоп", "дунлоп"],
+      "models": [
+        { "model": "Explosive", "type": "polyester" },
+        { "model": "Explosive Spin", "type": "polyester" }
+      ]
+    },
+    {
+      "brand": "Völkl",
+      "aliases": ["фолькл", "волкл"],
+      "models": [
+        { "model": "Cyclone", "type": "polyester" },
+        { "model": "V-Torque", "type": "polyester" }
+      ]
+    },
+    {
+      "brand": "Ashaway",
+      "aliases": ["ашавей"],
+      "models": [
+        { "model": "MonoGut ZX", "type": "other", "gauges": ["1.30"] },
+        { "model": "MonoGut ZX Pro", "type": "other" },
+        { "model": "Crossfire ZX", "type": "other" },
+        { "model": "Kevlar", "type": "other" }
+      ]
+    },
+    {
+      "brand": "Weiss CANNON",
+      "aliases": ["вайс кенон", "вайс кэнон"],
+      "models": [{ "model": "Ultra Cable", "type": "polyester" }]
+    },
+    {
+      "brand": "Isospeed",
+      "aliases": ["ізоспід", "изоспид"],
+      "models": [
+        { "model": "Baseline", "type": "polyester" },
+        { "model": "Professional", "type": "polyester" }
+      ]
+    },
+    {
+      "brand": "Polyfibre",
+      "aliases": ["полайфайбр", "полифайбр"],
+      "models": [
+        { "model": "Black Venom", "type": "polyester" },
+        { "model": "Black Venom Rough", "type": "polyester" }
+      ]
+    },
+    {
+      "brand": "Diadem",
+      "aliases": ["діадем", "диадем"],
+      "models": [
+        { "model": "Solstice Power", "type": "polyester" },
+        { "model": "Solstice Black", "type": "polyester" }
+      ]
+    },
+    {
+      "brand": "Topspin",
+      "aliases": ["топспін", "топспин"],
+      "models": [
+        { "model": "Cyber Flash", "type": "polyester" },
+        { "model": "Cyber Blue", "type": "polyester" }
+      ]
+    }
+  ]
+}

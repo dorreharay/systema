@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ComponentRef, type ReactNode, type Re
 import { TextInput, View, type TextInputProps } from 'react-native';
 
 import { colors } from '@/components/ui/colors';
+import { FIELD_INPUT_TEXT, FIELD_TEXT_LIFT } from '@/components/ui/field-text';
 import { OPEN_MS, useRevealInSheet } from '@/components/ui/sheet';
 import { Text } from '@/components/ui/text';
 
@@ -66,7 +67,7 @@ export function Input({
         } ${error ? 'border-danger' : focused ? 'border-primary' : 'border-line'} ${
           editable ? '' : 'bg-surface'
         }`}>
-        {prefix ? <View className="mr-2 ios:pb-1">{prefix}</View> : null}
+        {prefix ? <View className={`mr-2 ${FIELD_TEXT_LIFT}`}>{prefix}</View> : null}
         <TextInput
           ref={setRefs}
           multiline={multiline}
@@ -75,8 +76,8 @@ export function Input({
           placeholderTextColor={colors.placeholder}
           selectionColor={colors.primary}
           textAlignVertical={multiline ? 'top' : 'center'}
-          className={`min-w-0 flex-1 font-normal text-base text-ink outline-none ${
-            multiline ? 'min-h-24 py-3' : 'py-3 ios:pb-3.5 ios:pt-2.5'
+          className={`min-w-0 flex-1 font-normal text-ink outline-none ${
+            multiline ? 'min-h-24 py-3 text-base' : FIELD_INPUT_TEXT
           }`}
           onFocus={(event) => {
             setFocused(true);
@@ -90,7 +91,7 @@ export function Input({
           }}
           {...props}
         />
-        {suffix ? <View className="ml-2 ios:pb-1">{suffix}</View> : null}
+        {suffix ? <View className={`ml-2 ${FIELD_TEXT_LIFT}`}>{suffix}</View> : null}
       </View>
       {error ? (
         <Text accessibilityRole="alert" className="text-xs text-danger">

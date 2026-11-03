@@ -1,4 +1,4 @@
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { and, eq, gt, isNull, or, sql } from 'drizzle-orm';
 import express from 'express';
 import { z } from 'zod';
 import { db } from '../db/index.js';
@@ -8,7 +8,7 @@ import { parseQuery, validateBody } from '../middleware/validate.js';
 import { notFound, rejectMalformedIds } from '../utils/http.js';
 import { toNumber } from '../utils/orders.js';
 import {
-  matchesWords, money, optionalText, requiredText, searchQuery,
+  inStockQuery, matchesWords, money, optionalText, requiredText, searchText, setsInStock,
 } from '../utils/validators.js';
 
 const router = express.Router();
@@ -21,7 +21,12 @@ const stringSchema = z.object({
   gauge: optionalText(30),
   type: z.enum(STRING_TYPES, 'Choose a string type').optional(),
   default_price: money.optional(),
+  // Whether the stock is counted, and how many sets there are.
+  track_stock: z.boolean().optional(),
+  stock: setsInStock.optional(),
 });
+
+const listQuery = z.object({ q: searchText, in_stock: inStockQuery });
 
 const owned = (id, userId) =>
   and(eq(catalogStrings.id, id), eq(catalogStrings.user_id, userId), isNull(catalogStrings.deleted_at));
@@ -33,6 +38,10 @@ const serialize = (row) => ({
   gauge: row.gauge,
   type: row.type,
   default_price: toNumber(row.default_price),
+  track_stock: row.track_stock,
+  stock: toNumber(row.stock),
+  // What an order can use: not counted, or at least half a set left.
+  available: !row.track_stock || Number(row.stock) > 0,
   created_at: row.created_at,
   updated_at: row.updated_at,
 });
@@ -43,9 +52,9 @@ async function findString(id, userId) {
   return row;
 }
 
-// GET /api/strings?q=
+// GET /api/strings?q=&in_stock=
 router.get('/', async (req, res) => {
-  const { q } = parseQuery(searchQuery, req.query);
+  const { q, in_stock: inStock } = parseQuery(listQuery, req.query);
 
   const rows = await db
     .select()
@@ -54,7 +63,8 @@ router.get('/', async (req, res) => {
       and(
         eq(catalogStrings.user_id, req.user.id),
         isNull(catalogStrings.deleted_at),
-        q && matchesWords(sql`${catalogStrings.brand} || ' ' || ${catalogStrings.model}`, q)
+        inStock ? or(eq(catalogStrings.track_stock, false), gt(catalogStrings.stock, '0')) : undefined,
+        q ? matchesWords(sql`${catalogStrings.brand} || ' ' || ${catalogStrings.model}`, q) : undefined
       )
     )
     .orderBy(sql`lower(${catalogStrings.brand})`, sql`lower(${catalogStrings.model})`);

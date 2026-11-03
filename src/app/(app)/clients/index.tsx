@@ -1,15 +1,20 @@
 import { useRouter } from 'expo-router';
-import { Search, Users } from 'lucide-react-native';
-import { useEffect, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { FlatList, RefreshControl, TextInput, View } from 'react-native';
 
 import { StackNavBar } from '@/components/app-tab-bar';
 import ClientFormSheet from '@/components/client-form-sheet';
+import { Search } from '@/components/icons';
 import PlusIcon from '@/components/icons/plus-icon';
+import UserIcon from '@/components/icons/user-icon';
+import RacketFormSheet from '@/components/racket-form-sheet';
+import ReferenceRacketPicker from '@/components/reference-racket-picker';
 import Avatar from '@/components/ui/avatar';
 import Card from '@/components/ui/card';
 import { colors } from '@/components/ui/colors';
+import { FIELD_INPUT_TEXT } from '@/components/ui/field-text';
 import { DetailHeader, Screen, useDetailContentTop } from '@/components/ui/screen';
+import { afterSheetsClosed } from '@/components/ui/sheet';
 import Shortcut from '@/components/ui/shortcut';
 import { ListSkeleton } from '@/components/ui/skeleton';
 import { EmptyState, ErrorState, NoResults } from '@/components/ui/states';
@@ -18,17 +23,55 @@ import { useAuth } from '@/lib/auth';
 import { formatDate, todayIso } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import { useClients } from '@/lib/queries';
+import type { Client } from '@/lib/types';
 import { usePullRefresh } from '@/lib/use-pull-refresh';
 
 const SEARCH_DEBOUNCE_MS = 250;
 
+// A row changes only with its client, so a letter typed in the search does not draw the whole list again.
+const ClientRow = memo(function ClientRow({ client, today }: { client: Client; today: string }) {
+  const { t, language } = useI18n();
+  const router = useRouter();
+
+  return (
+    <Card
+      onPress={() => router.push({ pathname: '/clients/[id]', params: { id: client.id } })}
+      className="flex-row items-center gap-3"
+      accessibilityLabel={client.name}>
+      <Avatar name={client.name} />
+      <View className="flex-1 gap-0.5">
+        <Text className="text-base font-semibold" numberOfLines={1}>
+          {client.name}
+        </Text>
+        {client.phone ? (
+          <Text className="text-[15.4px] text-muted" numberOfLines={1}>
+            {client.phone}
+          </Text>
+        ) : null}
+        <Text className="text-[14.3px] text-muted" numberOfLines={1}>
+          {[
+            t('rackets_count', { count: client.rackets_count }),
+            client.last_order_date
+              ? t('client_last_order', { date: formatDate(client.last_order_date, language, today) })
+              : t('client_no_orders'),
+          ].join(' · ')}
+        </Text>
+      </View>
+    </Card>
+  );
+});
+
 export default function Clients() {
   const { user } = useAuth();
-  const { t, language } = useI18n();
+  const { t } = useI18n();
   const router = useRouter();
   const [text, setText] = useState('');
   const [query, setQuery] = useState('');
   const [adding, setAdding] = useState(false);
+  // A client who was just made is offered a racket from the reference list at once (or one typed in); then their page opens.
+  const [added, setAdded] = useState<Client | null>(null);
+  const [step, setStep] = useState<'picking' | 'typing' | null>(null);
+  const [typedRacket, setTypedRacket] = useState('');
   const clients = useClients(query);
   const pull = usePullRefresh(clients.refetch);
   const today = todayIso(user?.timezone);
@@ -38,6 +81,12 @@ export default function Clients() {
     const timer = setTimeout(() => setQuery(text), SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(timer);
   }, [text]);
+
+  // The racket was added, or it was not wanted: the page of the client is next.
+  const finish = () => {
+    setStep(null);
+    if (added) afterSheetsClosed(() => router.push({ pathname: '/clients/[id]', params: { id: added.id } }));
+  };
 
   return (
     <Screen
@@ -71,7 +120,7 @@ export default function Clients() {
               returnKeyType="search"
               accessibilityLabel={t('search')}
               textAlignVertical="center"
-              className="min-w-0 flex-1 py-3 ios:pb-3.5 ios:pt-2.5 font-normal text-base text-ink outline-none"
+              className={`min-w-0 flex-1 font-normal text-ink outline-none ${FIELD_INPUT_TEXT}`}
             />
           </View>
         }
@@ -86,32 +135,7 @@ export default function Clients() {
             tintColor={colors.primary}
           />
         }
-        renderItem={({ item }) => (
-          <Card
-            onPress={() => router.push({ pathname: '/clients/[id]', params: { id: item.id } })}
-            className="flex-row items-center gap-3"
-            accessibilityLabel={item.name}>
-            <Avatar name={item.name} />
-            <View className="flex-1 gap-0.5">
-              <Text className="text-base font-semibold" numberOfLines={1}>
-                {item.name}
-              </Text>
-              {item.phone ? (
-                <Text className="text-[15.4px] text-muted" numberOfLines={1}>
-                  {item.phone}
-                </Text>
-              ) : null}
-              <Text className="text-[14.3px] text-muted" numberOfLines={1}>
-                {[
-                  t('rackets_count', { count: item.rackets_count }),
-                  item.last_order_date
-                    ? t('client_last_order', { date: formatDate(item.last_order_date, language, today) })
-                    : t('client_no_orders'),
-                ].join(' · ')}
-              </Text>
-            </View>
-          </Card>
-        )}
+        renderItem={({ item }) => <ClientRow client={item} today={today} />}
         ListEmptyComponent={
           clients.isLoading ? (
             <ListSkeleton variant="row" />
@@ -121,7 +145,7 @@ export default function Clients() {
             <NoResults query={query} />
           ) : (
             <EmptyState
-              icon={Users}
+              icon={UserIcon}
               title={t('clients_empty_title')}
               message={t('clients_empty_message')}
               actionLabel={t('add_client')}
@@ -134,7 +158,26 @@ export default function Clients() {
       <ClientFormSheet
         visible={adding}
         onClose={() => setAdding(false)}
-        onSaved={(client) => router.push({ pathname: '/clients/[id]', params: { id: client.id } })}
+        onSaved={(client) => {
+          setAdded(client);
+          afterSheetsClosed(() => setStep('picking'));
+        }}
+      />
+      <ReferenceRacketPicker
+        visible={step === 'picking'}
+        onClose={finish}
+        owner={added ?? { id: '' }}
+        onCreate={(name) => {
+          setStep(null);
+          setTypedRacket(name);
+          afterSheetsClosed(() => setStep('typing'));
+        }}
+      />
+      <RacketFormSheet
+        visible={step === 'typing'}
+        onClose={finish}
+        owner={added ? { id: added.id, name: added.name } : undefined}
+        initialModel={typedRacket}
       />
     </Screen>
   );

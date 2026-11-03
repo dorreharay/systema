@@ -1,8 +1,10 @@
-import { Check } from 'lucide-react-native';
 import { useRef, useState } from 'react';
 import { View } from 'react-native';
 
+import { Check } from '@/components/icons';
 import PlusIcon from '@/components/icons/plus-icon';
+import { SUGGESTIONS_SHOWN, SUGGEST_DELAY_MS, Suggestions } from '@/components/reference-suggestions';
+import { StockFields, readStock } from '@/components/stock';
 import { colors } from '@/components/ui/colors';
 import { FormError, Input, type InputRef } from '@/components/ui/input';
 import PickerField from '@/components/ui/picker-field';
@@ -12,33 +14,52 @@ import Shortcut from '@/components/ui/shortcut';
 import { Text } from '@/components/ui/text';
 import { useToast } from '@/components/ui/toast';
 import { describeError } from '@/lib/errors';
+import { formatNumber } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
-import { useClients, useCreateRacket, useUpdateRacket } from '@/lib/queries';
+import { useClients, useCreateRacket, useRackets, useReferenceRackets, useUpdateRacket } from '@/lib/queries';
+import { withoutOwnedRackets } from '@/lib/reference';
 import type { Racket } from '@/lib/types';
+import { useDebounced } from '@/lib/use-debounced';
 
 type Owner = { id: string; name: string };
 
 type RacketFormSheetProps = {
   visible: boolean;
   onClose: () => void;
-  racket?: Pick<Racket, 'id' | 'brand' | 'model' | 'notes' | 'client_id' | 'client_name'>;
-  // The owner is already known (the form was opened from their page or from an order).
+  racket?: Pick<Racket, 'id' | 'brand' | 'model' | 'notes' | 'client_id' | 'client_name' | 'track_stock' | 'stock'>;
+  // The owner is already known (the form was opened from their page or from an order): a client's racket.
   owner?: Owner;
+  // With no owner, a racket of the catalog: one the stringer keeps in stock. A racket that is edited is one or the
+  // other by itself.
+  catalog?: boolean;
+  // The model, typed in a search that found nothing.
+  initialModel?: string;
   onSaved?: (racket: Racket) => void;
 };
 
-function RacketForm({ racket, owner: knownOwner, onClose, onSaved }: Omit<RacketFormSheetProps, 'visible'>) {
+function RacketForm({
+  racket,
+  owner: knownOwner,
+  catalog,
+  initialModel,
+  onClose,
+  onSaved,
+}: Omit<RacketFormSheetProps, 'visible'>) {
   const { t } = useI18n();
   const toast = useToast();
   const create = useCreateRacket();
   const update = useUpdateRacket();
+  const forCatalog = racket ? racket.client_id === null : !!catalog;
   const [owner, setOwner] = useState<Owner | undefined>(
-    knownOwner ?? (racket ? { id: racket.client_id, name: racket.client_name } : undefined)
+    knownOwner ?? (racket?.client_id ? { id: racket.client_id, name: racket.client_name ?? '' } : undefined)
   );
   const [brand, setBrand] = useState(racket?.brand ?? '');
-  const [model, setModel] = useState(racket?.model ?? '');
+  const [model, setModel] = useState(racket?.model ?? initialModel ?? '');
   const [notes, setNotes] = useState(racket?.notes ?? '');
-  const [errors, setErrors] = useState<{ owner?: string; brand?: string; model?: string }>({});
+  // A new catalog racket is counted, with one in stock: what was just bought, or is about to be used.
+  const [track, setTrack] = useState(racket?.track_stock ?? true);
+  const [stock, setStock] = useState(racket ? formatNumber(racket.stock, 0) : '1');
+  const [errors, setErrors] = useState<{ owner?: string; brand?: string; model?: string; stock?: string }>({});
   const [formError, setFormError] = useState<string>();
   const [saving, setSaving] = useState(false);
   const [choosing, setChoosing] = useState(false);
@@ -47,20 +68,57 @@ function RacketForm({ racket, owner: knownOwner, onClose, onSaved }: Omit<Racket
   const modelRef = useRef<InputRef>(null);
   const notesRef = useRef<InputRef>(null);
 
+  // A new racket is looked up in the reference list as it is typed, once there is something of its model. What was
+  // just picked is not offered again until the text is changed. For the catalog, what the catalog has is left out
+  // as well; a client's racket can be a model that is in stock, so it is only the catalog's that is compared.
+  const [picked, setPicked] = useState(false);
+  const inCatalog = useRackets({ kind: 'catalog', enabled: !racket && forCatalog });
+  const typed = [brand, model]
+    .map((text) => text.trim())
+    .filter(Boolean)
+    .join(' ');
+  const searching =
+    !racket && !picked && model.trim() !== '' && typed.length >= 2 && (!forCatalog || inCatalog.data !== undefined);
+  const found = useReferenceRackets(useDebounced(typed, SUGGEST_DELAY_MS), searching);
+  const suggestions = searching
+    ? withoutOwnedRackets(found.data ?? [], forCatalog ? (inCatalog.data ?? []) : [])
+        .filter((item) => item.brand !== brand.trim() || item.model !== model.trim())
+        .slice(0, SUGGESTIONS_SHOWN)
+    : [];
+
+  const pick = (id: string) => {
+    const item = suggestions.find((candidate) => candidate.id === id);
+    if (!item) return;
+    setBrand(item.brand);
+    setModel(item.model);
+    setPicked(true);
+    setErrors((current) => ({ ...current, brand: undefined, model: undefined }));
+  };
+
   const save = async () => {
     if (saving) return;
+    const counted = forCatalog && track ? readStock('racket', stock) : null;
     const next = {
-      owner: owner ? undefined : t('error_owner_required'),
+      owner: forCatalog || owner ? undefined : t('error_owner_required'),
       brand: brand.trim() ? undefined : t('error_brand_required'),
       model: model.trim() ? undefined : t('error_model_required'),
+      stock: counted && 'error' in counted ? t(counted.error) : undefined,
     };
     setErrors(next);
     setFormError(undefined);
-    if (next.owner || next.brand || next.model || !owner) return;
+    if (next.owner || next.brand || next.model || next.stock) return;
 
     setSaving(true);
     try {
-      const input = { client_id: owner.id, brand, model, notes: notes || null };
+      const input = forCatalog
+        ? {
+            brand,
+            model,
+            notes: notes || null,
+            track_stock: track,
+            ...(counted && 'value' in counted ? { stock: counted.value } : {}),
+          }
+        : { client_id: owner?.id, brand, model, notes: notes || null };
       const saved = racket
         ? await update.mutateAsync({ id: racket.id, ...input })
         : await create.mutateAsync(input);
@@ -76,26 +134,32 @@ function RacketForm({ racket, owner: knownOwner, onClose, onSaved }: Omit<Racket
   return (
     <>
       <View className="gap-3 pt-2">
-        <PickerField
-          label={t('field_owner')}
-          value={owner?.name}
-          placeholder={t('racket_owner_placeholder')}
-          error={errors.owner}
-          // A racket made from a client's page or an order belongs to them; elsewhere it is chosen.
-          disabled={!!knownOwner && !racket}
-          onPress={() => setChoosing(true)}
-        />
+        {forCatalog ? null : (
+          <PickerField
+            label={t('field_owner')}
+            value={owner?.name}
+            placeholder={t('racket_owner_placeholder')}
+            error={errors.owner}
+            // A racket made from a client's page or an order belongs to them; elsewhere it is chosen.
+            disabled={!!knownOwner && !racket}
+            onPress={() => setChoosing(true)}
+          />
+        )}
         <Input
           label={t('field_brand')}
           value={brand}
           onChangeText={(value) => {
             setBrand(value);
+            setPicked(false);
             setErrors((current) => ({ ...current, brand: undefined }));
           }}
           error={errors.brand}
           placeholder="Wilson"
-          autoFocus={!!owner}
+          autoFocus={!racket && (forCatalog || !!owner)}
           autoCapitalize="words"
+          // A brand or a model is not a word of any dictionary: it is not to be corrected into one, or underlined.
+          autoCorrect={false}
+          spellCheck={false}
           returnKeyType="next"
           submitBehavior="submit"
           onSubmitEditing={() => modelRef.current?.focus()}
@@ -106,14 +170,21 @@ function RacketForm({ racket, owner: knownOwner, onClose, onSaved }: Omit<Racket
           value={model}
           onChangeText={(value) => {
             setModel(value);
+            setPicked(false);
             setErrors((current) => ({ ...current, model: undefined }));
           }}
           error={errors.model}
           placeholder="Pro Staff 97"
           autoCapitalize="words"
+          autoCorrect={false}
+          spellCheck={false}
           returnKeyType="next"
           submitBehavior="submit"
           onSubmitEditing={() => notesRef.current?.focus()}
+        />
+        <Suggestions
+          items={suggestions.map((item) => ({ key: item.id, title: `${item.brand} ${item.model}` }))}
+          onPick={pick}
         />
         <Input
           ref={notesRef}
@@ -122,10 +193,24 @@ function RacketForm({ racket, owner: knownOwner, onClose, onSaved }: Omit<Racket
           onChangeText={setNotes}
           multiline
         />
+        {forCatalog ? (
+          <StockFields
+            kind="racket"
+            track={track}
+            onTrack={setTrack}
+            stock={stock}
+            onStock={(value) => {
+              setStock(value);
+              setErrors((current) => ({ ...current, stock: undefined }));
+            }}
+            error={errors.stock}
+          />
+        ) : null}
         {formError ? <FormError message={formError} /> : null}
       </View>
       <View className="pt-4">
         <Shortcut
+          compact
           icon={racket ? Check : PlusIcon}
           label={racket ? t('save') : t('add_racket')}
           color={colors.primary} contentColor={colors.white}
@@ -163,7 +248,7 @@ function RacketForm({ racket, owner: knownOwner, onClose, onSaved }: Omit<Racket
   );
 }
 
-// Add or edit a racket: its owner, brand and model.
+// Add or edit a racket: a client's (its owner, brand and model) or the catalog's (brand, model and the stock).
 export default function RacketFormSheet({ visible, onClose, ...rest }: RacketFormSheetProps) {
   const { t } = useI18n();
   return (

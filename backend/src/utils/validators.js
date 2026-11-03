@@ -38,6 +38,23 @@ export const money = z
   .transform((value) => Math.round(value * 100) / 100)
   .nullable();
 
+/** How many sets of a string are in stock: whole or half, since a hybrid takes half a set of each of its two strings. */
+export const setsInStock = z
+  .number('Enter a number')
+  .min(0, 'Cannot be negative')
+  .max(100_000, 'Too large')
+  .refine((value) => Number.isInteger(value * 2), 'Use whole or half sets');
+
+/** How many rackets of a model are in stock. */
+export const racketsInStock = z
+  .number('Enter a number')
+  .int('Use a whole number')
+  .min(0, 'Cannot be negative')
+  .max(100_000, 'Too large');
+
+/** `?in_stock=1` of a list route: only what is available. */
+export const inStockQuery = z.enum(['1', 'true']).optional();
+
 /** A calendar date, YYYY-MM-DD. */
 export const isoDate = z.iso.date('Invalid date');
 

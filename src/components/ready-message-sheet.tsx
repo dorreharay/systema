@@ -1,6 +1,6 @@
-import { Copy, MessageSquare, X } from 'lucide-react-native';
 import { View } from 'react-native';
 
+import { Copy, MessageSquare, X } from '@/components/icons';
 import { colors } from '@/components/ui/colors';
 import Sheet from '@/components/ui/sheet';
 import Shortcut from '@/components/ui/shortcut';

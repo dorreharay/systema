@@ -12,7 +12,8 @@ export const toNumber = (value) => (value === null || value === undefined ? null
 export const orderColumns = {
   order: orders,
   client: { id: clients.id, name: clients.name, phone: clients.phone, email: clients.email },
-  racket: { id: rackets.id, brand: rackets.brand, model: rackets.model },
+  // `client_id` is empty for a catalog racket: one the stringer keeps in stock, which goes with any client.
+  racket: { id: rackets.id, brand: rackets.brand, model: rackets.model, client_id: rackets.client_id },
 };
 
 export const withOrderJoins = (query) =>

@@ -1,7 +1,7 @@
-import { ChevronLeft, ChevronRight, X } from 'lucide-react-native';
 import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 
+import { ChevronLeft, ChevronRight, X } from '@/components/icons';
 import { colors } from '@/components/ui/colors';
 import IconButton from '@/components/ui/icon-button';
 import Sheet from '@/components/ui/sheet';
@@ -59,7 +59,7 @@ function Calendar({
     <View className="gap-2">
       <View className="flex-row items-center justify-between">
         <IconButton icon={ChevronLeft} label={t('previous_month')} onPress={() => shift(-1)} />
-        <Text accessibilityRole="header" className="text-base font-semibold">
+        <Text accessibilityRole="header" className="text-[18.5px] font-semibold">
           {MONTHS_LONG[language][month.month - 1]} {month.year}
         </Text>
         <IconButton icon={ChevronRight} label={t('next_month')} onPress={() => shift(1)} />
@@ -67,7 +67,7 @@ function Calendar({
       <View className="flex-row">
         {WEEKDAYS_SHORT[language].map((day) => (
           <View key={day} className="flex-1 items-center py-1">
-            <Text className="text-xs font-medium text-muted">{day}</Text>
+            <Text className="text-[13.9px] font-medium text-muted">{day}</Text>
           </View>
         ))}
       </View>
@@ -91,7 +91,7 @@ function Calendar({
                   selected ? 'bg-primary' : iso === today ? 'border border-primary' : ''
                 }`}>
                 <Text
-                  className={`text-[15px] ${
+                  className={`text-[18px] ${
                     selected ? 'font-semibold text-white' : iso === today ? 'font-semibold text-primary' : ''
                   }`}>
                   {day}
@@ -132,7 +132,7 @@ export function DateSheet({ visible, onClose, title, value, today, onChange, cle
                 value === preset.iso ? 'border-primary bg-primary active:bg-primary' : 'border-line bg-white active:bg-surface'
               }`}>
               <Text
-                className={`text-[15px] font-medium ${value === preset.iso ? 'text-white' : 'text-ink'}`}>
+                className={`text-[18px] font-medium ${value === preset.iso ? 'text-white' : 'text-ink'}`}>
                 {preset.label}
               </Text>
             </Pressable>
@@ -179,7 +179,7 @@ export function TimeSheet({ visible, onClose, value, onChange }: TimeSheetProps)
               className={`min-h-11 min-w-[22%] flex-1 items-center justify-center rounded-lg border ${
                 value === time ? 'border-primary bg-primary active:bg-primary' : 'border-line bg-white active:bg-surface'
               }`}>
-              <Text className={`text-[15px] font-medium ${value === time ? 'text-white' : 'text-ink'}`}>
+              <Text className={`text-[18px] font-medium ${value === time ? 'text-white' : 'text-ink'}`}>
                 {time}
               </Text>
             </Pressable>

@@ -2,28 +2,17 @@ import Svg, { Path } from 'react-native-svg';
 
 type CatalogIconProps = { size?: number; color?: string };
 
-// The drawing is wide and flat, so at the size of the other icons it looks small: it is drawn this much
-// larger than the size that is asked for.
-const SCALE = 1.2;
-
-// The icon of assets/images/catalog.svg, drawn with react-native-svg so that it takes its colour from the
+// The box of assets/images/catalog.svg, drawn with react-native-svg so that it takes its colour from the
 // caller like the other icons do.
 export default function CatalogIcon({ size = 24, color = '#000000' }: CatalogIconProps) {
   return (
-    // The drawing is 100 x 53; the box is made square, with margin, so it is as big as the other icons.
-    <Svg width={size * SCALE} height={size * SCALE} viewBox="-6 -30.2 112 112" fill="none">
+    // The drawing is 26 x 21; the box is made square, with margin, so it is as big as the other icons.
+    <Svg width={size} height={size} viewBox="-1.75 -4.25 29.5 29.5" fill="none">
       <Path
-        d="M75 10.0669C70.0312 10.0669 53.102 14.5474 35.492 22.6489C12.898 33.0439 7.81201 40.9379 7.81201 42.8789C7.81201 43.7422 8.51513 44.4414 9.37451 44.4414H74.9995C84.4761 44.4414 92.1875 36.7305 92.1875 27.2534C92.1875 17.7768 84.4766 10.0654 74.9995 10.0654L75 10.0669Z"
+        d="M25 0H1C0.447715 0 0 0.447715 0 1V4C0 4.55228 0.447716 5 1 5H25C25.5523 5 26 4.55228 26 4V1C26 0.447715 25.5523 0 25 0Z"
         fill={color}
       />
-      <Path
-        d="M75 2.25488C60.938 2.25488 0 24.1729 0 42.8799C0 48.0596 4.1953 52.2549 9.375 52.2549H75C88.809 52.2549 100 41.0639 100 27.2549C100 13.4459 88.809 2.25488 75 2.25488ZM75 47.5669H9.375C6.7891 47.5669 4.6875 45.4653 4.6875 42.8794C4.6875 38.4966 12.4141 29.8244 34.1875 19.8094C52.1955 11.5242 69.7535 6.94238 74.9995 6.94238C86.1985 6.94238 95.3115 16.0557 95.3115 27.2544C95.3115 38.4534 86.1987 47.5669 75 47.5669Z"
-        fill={color}
-      />
-      <Path
-        d="M28.164 18.0515C28.0468 16.571 28.2265 15.071 28.7265 13.6257C29.6796 10.864 31.6523 8.6374 34.2812 7.3601C35.7968 6.62182 37.4218 6.2507 39.0585 6.2507C40.2616 6.2507 41.4647 6.45382 42.6366 6.85617C44.5038 7.5007 46.1171 8.62177 47.3671 10.0828C49.4843 9.32496 51.5546 8.62187 53.5663 7.97727C51.4921 4.69997 48.3983 2.23117 44.6757 0.949969C40.3319 -0.550031 35.6718 -0.264832 31.5427 1.74294C27.4138 3.75074 24.3161 7.24684 22.82 11.5867C21.7575 14.6687 21.6091 17.9109 22.32 21.0086C24.2223 19.993 26.1796 19.0046 28.164 18.0515Z"
-        fill={color}
-      />
+      <Path d="M2 21H24V5H2V21ZM9.5 7H16.5V9H9.5V7Z" fill={color} />
     </Svg>
   );
 }

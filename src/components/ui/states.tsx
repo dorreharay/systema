@@ -1,6 +1,6 @@
-import { RotateCcw, SearchX, TriangleAlert, WifiOff, type LucideIcon } from 'lucide-react-native';
 import { View } from 'react-native';
 
+import { RotateCcw, SearchX, TriangleAlert, WifiOff, type IconComponent } from '@/components/icons';
 import { colors } from '@/components/ui/colors';
 import Shortcut from '@/components/ui/shortcut';
 import { Text } from '@/components/ui/text';
@@ -8,7 +8,7 @@ import { describeError, isOffline } from '@/lib/errors';
 import { useI18n } from '@/lib/i18n';
 
 type EmptyStateProps = {
-  icon: LucideIcon;
+  icon: IconComponent;
   title: string;
   message?: string;
   actionLabel?: string;
@@ -45,7 +45,7 @@ export function ErrorState({ error, onRetry }: { error: unknown; onRetry: () => 
   const { t } = useI18n();
   const offline = isOffline(error);
   return (
-    <View className="items-center gap-3 px-6 py-12">
+    <View className="items-center gap-3 px-6 py-12 mt-[30vh]">
       <View className="size-16 items-center justify-center rounded-full bg-red-50">
         {offline ? (
           <WifiOff size={28} color={colors.danger} />

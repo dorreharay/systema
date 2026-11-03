@@ -1,14 +1,4 @@
 import { useRouter } from 'expo-router';
-import {
-  CalendarDays,
-  ChartColumn,
-  Check,
-  TrendingDown,
-  TrendingUp,
-  TriangleAlert,
-  Wallet,
-  type LucideIcon,
-} from 'lucide-react-native';
 import { useState, type ReactNode } from 'react';
 import { PixelRatio, Pressable, View } from 'react-native';
 import Animated, {
@@ -20,6 +10,16 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated';
 
+import {
+  CalendarDays,
+  ChartColumn,
+  Check,
+  TrendingDown,
+  TrendingUp,
+  TriangleAlert,
+  Wallet,
+  type IconComponent,
+} from '@/components/icons';
 import { BarChart, type ChartBar } from '@/components/ui/bar-chart';
 import { BLOCK_ROOM } from '@/components/ui/card';
 import { colors } from '@/components/ui/colors';
@@ -169,7 +169,7 @@ function Figure({ value, caption }: { value: string; caption: string }) {
   );
 }
 
-function Hint({ icon: Icon, text }: { icon: LucideIcon; text: string }) {
+function Hint({ icon: Icon, text }: { icon: IconComponent; text: string }) {
   return (
     <View className="flex-1 items-center justify-center gap-2 px-4">
       <Icon size={26} color={colors.primary} />

@@ -1,7 +1,7 @@
-import { Check } from 'lucide-react-native';
 import { useRef, useState } from 'react';
 import { View } from 'react-native';
 
+import { Check } from '@/components/icons';
 import PlusIcon from '@/components/icons/plus-icon';
 import { colors } from '@/components/ui/colors';
 import { FormError, Input, type InputRef } from '@/components/ui/input';
@@ -131,6 +131,7 @@ function ClientForm({ client, initialName, onClose, onSaved }: Omit<ClientFormSh
       </View>
       <View className="pt-4">
         <Shortcut
+          compact
           icon={client ? Check : PlusIcon}
           label={client ? t('save') : t('add_client')}
           color={colors.primary} contentColor={colors.white}

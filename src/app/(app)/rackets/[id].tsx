@@ -1,10 +1,12 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { MoreHorizontal, Pencil, Repeat, Trash2 } from 'lucide-react-native';
 import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { MoreHorizontal, Pencil, Repeat, Trash2 } from '@/components/icons';
+import { HISTORY_SHOWN } from '@/components/order-card';
 import RacketFormSheet from '@/components/racket-form-sheet';
+import { StockBadge, StockSheet } from '@/components/stock';
 import ActionSheet from '@/components/ui/action-sheet';
 import PlusIcon from '@/components/icons/plus-icon';
 import { StatusBadge } from '@/components/ui/badge';
@@ -37,7 +39,9 @@ export default function RacketDetails() {
   const query = useRacket(id);
   const remove = useDeleteRacket();
   const [editing, setEditing] = useState(false);
+  const [stocking, setStocking] = useState(false);
   const [menu, setMenu] = useState(false);
+  const [allOrders, setAllOrders] = useState(false);
   const racket = query.data;
   const today = todayIso(user?.timezone);
 
@@ -86,7 +90,7 @@ export default function RacketDetails() {
             color={colors.newOrder}
             contentColor={colors.ink}
             className="px-5 py-5 w-full"
-            onPress={() => router.push({ pathname: '/orders/new', params: { clientId: racket.client_id } })}
+            onPress={() => router.push({ pathname: '/orders/new', params: { clientId: racket.client_id ?? undefined } })}
           />
         ) : undefined
       }
@@ -102,13 +106,25 @@ export default function RacketDetails() {
             <Text className="text-[14.3px] text-muted">{racket.brand}</Text>
             <Text className="text-[24.2px] font-semibold">{racket.model}</Text>
           </View>
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => router.push({ pathname: '/clients/[id]', params: { id: racket.client_id } })}
-            className="flex-row items-center justify-between active:opacity-60">
-            <Text className="text-[16.5px] text-muted">{t('field_owner')}</Text>
-            <Text className="text-[16.5px] font-medium text-primary">{racket.client_name}</Text>
-          </Pressable>
+          {racket.client_id ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => router.push({ pathname: '/clients/[id]', params: { id: racket.client_id! } })}
+              className="flex-row items-center justify-between active:opacity-60">
+              <Text className="text-[16.5px] text-muted">{t('field_owner')}</Text>
+              <Text className="text-[16.5px] font-medium text-primary">{racket.client_name}</Text>
+            </Pressable>
+          ) : (
+            // A catalog racket has no owner; what it has is a stock, which is changed with a tap.
+            <View className="flex-row items-center justify-between gap-3">
+              <Text className="text-[16.5px] text-muted">{t('field_stock')}</Text>
+              {racket.track_stock ? (
+                <StockBadge kind="racket" item={racket} onPress={() => setStocking(true)} />
+              ) : (
+                <Text className="text-[16.5px] text-muted">{t('stock_untracked')}</Text>
+              )}
+            </View>
+          )}
           {racket.notes ? <Text className="text-[16.5px] text-muted">{racket.notes}</Text> : null}
         </Card>
 
@@ -142,14 +158,17 @@ export default function RacketDetails() {
           />
         )}
 
-        <Section title={t('section_stringing_history')}>
+        <Section
+          title={t('section_stringing_history')}
+          actionLabel={!allOrders && racket.orders.length > HISTORY_SHOWN ? t('see_all') : undefined}
+          onAction={() => setAllOrders(true)}>
           {racket.orders.length === 0 ? (
             <Card>
               <Text className="text-center text-[16.5px] text-muted">{t('racket_no_history')}</Text>
             </Card>
           ) : (
             <View className="gap-3">
-              {racket.orders.map((order) => (
+              {(allOrders ? racket.orders : racket.orders.slice(0, HISTORY_SHOWN)).map((order) => (
                 <Card
                   key={order.id}
                   onPress={() => router.push({ pathname: '/orders/[id]', params: { id: order.id } })}
@@ -175,6 +194,7 @@ export default function RacketDetails() {
 
 
       <RacketFormSheet visible={editing} onClose={() => setEditing(false)} racket={racket} />
+      <StockSheet visible={stocking} onClose={() => setStocking(false)} kind="racket" item={racket} />
       <ActionSheet
         visible={menu}
         onClose={() => setMenu(false)}

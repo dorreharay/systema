@@ -1,6 +1,5 @@
 import type { Href } from 'expo-router';
 import { useFocusEffect } from 'expo-router';
-import { ArrowLeft } from 'lucide-react-native';
 import type { ReactNode } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { LayoutChangeEvent } from 'react-native';
@@ -20,6 +19,7 @@ import { scheduleOnRN } from 'react-native-worklets';
 import { HEADER_HEIGHT } from '@/components/app-header';
 import { AuthLeaveContext } from '@/components/auth-leave';
 import AuthLink from '@/components/auth-link';
+import { ArrowLeft } from '@/components/icons';
 import { useI18n } from '@/lib/i18n';
 
 // Size of the round back button at the top left, in line with the logo.

@@ -21,6 +21,8 @@ assert.equal(custom.databaseSsl, false, 'an explicit value wins');
 assert.deepEqual(custom.corsOrigins, ['https://a.test', 'https://b.test']);
 assert.equal(custom.smtp.port, 587, 'a value that is not a number falls back');
 assert.equal(loadConfig({ SEED_ADMIN_EMAIL: 'Root@Test.Local' }).seedAdmin.email, 'root@test.local');
+assert.equal(dev.starterCatalog, true, 'a new account starts with a catalog');
+assert.equal(loadConfig({ STARTER_CATALOG: 'false' }).starterCatalog, false, 'unless it is turned off');
 
 assert.throws(() => assertConfig(loadConfig({})), /DATABASE_URL[\s\S]*JWT_SECRET/);
 assert.throws(() => assertConfig(loadConfig({ DATABASE_URL: 'postgres://x', JWT_SECRET: 'short' })), /too short/);

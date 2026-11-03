@@ -1,14 +1,15 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Mail, MoreHorizontal, Pencil, Trash2 } from 'lucide-react-native';
 import { useState } from 'react';
 import { View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import CallButton from '@/components/call-button';
 import ClientFormSheet from '@/components/client-form-sheet';
+import { Mail, MoreHorizontal, Pencil, Trash2 } from '@/components/icons';
 import PlusIcon from '@/components/icons/plus-icon';
-import OrderCard from '@/components/order-card';
+import OrderCard, { HISTORY_SHOWN } from '@/components/order-card';
 import RacketFormSheet from '@/components/racket-form-sheet';
+import ReferenceRacketPicker from '@/components/reference-racket-picker';
 import ActionSheet from '@/components/ui/action-sheet';
 import Card from '@/components/ui/card';
 import { colors } from '@/components/ui/colors';
@@ -16,6 +17,7 @@ import { useConfirm } from '@/components/ui/confirm';
 import IconButton from '@/components/ui/icon-button';
 import { DetailHeader, DetailScroll, Screen } from '@/components/ui/screen';
 import Section from '@/components/ui/section';
+import { afterSheetsClosed } from '@/components/ui/sheet';
 import Shortcut from '@/components/ui/shortcut';
 import { BlockSkeleton } from '@/components/ui/skeleton';
 import { ErrorState } from '@/components/ui/states';
@@ -37,8 +39,11 @@ export default function ClientDetails() {
   const query = useClient(id);
   const remove = useDeleteClient();
   const [editing, setEditing] = useState(false);
-  const [addingRacket, setAddingRacket] = useState(false);
+  // A racket is added from the reference list; one that is not in it is typed in, in a form that comes after.
+  const [pickingRacket, setPickingRacket] = useState(false);
+  const [typedRacket, setTypedRacket] = useState<string | null>(null);
   const [menu, setMenu] = useState(false);
+  const [allOrders, setAllOrders] = useState(false);
   const client = query.data;
 
   if (!client) {
@@ -118,7 +123,7 @@ export default function ClientDetails() {
           </Card>
         ) : null}
 
-        <Section title={t('section_rackets')} actionLabel={t('add')} onAction={() => setAddingRacket(true)}>
+        <Section title={t('section_rackets')} actionLabel={t('add')} onAction={() => setPickingRacket(true)}>
           {client.rackets.length === 0 ? (
             <Card className="items-center gap-3 py-6">
               <Text className="text-center text-[16.5px] text-muted">{t('client_no_rackets')}</Text>
@@ -129,7 +134,7 @@ export default function ClientDetails() {
                 label={t('add_racket')}
                 color={colors.catalog}
                 contentColor={colors.ink}
-                onPress={() => setAddingRacket(true)}
+                onPress={() => setPickingRacket(true)}
               />
             </Card>
           ) : (
@@ -149,19 +154,18 @@ export default function ClientDetails() {
           )}
         </Section>
 
-        <Section title={t('section_order_history')}>
+        <Section
+          title={t('section_order_history')}
+          actionLabel={!allOrders && client.orders.length > HISTORY_SHOWN ? t('see_all') : undefined}
+          onAction={() => setAllOrders(true)}>
           {client.orders.length === 0 ? (
             <Card>
               <Text className="text-center text-[16.5px] text-muted">{t('client_no_orders_yet')}</Text>
             </Card>
           ) : (
             <View className="gap-3">
-              {client.orders.map((order) => (
-                <OrderCard
-                  key={order.id}
-                  order={order}
-                  onPress={() => router.push({ pathname: '/orders/[id]', params: { id: order.id } })}
-                />
+              {(allOrders ? client.orders : client.orders.slice(0, HISTORY_SHOWN)).map((order) => (
+                <OrderCard key={order.id} order={order} />
               ))}
             </View>
           )}
@@ -170,10 +174,21 @@ export default function ClientDetails() {
 
 
       <ClientFormSheet visible={editing} onClose={() => setEditing(false)} client={client} />
+      <ReferenceRacketPicker
+        visible={pickingRacket}
+        onClose={() => setPickingRacket(false)}
+        owner={client}
+        // After one sheet closes, the next may open.
+        onCreate={(name) => {
+          setPickingRacket(false);
+          afterSheetsClosed(() => setTypedRacket(name));
+        }}
+      />
       <RacketFormSheet
-        visible={addingRacket}
-        onClose={() => setAddingRacket(false)}
+        visible={typedRacket !== null}
+        onClose={() => setTypedRacket(null)}
         owner={{ id: client.id, name: client.name }}
+        initialModel={typedRacket ?? undefined}
       />
       <ActionSheet
         visible={menu}

@@ -4,7 +4,7 @@ import { View } from 'react-native';
 import { styled } from 'react-native-css';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { useKeyboardHeight } from '@/lib/use-keyboard';
+import { useKeyboardTakesRoom } from '@/lib/use-keyboard';
 
 const BarBlur = styled(BlurView);
 
@@ -22,7 +22,7 @@ type BottomBarProps = {
  */
 export default function BottomBar({ children, clearHomeIndicator = true }: BottomBarProps) {
   const insets = useSafeAreaInsets();
-  const keyboardOpen = useKeyboardHeight() > 0;
+  const keyboardOpen = useKeyboardTakesRoom();
 
   // Where the window shrinks for the keyboard (Android) the bar would ride on top of it: it goes instead.
   if (keyboardOpen) {

@@ -1,9 +1,9 @@
-import { CircleAlert, CircleCheck } from 'lucide-react-native';
 import { createContext, use, useCallback, useRef, useState, type ReactNode } from 'react';
 import { View } from 'react-native';
 import Animated, { FadeInUp, FadeOutUp } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { CircleAlert, CircleCheck } from '@/components/icons';
 import { Text } from '@/components/ui/text';
 
 type ToastTone = 'success' | 'error';

@@ -1,16 +1,18 @@
-import { useRouter } from 'expo-router';
-import { Library, Search, Tags } from 'lucide-react-native';
-import { useEffect, useState } from 'react';
+import { router } from 'expo-router';
+import { createContext, memo, use, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { FlatList, RefreshControl, TextInput, View } from 'react-native';
 
 import { StackNavBar } from '@/components/app-tab-bar';
+import { Library, Search, Tags } from '@/components/icons';
 import PlusIcon from '@/components/icons/plus-icon';
 import RacketFormSheet from '@/components/racket-form-sheet';
+import { StockBadge, StockSheet, sortByStock } from '@/components/stock';
 import StringFormSheet from '@/components/string-form-sheet';
 import { Badge } from '@/components/ui/badge';
 import Card from '@/components/ui/card';
 import { Segmented } from '@/components/ui/chips';
 import { colors } from '@/components/ui/colors';
+import { FIELD_INPUT_TEXT } from '@/components/ui/field-text';
 import { DetailHeader, Screen, useDetailContentTop } from '@/components/ui/screen';
 import Shortcut from '@/components/ui/shortcut';
 import { ListSkeleton } from '@/components/ui/skeleton';
@@ -22,24 +24,144 @@ import { useI18n } from '@/lib/i18n';
 import { stringLabel } from '@/lib/order-draft';
 import { useRackets, useStrings } from '@/lib/queries';
 import { usePullRefresh } from '@/lib/use-pull-refresh';
-import type { CatalogString } from '@/lib/types';
+import type { CatalogString, Racket } from '@/lib/types';
 
 type Tab = 'rackets' | 'strings';
+// An item whose stock is being set, from its badge.
+type Stocking = { kind: 'racket'; item: Racket } | { kind: 'string'; item: CatalogString };
 const SEARCH_DEBOUNCE_MS = 250;
 
-export default function Catalog() {
+// What the page asks of its sheets: they are opened from the dock, from the empty states and from the rows.
+type Sheets = {
+  addRacket: () => void;
+  addString: () => void;
+  editString: (string: CatalogString) => void;
+  stock: (target: Stocking) => void;
+};
+
+const SheetsContext = createContext<Sheets | null>(null);
+
+function useSheets() {
+  const sheets = use(SheetsContext);
+  if (!sheets) throw new Error('useSheets is used outside of the catalog');
+  return sheets;
+}
+
+// The sheets keep their state here, beside the page and not in it: a catalog of a hundred items is a long list, and
+// drawing it again each time a sheet opened or closed was a pause long enough to look like the app had hung.
+function CatalogSheets({ children }: { children: ReactNode }) {
+  const [addingRacket, setAddingRacket] = useState(false);
+  // What a sheet was opened for stays when it is closed, so that it does not turn into another one while it slides away.
+  const [stringOpen, setStringOpen] = useState(false);
+  const [editedString, setEditedString] = useState<CatalogString>();
+  const [stockOpen, setStockOpen] = useState(false);
+  const [stocking, setStocking] = useState<Stocking>();
+
+  const sheets = useMemo<Sheets>(
+    () => ({
+      addRacket: () => setAddingRacket(true),
+      addString: () => {
+        setEditedString(undefined);
+        setStringOpen(true);
+      },
+      editString: (string) => {
+        setEditedString(string);
+        setStringOpen(true);
+      },
+      stock: (target) => {
+        setStocking(target);
+        setStockOpen(true);
+      },
+    }),
+    []
+  );
+
+  return (
+    <SheetsContext value={sheets}>
+      {children}
+      {/* A racket made here belongs to no client: it is one the stringer keeps in stock. */}
+      <RacketFormSheet visible={addingRacket} onClose={() => setAddingRacket(false)} catalog />
+      <StockSheet
+        visible={stockOpen}
+        onClose={() => setStockOpen(false)}
+        kind={stocking?.kind ?? 'string'}
+        item={stocking?.item ?? null}
+      />
+      <StringFormSheet visible={stringOpen} onClose={() => setStringOpen(false)} string={editedString} />
+    </SheetsContext>
+  );
+}
+
+// A row changes only with its item, so a letter typed in the search does not draw the whole list again.
+const RacketCard = memo(function RacketCard({ racket }: { racket: Racket }) {
+  const { t } = useI18n();
+  const sheets = useSheets();
+
+  return (
+    <Card
+      onPress={() => router.push({ pathname: '/rackets/[id]', params: { id: racket.id } })}
+      className="gap-1.5">
+      <Text className="text-base font-semibold" numberOfLines={1}>
+        {racketName(racket)}
+      </Text>
+      {racket.notes ? (
+        <Text className="text-[15.4px] text-muted" numberOfLines={1}>
+          {racket.notes}
+        </Text>
+      ) : null}
+      <View className="flex-row flex-wrap items-center gap-2">
+        <StockBadge kind="racket" item={racket} onPress={() => sheets.stock({ kind: 'racket', item: racket })} />
+        <Text className="text-[14.3px] text-muted">{t('orders_count', { count: racket.orders_count })}</Text>
+      </View>
+    </Card>
+  );
+});
+
+const StringCard = memo(function StringCard({ string }: { string: CatalogString }) {
   const { user } = useAuth();
   const { t, language } = useI18n();
-  const router = useRouter();
+  const sheets = useSheets();
+
+  return (
+    <Card onPress={() => sheets.editString(string)} className="gap-1.5">
+      <View className="flex-row items-center justify-between gap-3">
+        <Text className="flex-1 text-base font-semibold" numberOfLines={1}>
+          {stringLabel(string)}
+        </Text>
+        <Text className="text-base font-semibold">
+          {formatMoney(string.default_price, user?.currency ?? 'USD', language)}
+        </Text>
+      </View>
+      <View className="flex-row flex-wrap items-center gap-2">
+        <Badge label={t(`string_type_${string.type}`)} />
+        <StockBadge kind="string" item={string} onPress={() => sheets.stock({ kind: 'string', item: string })} />
+      </View>
+    </Card>
+  );
+});
+
+export default function Catalog() {
+  return (
+    <CatalogSheets>
+      <CatalogPage />
+    </CatalogSheets>
+  );
+}
+
+function CatalogPage() {
+  const { t } = useI18n();
+  const sheets = useSheets();
   const [tab, setTab] = useState<Tab>('rackets');
   const [text, setText] = useState('');
   const [query, setQuery] = useState('');
-  const [addingRacket, setAddingRacket] = useState(false);
-  const [editingString, setEditingString] = useState<CatalogString | 'new' | null>(null);
-  const rackets = useRackets({ q: tab === 'rackets' ? query : '' });
+  // The catalog's rackets are the ones kept in stock; a client's are on the page of the client.
+  const rackets = useRackets({ q: tab === 'rackets' ? query : '', kind: 'catalog' });
   const strings = useStrings(tab === 'strings' ? query : '');
   const racketsPull = usePullRefresh(rackets.refetch);
   const stringsPull = usePullRefresh(strings.refetch);
+  // What is in stock is at the top of a list, and what has run out is at the bottom.
+  const racketList = useMemo(() => sortByStock(rackets.data ?? []), [rackets.data]);
+  const stringList = useMemo(() => sortByStock(strings.data ?? []), [strings.data]);
 
   useEffect(() => {
     const timer = setTimeout(() => setQuery(text), SEARCH_DEBOUNCE_MS);
@@ -80,7 +202,7 @@ export default function Catalog() {
           returnKeyType="search"
           accessibilityLabel={t('search')}
           textAlignVertical="center"
-          className="min-w-0 flex-1 py-3 ios:pb-3.5 ios:pt-2.5 font-normal text-base text-ink outline-none"
+          className={`min-w-0 flex-1 font-normal text-ink outline-none ${FIELD_INPUT_TEXT}`}
         />
       </View>
     </View>
@@ -96,7 +218,7 @@ export default function Catalog() {
           color={colors.catalog}
           contentColor="#000000"
           className="px-5 py-5 w-full"
-          onPress={() => (racketsTab ? setAddingRacket(true) : setEditingString('new'))}
+          onPress={racketsTab ? sheets.addRacket : sheets.addString}
         />
       }
       footer={<StackNavBar />}>
@@ -106,8 +228,10 @@ export default function Catalog() {
           key="rackets"
           contentContainerStyle={{ paddingTop: contentTop }}
           ListHeaderComponent={listHeader}
-          data={rackets.data ?? []}
+          data={racketList}
           keyExtractor={(racket) => racket.id}
+          // The rows are drawn a screenful or two at a time, not all of the catalog at once.
+          windowSize={7}
           contentContainerClassName="gap-3 px-page pb-28"
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
@@ -117,19 +241,7 @@ export default function Catalog() {
               tintColor={colors.primary}
             />
           }
-          renderItem={({ item }) => (
-            <Card
-              onPress={() => router.push({ pathname: '/rackets/[id]', params: { id: item.id } })}
-              className="gap-0.5">
-              <Text className="text-base font-semibold" numberOfLines={1}>
-                {racketName(item)}
-              </Text>
-              <Text className="text-[15.4px] text-muted" numberOfLines={1}>
-                {item.client_name}
-              </Text>
-              <Text className="text-[14.3px] text-muted">{t('orders_count', { count: item.orders_count })}</Text>
-            </Card>
-          )}
+          renderItem={({ item }) => <RacketCard racket={item} />}
           ListEmptyComponent={
             rackets.isLoading ? (
               <ListSkeleton variant="row" />
@@ -143,7 +255,7 @@ export default function Catalog() {
                 title={t('rackets_empty_title')}
                 message={t('rackets_empty_message')}
                 actionLabel={t('add_racket')}
-                onAction={() => setAddingRacket(true)}
+                onAction={sheets.addRacket}
               />
             )
           }
@@ -153,8 +265,9 @@ export default function Catalog() {
           key="strings"
           contentContainerStyle={{ paddingTop: contentTop }}
           ListHeaderComponent={listHeader}
-          data={strings.data ?? []}
+          data={stringList}
           keyExtractor={(string) => string.id}
+          windowSize={7}
           contentContainerClassName="gap-3 px-page pb-28"
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
@@ -164,19 +277,7 @@ export default function Catalog() {
               tintColor={colors.primary}
             />
           }
-          renderItem={({ item }) => (
-            <Card onPress={() => setEditingString(item)} className="gap-1.5">
-              <View className="flex-row items-center justify-between gap-3">
-                <Text className="flex-1 text-base font-semibold" numberOfLines={1}>
-                  {stringLabel(item)}
-                </Text>
-                <Text className="text-base font-semibold">
-                  {formatMoney(item.default_price, user?.currency ?? 'USD', language)}
-                </Text>
-              </View>
-              <Badge label={t(`string_type_${item.type}`)} />
-            </Card>
-          )}
+          renderItem={({ item }) => <StringCard string={item} />}
           ListEmptyComponent={
             strings.isLoading ? (
               <ListSkeleton variant="row" />
@@ -190,24 +291,12 @@ export default function Catalog() {
                 title={t('strings_empty_title')}
                 message={t('strings_empty_message')}
                 actionLabel={t('add_string')}
-                onAction={() => setEditingString('new')}
+                onAction={sheets.addString}
               />
             )
           }
         />
       )}
-
-      {/* A racket made here still needs its owner, chosen in the sheet. */}
-      <RacketFormSheet
-        visible={addingRacket}
-        onClose={() => setAddingRacket(false)}
-        onSaved={(racket) => router.push({ pathname: '/rackets/[id]', params: { id: racket.id } })}
-      />
-      <StringFormSheet
-        visible={editingString !== null}
-        onClose={() => setEditingString(null)}
-        string={editingString && editingString !== 'new' ? editingString : undefined}
-      />
     </Screen>
   );
 }

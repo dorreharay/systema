@@ -1,22 +1,12 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import {
-  Check,
-  Copy,
-  Mail,
-  MoreHorizontal,
-  Pencil,
-  Phone,
-  Repeat,
-  Trash2,
-  Undo2,
-  UserRound,
-} from 'lucide-react-native';
 import { useState, type ReactNode } from 'react';
 import { Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import CallButton from '@/components/call-button';
 import ContactSheet from '@/components/contact-sheet';
+import { Check, Copy, Mail, MoreHorizontal, Pencil, Phone, Repeat, Trash2, Undo2 } from '@/components/icons';
+import UserIcon from '@/components/icons/user-icon';
 import { useDueText } from '@/components/order-card';
 import ReadyMessageSheet from '@/components/ready-message-sheet';
 import ActionSheet from '@/components/ui/action-sheet';
@@ -191,10 +181,11 @@ export default function OrderDetails() {
         floating
         title={t('order_title', { number: orderNumber(order.number) })}
         right={
-          <>
-            {order.client.phone ? <CallButton phone={order.client.phone} /> : null}
-            <IconButton icon={MoreHorizontal} label={t('more_actions')} onPress={() => setMenu(true)} />
-          </>
+          // A large button (a touch target twice as big, an icon 1.6 times as big), pulled out towards the edge of the screen
+          // so that the dots stay about where they were.
+          <View className="-mr-6">
+            <IconButton large icon={MoreHorizontal} label={t('more_actions')} onPress={() => setMenu(true)} />
+          </View>
         }
       />
       <DetailScroll
@@ -216,22 +207,30 @@ export default function OrderDetails() {
           <View className="h-px bg-line" />
 
           <View className="gap-3">
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => router.push({ pathname: '/clients/[id]', params: { id: order.client.id } })}
-              className="flex-row items-center gap-3 active:opacity-60">
-              <View className="size-11 items-center justify-center rounded-full bg-primary-soft">
-                <UserRound size={22} color={colors.primary} />
-              </View>
-              <View className="flex-1">
-                <Text className="text-[18.7px] font-semibold" numberOfLines={1}>
-                  {order.client.name}
-                </Text>
-                <Text className="text-[15.4px] text-muted" numberOfLines={1}>
-                  {order.client.phone ?? order.client.email ?? t('no_contact_details')}
-                </Text>
-              </View>
-            </Pressable>
+            <View className="flex-row items-center gap-3">
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => router.push({ pathname: '/clients/[id]', params: { id: order.client.id } })}
+                className="flex-1 flex-row items-center gap-3 active:opacity-60">
+                <View className="size-11 items-center justify-center rounded-full bg-primary-soft">
+                  <UserIcon size={22} color={colors.primary} />
+                </View>
+                <View className="flex-1">
+                  <Text className="text-[18.7px] font-semibold" numberOfLines={1}>
+                    {order.client.name}
+                  </Text>
+                  <Text className="text-[15.4px] text-muted" numberOfLines={1}>
+                    {order.client.phone ?? order.client.email ?? t('no_contact_details')}
+                  </Text>
+                </View>
+              </Pressable>
+              {/* The round ground is 6 pt in from the edge of its touch target: pulled out, it stands at the edge of the card's content. */}
+              {order.client.phone ? (
+                <View className="-mr-1.5">
+                  <CallButton phone={order.client.phone} round />
+                </View>
+              ) : null}
+            </View>
             {!order.client.phone && order.client.email ? (
               <Shortcut
                 compact

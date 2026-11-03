@@ -15,6 +15,13 @@
       "when": 1793562495986,
       "tag": "0001_restring_domain",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793700187484,
+      "tag": "0002_catalog_stock",
+      "breakpoints": true
     }
   ]
 }

@@ -342,10 +342,15 @@ test('Clients', 'one stringer never sees or changes another one\'s data', async 
   assertStatus(await s.client.get('/api/clients/not-a-uuid'), 404);
 });
 
-test('Rackets', 'brand, model and a client are required', async (ctx) => {
+test('Rackets', 'brand and model are required; a client is not (without one it is a catalog racket)', async (ctx) => {
   const s = await shop(ctx);
   assertStatus(await s.client.post('/api/rackets', { client_id: s.customer.id, brand: 'Head' }), 400);
-  assertStatus(await s.client.post('/api/rackets', { brand: 'Head', model: 'Speed' }), 400);
+  assertStatus(await s.client.post('/api/rackets', { brand: 'Head' }), 400);
+  const catalog = await s.client.post('/api/rackets', { brand: 'Head', model: 'Speed' });
+  assertEq([catalog.status, catalog.data.client_id], [201, null], 'no client: a catalog racket');
+  const unknown = await s.client.post('/api/rackets', { client_id: '00000000-0000-4000-8000-000000000000', brand: 'Head', model: 'Speed' });
+  assertStatus(unknown, 400);
+  assertTrue(unknown.data.fields.client_id, 'an unknown client is named');
 });
 test('Rackets', 'the list can be filtered by owner and searched by brand and model', async (ctx) => {
   const s = await shop(ctx);
@@ -514,6 +519,85 @@ test('Orders', 'checks what an order points at', async (ctx) => {
   assertStatus(await s.client.post('/api/orders', minimalOrder(s, { due_date: '2026-06-01', due_time: '25:00' })), 400);
   assertEq((await s.client.post('/api/orders', minimalOrder(s, { due_date: '2026-06-01', due_time: '09:30' }))).status, 201, 'a valid date and time');
 });
+const clientRackets = async (s, client = s.customer) =>
+  (await s.client.get(`/api/rackets?client_id=${client.id}`)).data.items.map((r) => `${r.brand} ${r.model}`);
+
+test('Orders', 'an order can name a racket the client does not have: it is made with the order', async (ctx) => {
+  const s = await shop(ctx);
+  assertEq(await clientRackets(s), ['Wilson Pro Staff 97'], 'the client starts with one');
+
+  const res = await s.client.post('/api/orders', { client_id: s.customer.id, new_racket: { brand: ' Babolat ', model: 'Pure Drive' } });
+  assertStatus(res, 201);
+  assertEq(
+    [res.data.racket.brand, res.data.racket.model, res.data.racket.client_id],
+    ['Babolat', 'Pure Drive', s.customer.id],
+    'the racket of the order is a new one of the client\'s'
+  );
+  assertEq(await clientRackets(s), ['Babolat Pure Drive', 'Wilson Pro Staff 97'], 'and now the client has it');
+  const made = (await s.client.get(`/api/rackets/${res.data.racket.id}`)).data;
+  assertEq([made.track_stock, made.stock, made.orders_count], [false, 0, 1], 'a client\'s racket, not counted, with this one order');
+});
+test('Orders', 'a named racket that the client has already is used, not made again', async (ctx) => {
+  const s = await shop(ctx);
+  for (const named of [
+    { brand: 'wilson', model: 'PRO STAFF 97' },
+    { brand: 'Wilson', model: 'pro-staff 97' },
+    { brand: ' Wilson ', model: 'ProStaff97' },
+  ]) {
+    const res = await s.client.post('/api/orders', { client_id: s.customer.id, new_racket: named });
+    assertStatus(res, 201);
+    assertEq(res.data.racket.id, s.racket.id, `${named.model}: the racket the client has`);
+  }
+  assertEq(await clientRackets(s), ['Wilson Pro Staff 97'], 'still the one');
+
+  const plus = await s.client.post('/api/orders', { client_id: s.customer.id, new_racket: { brand: 'Wilson', model: 'Pro Staff 97+' } });
+  assertStatus(plus, 201);
+  assertTrue(plus.data.racket.id !== s.racket.id, '"+" is another racket');
+
+  // A racket is each client's own: another client with the same model gets one of their own.
+  const iga = (await s.client.post('/api/clients', { name: 'Iga', phone: '+380631110000' })).data;
+  const hers = await s.client.post('/api/orders', { client_id: iga.id, new_racket: { brand: 'Wilson', model: 'Pro Staff 97' } });
+  assertStatus(hers, 201);
+  assertTrue(hers.data.racket.id !== s.racket.id, 'Iga does not get Maria\'s racket');
+  assertEq(hers.data.racket.client_id, iga.id, 'she gets her own');
+  assertEq(await clientRackets(s, iga), ['Wilson Pro Staff 97'], 'one for her');
+});
+test('Orders', 'a racket is pointed at or named, never both and never neither', async (ctx) => {
+  const s = await shop(ctx);
+  const named = { brand: 'Strangebrand', model: 'Speed' };
+  const none = await s.client.post('/api/orders', { client_id: s.customer.id });
+  assertStatus(none, 400);
+  assertTrue(none.data.fields.racket_id, 'the racket is named');
+  const both = await s.client.post('/api/orders', { client_id: s.customer.id, racket_id: s.racket.id, new_racket: named });
+  assertStatus(both, 400);
+  assertTrue(both.data.fields.racket_id, 'the racket is named');
+  const blank = await s.client.post('/api/orders', { client_id: s.customer.id, new_racket: { brand: '  ', model: '' } });
+  assertStatus(blank, 400);
+  assertTrue(blank.data.fields['new_racket.brand'] && blank.data.fields['new_racket.model'], 'the brand and the model are named');
+
+  const order = (await s.client.post('/api/orders', minimalOrder(s))).data;
+  assertStatus(await s.client.patch(`/api/orders/${order.id}`, { racket_id: s.racket.id, new_racket: named }), 400);
+  const stranger = await register(ctx);
+  assertStatus(await stranger.client.post('/api/orders', { client_id: s.customer.id, new_racket: named }), 400);
+  assertEq(Number(dbScalar(`SELECT count(*) FROM rackets WHERE brand='Strangebrand'`)), 0, 'no racket was made by any of them');
+});
+test('Orders', 'an order can be moved to a named racket, which is made with the change', async (ctx) => {
+  const s = await shop(ctx);
+  const order = (await s.client.post('/api/orders', minimalOrder(s))).data;
+  const moved = await s.client.patch(`/api/orders/${order.id}`, { new_racket: { brand: 'Yonex', model: 'Ezone 98' } });
+  assertStatus(moved, 200);
+  assertEq(
+    [moved.data.racket.brand, moved.data.racket.model, moved.data.racket.client_id],
+    ['Yonex', 'Ezone 98', s.customer.id],
+    'the order has the new racket'
+  );
+  assertEq((await s.client.get(`/api/rackets/${s.racket.id}`)).data.orders.length, 0, 'the old racket has no order now');
+  assertEq(await clientRackets(s), ['Wilson Pro Staff 97', 'Yonex Ezone 98'], 'the client has both');
+
+  const again = await s.client.patch(`/api/orders/${order.id}`, { new_racket: { brand: 'yonex', model: 'ezone-98' } });
+  assertEq([again.status, again.data.racket.id], [200, moved.data.racket.id], 'the same name is the same racket');
+  assertEq(await clientRackets(s), ['Wilson Pro Staff 97', 'Yonex Ezone 98'], 'not made twice');
+});
 test('Orders', 'status moves through the workflow and keeps its timestamps', async (ctx) => {
   const s = await shop(ctx);
   const order = (await s.client.post('/api/orders', minimalOrder(s))).data;
@@ -669,6 +753,359 @@ test('Dashboard', 'this month is the stringer\'s month, not the server\'s', asyn
   assertEq((await s.client.get('/api/dashboard')).data.completed_this_month, 0, 'finished last month');
   dbExec(`UPDATE orders SET completed_at = now() WHERE id='${order.id}'`);
   assertEq((await s.client.get('/api/dashboard')).data.completed_this_month, 1, 'finished now');
+});
+
+// ---------------------------------------------------------------------------
+// Catalog stock
+// ---------------------------------------------------------------------------
+/** The stringer's own catalog: a racket with no owner, and the string of `shop`, both counted. */
+async function stocked(ctx, { racketStock = 2, stringStock = 3 } = {}) {
+  const s = await shop(ctx);
+  const catalogRacket = (await s.client.post('/api/rackets', {
+    brand: 'Yonex', model: 'Vcore 98', track_stock: true, stock: racketStock,
+  })).data;
+  const string = (await s.client.patch(`/api/strings/${s.string.id}`, { track_stock: true, stock: stringStock })).data;
+  return { ...s, catalogRacket, string };
+}
+const racketStock = async (s, id) => (await s.client.get(`/api/rackets/${id}`)).data.stock;
+const stringStock = async (s, id) => (await s.client.get(`/api/strings/${id}`)).data.stock;
+const catalogOrder = (s, extra = {}) => ({ client_id: s.customer.id, racket_id: s.catalogRacket.id, ...extra });
+
+test('Stock', 'a racket can be added to the catalog with no client, with a stock', async (ctx) => {
+  const s = await shop(ctx);
+  const res = await s.client.post('/api/rackets', { brand: 'Yonex', model: 'Vcore 98', track_stock: true, stock: 3 });
+  assertStatus(res, 201);
+  assertEq(
+    [res.data.client_id, res.data.client_name, res.data.track_stock, res.data.stock, res.data.available, res.data.last_setup],
+    [null, null, true, 3, true, null],
+    'a catalog racket'
+  );
+  assertEq((await s.client.get('/api/rackets?kind=catalog')).data.items.map((r) => r.model), ['Vcore 98'], 'the catalog');
+  assertEq((await s.client.get('/api/rackets?kind=client')).data.items.map((r) => r.model), ['Pro Staff 97'], 'the clients');
+  assertEq((await s.client.get('/api/rackets?q=vcore')).data.items.length, 1, 'found by name without an owner');
+
+  const own = await s.client.post('/api/rackets', {
+    client_id: s.customer.id, brand: 'Head', model: 'Speed', track_stock: true, stock: 5,
+  });
+  assertEq([own.status, own.data.track_stock, own.data.stock], [201, false, 0], 'a client\'s racket is not counted');
+
+  assertStatus(await s.client.post('/api/rackets', { brand: 'A', model: 'B', stock: -1 }), 400);
+  assertStatus(await s.client.post('/api/rackets', { brand: 'A', model: 'B', stock: 1.5 }), 400);
+});
+test('Stock', 'only what is available is listed as in stock', async (ctx) => {
+  const s = await shop(ctx);
+  await s.client.post('/api/rackets', { brand: 'Babolat', model: 'Pure Drive', track_stock: true, stock: 0 });
+  await s.client.post('/api/rackets', { brand: 'Head', model: 'Radical', track_stock: true, stock: 2 });
+  await s.client.post('/api/rackets', { brand: 'Prince', model: 'Phantom' });
+  const models = async (query) => (await s.client.get(`/api/rackets?${query}`)).data.items.map((r) => r.model);
+  assertEq(await models('kind=catalog'), ['Pure Drive', 'Radical', 'Phantom'], 'all of the catalog, by brand');
+  assertEq(await models('kind=catalog&in_stock=1'), ['Radical', 'Phantom'], 'a counted one with none left is out, one that is not counted is in');
+  const out = (await s.client.get('/api/rackets?kind=catalog')).data.items.find((r) => r.model === 'Pure Drive');
+  assertEq(out.available, false, 'marked as not available');
+
+  await s.client.post('/api/strings', { brand: 'Head', model: 'Hawk', track_stock: true, stock: 0 });
+  await s.client.post('/api/strings', { brand: 'Head', model: 'Lynx', track_stock: true, stock: 0.5 });
+  assertEq((await s.client.get('/api/strings?in_stock=1')).data.items.map((x) => x.model), ['Lynx', 'ALU Power'], 'half a set is something');
+  assertEq((await s.client.get('/api/strings')).data.items.length, 3, 'the whole catalog');
+});
+test('Stock', 'strings are counted in whole and half sets', async (ctx) => {
+  const { client } = await register(ctx);
+  const res = await client.post('/api/strings', { brand: 'Head', model: 'Hawk', track_stock: true, stock: 2.5 });
+  assertStatus(res, 201);
+  assertEq([res.data.track_stock, res.data.stock, res.data.available], [true, 2.5, true], 'kept');
+  assertStatus(await client.post('/api/strings', { brand: 'Head', model: 'Lynx', stock: 0.3 }), 400);
+  assertStatus(await client.post('/api/strings', { brand: 'Head', model: 'Lynx', stock: -1 }), 400);
+  const plain = (await client.post('/api/strings', { brand: 'Head', model: 'Lynx' })).data;
+  assertEq([plain.track_stock, plain.stock, plain.available], [false, 0, true], 'not counted unless asked: always available');
+  assertEq((await client.patch(`/api/strings/${res.data.id}`, { stock: 4 })).data.stock, 4, 'the stock can be set');
+});
+test('Stock', 'a catalog racket has no owner and a client\'s racket always has one', async (ctx) => {
+  const s = await stocked(ctx);
+  const moved = await s.client.patch(`/api/rackets/${s.catalogRacket.id}`, { client_id: s.customer.id });
+  assertStatus(moved, 400);
+  assertTrue(moved.data.fields.client_id, 'the owner is named');
+  assertStatus(await s.client.patch(`/api/rackets/${s.racket.id}`, { client_id: null }), 400);
+  const edited = await s.client.patch(`/api/rackets/${s.catalogRacket.id}`, { stock: 7, notes: 'Demo' });
+  assertEq([edited.data.stock, edited.data.notes, edited.data.model], [7, 'Demo', 'Vcore 98'], 'only what was sent');
+  const own = await s.client.patch(`/api/rackets/${s.racket.id}`, { track_stock: true, stock: 9 });
+  assertEq([own.data.track_stock, own.data.stock], [false, 0], 'a client\'s racket stays uncounted');
+});
+
+test('Stock', 'an order takes its racket and a set of its string, and deleting it gives them back', async (ctx) => {
+  const s = await stocked(ctx);
+  const order = await s.client.post('/api/orders', catalogOrder(s, { main_string_id: s.string.id }));
+  assertStatus(order, 201);
+  assertEq(order.data.racket.client_id, null, 'the order shows a catalog racket');
+  assertEq([await racketStock(s, s.catalogRacket.id), await stringStock(s, s.string.id)], [1, 2], 'taken');
+  assertStatus(await s.client.delete(`/api/orders/${order.data.id}`), 200);
+  assertEq([await racketStock(s, s.catalogRacket.id), await stringStock(s, s.string.id)], [2, 3], 'given back');
+});
+test('Stock', 'an order that finds too little fails whole, and keeps its number free', async (ctx) => {
+  const s = await stocked(ctx, { racketStock: 1, stringStock: 3 });
+  assertStatus(await s.client.post('/api/orders', catalogOrder(s, { main_string_id: s.string.id })), 201);
+  const again = await s.client.post('/api/orders', catalogOrder(s, { main_string_id: s.string.id }));
+  assertStatus(again, 409);
+  assertEq(again.data.code, 'out_of_stock', 'code');
+  assertTrue(again.data.fields.racket_id, 'the racket is named');
+  assertEq(await stringStock(s, s.string.id), 2, 'the string was not taken either');
+
+  await s.client.patch(`/api/rackets/${s.catalogRacket.id}`, { stock: 5 });
+  const next = await s.client.post('/api/orders', catalogOrder(s, { main_string_id: s.string.id }));
+  assertEq([next.status, next.data.number], [201, 2], 'the failed order used no number');
+
+  const bare = await stocked(ctx, { stringStock: 0 });
+  const refused = await bare.client.post('/api/orders', minimalOrder(bare, { main_string_id: bare.string.id }));
+  assertStatus(refused, 409);
+  assertTrue(refused.data.fields.main_string_id, 'the string is named');
+});
+test('Stock', 'an order that is not made leaves no racket behind, a racket it named included', async (ctx) => {
+  const s = await stocked(ctx, { stringStock: 0 });
+  const count = () => Number(dbScalar(`SELECT count(*) FROM rackets WHERE client_id='${s.customer.id}'`));
+  const named = { brand: 'Head', model: 'Speed' };
+  assertEq(count(), 1, 'the client starts with one racket');
+
+  // Too little in the stock: the order fails whole, and the racket that was made for it goes with it.
+  const refused = await s.client.post('/api/orders', { client_id: s.customer.id, new_racket: named, main_string_id: s.string.id });
+  assertStatus(refused, 409);
+  assertEq(refused.data.code, 'out_of_stock', 'code');
+  assertEq([count(), (await s.client.get('/api/orders')).data.items.length], [1, 0], 'no racket and no order');
+
+  // An order that is wrong is turned away before anything is made.
+  assertStatus(await s.client.post('/api/orders', { client_id: s.customer.id, new_racket: named, due_time: '10:00' }), 400);
+  assertStatus(await s.client.post('/api/orders', {
+    client_id: s.customer.id, new_racket: named, main_string_id: '00000000-0000-4000-8000-000000000000',
+  }), 400);
+  assertEq(count(), 1, 'no racket');
+
+  // The same for a change: the order keeps its racket, and none is made.
+  const order = (await s.client.post('/api/orders', minimalOrder(s))).data;
+  const changed = await s.client.patch(`/api/orders/${order.id}`, { new_racket: named, main_string_id: s.string.id });
+  assertStatus(changed, 409);
+  assertEq(count(), 1, 'no racket was made by the change');
+  assertEq((await s.client.get(`/api/orders/${order.id}`)).data.racket.id, s.racket.id, 'the order has the racket it had');
+
+  // With enough in the stock the racket and the order are made together, and the failed ones used no number.
+  await s.client.patch(`/api/strings/${s.string.id}`, { stock: 2 });
+  const made = await s.client.post('/api/orders', { client_id: s.customer.id, new_racket: named, main_string_id: s.string.id });
+  assertStatus(made, 201);
+  assertEq([count(), made.data.number, made.data.racket.model], [2, 2, 'Speed'], 'a racket, and the order after the one that was made');
+  assertEq(await stringStock(s, s.string.id), 1, 'and it took its string');
+});
+test('Stock', 'a hybrid takes half a set of each string; the customer\'s strings and uncounted ones take none', async (ctx) => {
+  const s = await stocked(ctx);
+  const gut = (await s.client.post('/api/strings', { brand: 'Babolat', model: 'VS Touch', track_stock: true, stock: 1 })).data;
+  const hybrid = await s.client.post('/api/orders', minimalOrder(s, {
+    hybrid: true, main_string_id: s.string.id, cross_string_id: gut.id,
+  }));
+  assertStatus(hybrid, 201);
+  assertEq([await stringStock(s, s.string.id), await stringStock(s, gut.id)], [2.5, 0.5], 'half of each');
+
+  const own = await s.client.post('/api/orders', minimalOrder(s, { customer_strings: true, main_string_name: 'Their Solinco' }));
+  assertStatus(own, 201);
+  const loose = (await s.client.post('/api/strings', { brand: 'Wilson', model: 'NXT' })).data;
+  assertStatus(await s.client.post('/api/orders', minimalOrder(s, { main_string_id: loose.id })), 201);
+  assertEq(await stringStock(s, loose.id), 0, 'a string that is not counted is never taken from');
+  assertEq(await stringStock(s, s.string.id), 2.5, 'and the others are as they were');
+
+  assertStatus(await s.client.delete(`/api/orders/${hybrid.data.id}`), 200);
+  assertEq([await stringStock(s, s.string.id), await stringStock(s, gut.id)], [3, 1], 'back as it was');
+});
+test('Stock', 'changing what an order points at moves the stock; changing anything else does not', async (ctx) => {
+  const s = await stocked(ctx);
+  const other = (await s.client.post('/api/strings', { brand: 'Babolat', model: 'RPM', track_stock: true, stock: 2 })).data;
+  const order = (await s.client.post('/api/orders', minimalOrder(s, { main_string_id: s.string.id }))).data;
+  assertEq(await stringStock(s, s.string.id), 2, 'taken');
+
+  await s.client.patch(`/api/orders/${order.id}`, { notes: 'Fast', status: 'in_progress', labor_price: 20, is_paid: true });
+  assertEq(await stringStock(s, s.string.id), 2, 'a note, the status and the price leave it alone');
+
+  const changed = await s.client.patch(`/api/orders/${order.id}`, { main_string_id: other.id });
+  assertStatus(changed, 200);
+  assertEq([await stringStock(s, s.string.id), await stringStock(s, other.id)], [3, 1], 'the old string is back, the new one taken');
+
+  await s.client.patch(`/api/strings/${s.string.id}`, { stock: 0 });
+  const refused = await s.client.patch(`/api/orders/${order.id}`, { main_string_id: s.string.id });
+  assertStatus(refused, 409);
+  assertEq(await stringStock(s, other.id), 1, 'a change that fails changes nothing');
+  assertEq((await s.client.get(`/api/orders/${order.id}`)).data.main_string_id, other.id, 'the order is as it was');
+
+  const customer = await s.client.patch(`/api/orders/${order.id}`, { customer_strings: true, main_string_name: 'Their own' });
+  assertStatus(customer, 200);
+  assertEq(await stringStock(s, other.id), 2, 'strings the customer brings: the set goes back');
+});
+test('Stock', 'an order made before the stock was counted gives nothing back', async (ctx) => {
+  const s = await shop(ctx);
+  const order = (await s.client.post('/api/orders', minimalOrder(s, { main_string_id: s.string.id }))).data;
+  await s.client.patch(`/api/strings/${s.string.id}`, { track_stock: true, stock: 3 });
+  await s.client.patch(`/api/orders/${order.id}`, { notes: 'Counted since' });
+  assertEq(await stringStock(s, s.string.id), 3, 'editing it takes nothing');
+  assertStatus(await s.client.delete(`/api/orders/${order.id}`), 200);
+  assertEq(await stringStock(s, s.string.id), 3, 'and deleting it gives nothing back');
+});
+test('Stock', 'two orders at once cannot both take the last one', async (ctx) => {
+  const s = await stocked(ctx, { stringStock: 1 });
+  const results = await Promise.all([1, 2, 3].map(() => s.client.post('/api/orders', minimalOrder(s, { main_string_id: s.string.id }))));
+  assertEq(results.map((r) => r.status).sort(), [201, 409, 409], 'one wins');
+  assertEq(await stringStock(s, s.string.id), 0, 'nothing is below zero');
+  assertEq((await s.client.get('/api/orders')).data.items.map((o) => o.number), [1], 'and only one number was used');
+});
+test('Stock', 'a catalog racket goes with any client and has no setup of its own', async (ctx) => {
+  const s = await stocked(ctx);
+  const iga = (await s.client.post('/api/clients', { name: 'Iga', phone: '+380631110000' })).data;
+  assertStatus(await s.client.post('/api/orders', catalogOrder(s, { main_tension: 24 })), 201);
+  assertStatus(await s.client.post('/api/orders', { client_id: iga.id, racket_id: s.catalogRacket.id, main_tension: 25 }), 201);
+  const { data } = await s.client.get(`/api/rackets/${s.catalogRacket.id}`);
+  assertEq(data.orders.map((o) => o.client.name), ['Iga', 'Maria Sharapova'], 'its history is across clients');
+  assertEq(data.last_setup, null, 'a setup is a client\'s, so there is none to repeat');
+  const stranger = await register(ctx);
+  assertStatus(await stranger.client.post('/api/orders', { client_id: iga.id, racket_id: s.catalogRacket.id }), 400);
+});
+
+// ---------------------------------------------------------------------------
+// Reference catalog: the rackets and strings that exist, searched by a part of the name
+// ---------------------------------------------------------------------------
+const reference = (path, params = {}) => `/api/reference${path}?${new URLSearchParams(params)}`;
+
+test('Reference', 'needs a signed-in user', async (ctx) => {
+  // A client of its own: the shared anonymous one may have signed in by an earlier test.
+  const stranger = new Client(ctx.server.base);
+  for (const path of ['', '/rackets', '/strings']) {
+    assertStatus(await stranger.get(`/api/reference${path}`), 401);
+  }
+});
+test('Reference', 'finds a racket by a part of its name, however it is typed', async (ctx) => {
+  const { client } = await register(ctx);
+  const first = async (q) => {
+    const res = await client.get(reference('/rackets', { q }));
+    assertStatus(res, 200);
+    return res.data.items[0];
+  };
+  assertEq(await first('pure dr'), { id: 'babolat-pure-drive', brand: 'Babolat', model: 'Pure Drive' }, 'a part of the name');
+  assertEq((await first('PROSTAFF 97')).model, 'Pro Staff 97', 'case and spaces');
+  assertEq((await first('v core 98')).model, 'VCORE 98', 'a space inside a word');
+  assertEq((await first('бабола')).brand, 'Babolat', 'the brand in Ukrainian');
+  const none = await client.get(reference('/rackets', { q: 'zzzz' }));
+  assertEq(none.data, { items: [], has_more: false }, 'nothing found');
+});
+test('Reference', 'finds a string and tells its type and gauges', async (ctx) => {
+  const { client } = await register(ctx);
+  const res = await client.get(reference('/strings', { q: 'alu power 1,25' }));
+  assertStatus(res, 200);
+  assertEq(
+    res.data.items[0],
+    { id: 'luxilon-alu-power', brand: 'Luxilon', model: 'ALU Power', type: 'polyester', gauges: ['1.20', '1.25', '1.30'] },
+    'the string'
+  );
+  const natural = await client.get(reference('/strings', { type: 'natural_gut', limit: '50' }));
+  assertTrue(natural.data.items.length > 0 && natural.data.items.every((item) => item.type === 'natural_gut'), 'only natural gut');
+  const bite = await client.get(reference('/strings', { brand: 'Solinco', q: 'bite' }));
+  assertEq(bite.data.items.map((item) => item.model), ['Tour Bite', 'Tour Bite Soft', 'Tour Bite Diamond Rough'], 'a brand and a word, the shorter name first');
+});
+test('Reference', 'pages the answer and says what it cannot read', async (ctx) => {
+  const { client } = await register(ctx);
+  const page = await client.get(reference('/rackets', { brand: 'Wilson', limit: '2' }));
+  assertEq(page.data.items.length, 2, 'two on a page');
+  assertEq(page.data.has_more, true, 'and more after them');
+  const next = await client.get(reference('/rackets', { brand: 'Wilson', limit: '2', offset: '2' }));
+  assertTrue(
+    next.data.items.length === 2 && next.data.items.every((item) => !page.data.items.some((seen) => seen.id === item.id)),
+    'the next page is other rackets'
+  );
+  for (const bad of [{ limit: '0' }, { limit: '51' }, { limit: 'many' }, { offset: '-1' }, { q: 'x'.repeat(101) }]) {
+    const res = await client.get(reference('/rackets', bad));
+    assertStatus(res, 400);
+    assertEq(res.data.code, 'validation_error', `code for ${JSON.stringify(bad)}`);
+  }
+  assertStatus(await client.get(reference('/strings', { type: 'rope' })), 400);
+});
+test('Reference', 'says what it holds, and may be kept for a while', async (ctx) => {
+  const { client } = await register(ctx);
+  const res = await client.get('/api/reference');
+  assertStatus(res, 200);
+  assertTrue(res.data.rackets.count > 100 && res.data.strings.count > 50, 'a list of each');
+  assertTrue(res.data.rackets.brands.includes('Babolat') && res.data.strings.brands.includes('Luxilon'), 'with their brands');
+  assertTrue(/^\d{4}-\d{2}-\d{2}$/.test(res.data.updated), 'and when it was made');
+  assertEq(res.headers.get('cache-control'), 'private, max-age=3600', 'cache-control');
+});
+
+// ---------------------------------------------------------------------------
+// Starter catalog: a new account begins with common rackets and strings, none in stock. The rest of these tests run
+// with it off, so each of the ones here starts a server of its own with it on, on the port that the rate limit test
+// uses (they run one after the other). Never on 4000: that is the dev server's, and it would take their place.
+// ---------------------------------------------------------------------------
+async function withStarterCatalog(run) {
+  const server = await startServer({ port: CONFIG.port + 1, env: { STARTER_CATALOG: 'true' } });
+  try {
+    const client = new Client(server.base);
+    assertStatus(await client.post('/api/auth/register', { email: newEmail(), password }), 201);
+    await run(client);
+  } finally {
+    await server.stop();
+  }
+}
+
+test('Starter catalog', 'is not made when it is turned off', async (ctx) => {
+  const { client } = await register(ctx);
+  assertEq((await client.get('/api/rackets')).data.items, [], 'no rackets');
+  assertEq((await client.get('/api/strings')).data.items, [], 'no strings');
+});
+test('Starter catalog', 'a new account starts with common rackets and strings, none in stock', async () => {
+  await withStarterCatalog(async (client) => {
+    const rackets = (await client.get('/api/rackets?kind=catalog')).data.items;
+    assertTrue(rackets.length >= 50, `rackets: ${rackets.length}`);
+    assertTrue(
+      rackets.every((r) => r.client_id === null && r.track_stock && r.stock === 0 && !r.available),
+      'counted, none in stock, none of a client'
+    );
+    assertTrue(rackets.some((r) => r.brand === 'Babolat' && r.model === 'Pure Drive'), 'a racket of the list');
+    assertEq((await client.get('/api/rackets?kind=client')).data.items, [], 'no racket of a client');
+
+    const strings = (await client.get('/api/strings')).data.items;
+    assertTrue(strings.length >= 50, `strings: ${strings.length}`);
+    assertTrue(strings.every((s) => s.track_stock && s.stock === 0 && !s.available), 'counted, none in stock');
+    const alu = strings.filter((s) => s.brand === 'Luxilon' && s.model === 'ALU Power');
+    assertEq(alu.map((s) => s.gauge).sort(), ['1.25 mm', '1.30 mm'], 'a string for each size');
+    assertEq(alu[0].type, 'polyester', 'with its type');
+    assertEq(alu[0].default_price, null, 'and no price: that is the stringer\'s');
+    assertEq((await client.get('/api/rackets?in_stock=1')).data.items, [], 'so nothing is offered as in stock');
+    assertEq((await client.get('/api/services')).data.items.length, 3, 'the services are made as before');
+  });
+});
+test('Starter catalog', 'is an ordinary catalog: an order can use it once it has a count', async () => {
+  await withStarterCatalog(async (client) => {
+    const racket = (await client.get('/api/rackets?q=pure%20drive')).data.items.find((r) => r.model === 'Pure Drive');
+    const string = (await client.get('/api/strings?q=alu%20power')).data.items.find((s) => s.gauge === '1.25 mm');
+    const customer = (await client.post('/api/clients', { name: 'Iga', phone: '+380501112233' })).data;
+    const order = { client_id: customer.id, racket_id: racket.id, main_string_id: string.id };
+
+    const refused = await client.post('/api/orders', order);
+    assertStatus(refused, 409);
+    assertEq(refused.data.code, 'out_of_stock', 'nothing is in stock yet');
+
+    assertStatus(await client.patch(`/api/rackets/${racket.id}`, { stock: 1 }), 200);
+    assertStatus(await client.patch(`/api/strings/${string.id}`, { stock: 2 }), 200);
+    assertStatus(await client.post('/api/orders', order), 201);
+    assertEq((await client.get(`/api/rackets/${racket.id}`)).data.stock, 0, 'the racket went');
+    assertEq((await client.get(`/api/strings/${string.id}`)).data.stock, 1, 'and a set of the string');
+  });
+});
+test('Starter catalog', 'each account has its own', async () => {
+  const server = await startServer({ port: CONFIG.port + 1, env: { STARTER_CATALOG: 'true' } });
+  try {
+    const first = new Client(server.base);
+    const second = new Client(server.base);
+    assertStatus(await first.post('/api/auth/register', { email: newEmail(), password }), 201);
+    assertStatus(await second.post('/api/auth/register', { email: newEmail(), password }), 201);
+
+    const mine = (await first.get('/api/rackets?q=pure%20drive')).data.items.find((r) => r.model === 'Pure Drive');
+    assertStatus(await first.patch(`/api/rackets/${mine.id}`, { stock: 5 }), 200);
+    const theirs = (await second.get('/api/rackets?q=pure%20drive')).data.items.find((r) => r.model === 'Pure Drive');
+    assertTrue(theirs.id !== mine.id, 'another racket');
+    assertEq(theirs.stock, 0, 'still none');
+    assertStatus(await second.get(`/api/rackets/${mine.id}`), 404);
+  } finally {
+    await server.stop();
+  }
 });
 
 // ---------------------------------------------------------------------------

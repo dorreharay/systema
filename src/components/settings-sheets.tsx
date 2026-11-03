@@ -1,7 +1,7 @@
-import { Check, KeyRound } from 'lucide-react-native';
 import { useMemo, useState } from 'react';
 import { View } from 'react-native';
 
+import { Check, KeyRound } from '@/components/icons';
 import { colors } from '@/components/ui/colors';
 import { FormError, Input } from '@/components/ui/input';
 import PickerField from '@/components/ui/picker-field';
@@ -185,7 +185,7 @@ function ProfileForm({ onClose }: { onClose: () => void }) {
         {formError ? <FormError message={formError} /> : null}
       </View>
       <View className="pt-4">
-        <Shortcut icon={Check} label={t('save')} color={colors.primary} contentColor={colors.white} onPress={save} loading={saving} />
+        <Shortcut compact icon={Check} label={t('save')} color={colors.primary} contentColor={colors.white} onPress={save} loading={saving} />
       </View>
       <TimeZoneSheet
         visible={choosingZone}
@@ -243,7 +243,7 @@ function WorkshopForm({ onClose }: { onClose: () => void }) {
         {formError ? <FormError message={formError} /> : null}
       </View>
       <View className="pt-4">
-        <Shortcut icon={Check} label={t('save')} color={colors.primary} contentColor={colors.white} onPress={save} loading={saving} />
+        <Shortcut compact icon={Check} label={t('save')} color={colors.primary} contentColor={colors.white} onPress={save} loading={saving} />
       </View>
     </>
   );

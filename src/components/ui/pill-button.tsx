@@ -1,10 +1,10 @@
-import type { LucideIcon } from 'lucide-react-native';
 import { Pressable } from 'react-native';
 
+import type { IconComponent } from '@/components/icons';
 import { colors } from '@/components/ui/colors';
 import { Text } from '@/components/ui/text';
 
-type PillButtonProps = { icon: LucideIcon; label: string; onPress: () => void };
+type PillButtonProps = { icon: IconComponent; label: string; onPress: () => void };
 
 // A compact filled button for a header: "+ Add Client".
 export default function PillButton({ icon: Icon, label, onPress }: PillButtonProps) {

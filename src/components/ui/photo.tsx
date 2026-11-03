@@ -1,6 +1,6 @@
-import { X } from 'lucide-react-native';
 import { Image, Modal, Pressable, View } from 'react-native';
 
+import { X } from '@/components/icons';
 import { colors } from '@/components/ui/colors';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useI18n } from '@/lib/i18n';

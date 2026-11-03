@@ -1,5 +1,4 @@
 import { useRouter } from 'expo-router';
-import { ClipboardList, Plus, Search, X } from 'lucide-react-native';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -11,8 +10,10 @@ import {
   View,
 } from 'react-native';
 
+import { ClipboardList, Plus, Search, X } from '@/components/icons';
 import OrderCard from '@/components/order-card';
 import { colors } from '@/components/ui/colors';
+import { FIELD_INPUT_TEXT } from '@/components/ui/field-text';
 import IconButton from '@/components/ui/icon-button';
 import { Screen, ScreenHeader, TAB_HEADER_DROP, useDetailContentTop } from '@/components/ui/screen';
 import Shortcut from '@/components/ui/shortcut';
@@ -87,7 +88,7 @@ export default function Orders() {
               returnKeyType="search"
               accessibilityLabel={t('search')}
               textAlignVertical="center"
-              className="min-w-0 flex-1 py-3 ios:pb-3.5 ios:pt-2.5 font-normal text-base text-ink outline-none"
+              className={`min-w-0 flex-1 font-normal text-ink outline-none ${FIELD_INPUT_TEXT}`}
             />
           </View>
         </View>
@@ -142,12 +143,7 @@ export default function Orders() {
         onEndReached={() => {
           if (orders.hasNextPage && !orders.isFetchingNextPage) orders.fetchNextPage();
         }}
-        renderItem={({ item }) => (
-          <OrderCard
-            order={item}
-            onPress={() => router.push({ pathname: '/orders/[id]', params: { id: item.id } })}
-          />
-        )}
+        renderItem={({ item }) => <OrderCard order={item} />}
         ListEmptyComponent={
           orders.isLoading ? (
             <ListSkeleton />

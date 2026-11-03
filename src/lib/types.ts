@@ -31,6 +31,9 @@ export type Client = ClientSummary & {
 
 export type RacketSummary = { id: string; brand: string; model: string };
 
+/** The racket of an order: `client_id` is empty for a catalog racket, one the stringer keeps in stock. */
+export type OrderRacket = RacketSummary & { client_id: string | null };
+
 /** How a racket was strung: what "Use Previous Setup" copies into a new order. */
 export type Setup = {
   customer_strings: boolean;
@@ -55,11 +58,16 @@ export type LastSetup = Setup & {
 
 export type Racket = {
   id: string;
-  client_id: string;
-  client_name: string;
+  // The owner. A catalog racket, one the stringer keeps in stock, has none.
+  client_id: string | null;
+  client_name: string | null;
   brand: string;
   model: string;
   notes: string | null;
+  // The stock of a catalog racket: counted only while `track_stock` is on. `available` says whether an order can use it.
+  track_stock: boolean;
+  stock: number;
+  available: boolean;
   orders_count: number;
   last_setup: LastSetup | null;
 };
@@ -77,6 +85,24 @@ export type CatalogString = {
   gauge: string | null;
   type: StringType;
   default_price: number | null;
+  // How many sets are in stock, counted only while `track_stock` is on; halves, as a hybrid takes half a set of each string.
+  track_stock: boolean;
+  stock: number;
+  available: boolean;
+};
+
+// The reference list of rackets and strings that exist (names, no photos): what a new racket or string of the
+// stringer's own catalog can be filled in from.
+export type ReferenceRacket = {
+  id: string;
+  brand: string;
+  model: string;
+};
+
+export type ReferenceString = ReferenceRacket & {
+  type: StringType;
+  // The sizes in mm, from the thinnest, like "1.25"; empty when they are not known.
+  gauges: string[];
 };
 
 export type Service = {
@@ -94,7 +120,7 @@ export type Order = Setup & {
   is_paid: boolean;
   paid_at: string | null;
   client: ClientSummary;
-  racket: RacketSummary;
+  racket: OrderRacket;
   received_date: string;
   due_date: string | null;
   due_time: string | null;
@@ -154,6 +180,9 @@ export type Insights = {
 export type OrderInput = Partial<Setup> & {
   client_id?: string;
   racket_id?: string;
+  // Instead of `racket_id`: a racket of the client that they may not have yet. The server makes it together with the
+  // order (and not if the order is not made), or uses the one of that name that the client has.
+  new_racket?: { brand: string; model: string };
   received_date?: string;
   due_date?: string | null;
   due_time?: string | null;

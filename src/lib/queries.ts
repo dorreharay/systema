@@ -21,6 +21,8 @@ import type {
   OrderStatus,
   Racket,
   RacketDetail,
+  ReferenceRacket,
+  ReferenceString,
   Service,
   StringType,
 } from '@/lib/types';
@@ -100,14 +102,27 @@ export const useClient = (id: string | undefined) => {
   });
 };
 
-export const useRackets = ({ q = '', clientId }: { q?: string; clientId?: string } = {}) => {
+export type RacketFilter = {
+  q?: string;
+  clientId?: string;
+  // The rackets of clients, or the catalog's (the ones kept in stock).
+  kind?: 'client' | 'catalog';
+  inStock?: boolean;
+  // False while the list is not wanted: it is asked for once it is.
+  enabled?: boolean;
+};
+
+export const useRackets = ({ q = '', clientId, kind, inStock, enabled = true }: RacketFilter = {}) => {
   const request = useRequest();
   return useQuery({
-    queryKey: ['rackets', { q: q.trim(), clientId }],
+    queryKey: ['rackets', { q: q.trim(), clientId, kind, inStock }],
+    enabled,
     queryFn: () => {
       const params = new URLSearchParams();
       if (q.trim()) params.set('q', q.trim());
       if (clientId) params.set('client_id', clientId);
+      if (kind) params.set('kind', kind);
+      if (inStock) params.set('in_stock', '1');
       const query = params.toString();
       return request<{ items: Racket[] }>(`/api/rackets${query ? `?${query}` : ''}`);
     },
@@ -125,15 +140,81 @@ export const useRacket = (id: string | undefined) => {
   });
 };
 
-export const useStrings = (q = '') => {
+export const useStrings = (q = '', { inStock, enabled = true }: { inStock?: boolean; enabled?: boolean } = {}) => {
   const request = useRequest();
   return useQuery({
-    queryKey: ['strings', q.trim()],
-    queryFn: () => request<{ items: CatalogString[] }>(`/api/strings${search(q)}`),
+    queryKey: ['strings', q.trim(), inStock],
+    enabled,
+    queryFn: () => {
+      const params = new URLSearchParams();
+      if (q.trim()) params.set('q', q.trim());
+      if (inStock) params.set('in_stock', '1');
+      const query = params.toString();
+      return request<{ items: CatalogString[] }>(`/api/strings${query ? `?${query}` : ''}`);
+    },
     placeholderData: keepPreviousData,
     select: (data) => data.items,
   });
 };
+
+// The reference list: the rackets and strings that exist, found by a part of the name while a new one is typed.
+// It is the same for everyone and does not change while the app is open, so an answer is kept for a while.
+const REFERENCE_STALE_MS = 60 * 60_000;
+// How many are asked for: more than a form shows, since what the catalog already has is taken out of them.
+const REFERENCE_FETCH = 12;
+
+function useReference<T>(kind: 'rackets' | 'strings', q: string, enabled: boolean, limit: number) {
+  const request = useRequest();
+  const text = q.trim();
+  return useQuery({
+    queryKey: ['reference', kind, text, limit],
+    queryFn: () =>
+      request<{ items: T[] }>(`/api/reference/${kind}?q=${encodeURIComponent(text)}&limit=${limit}`),
+    // One letter finds too much to be of use.
+    enabled: enabled && text.length >= 2,
+    staleTime: REFERENCE_STALE_MS,
+    placeholderData: keepPreviousData,
+    select: (data) => data.items,
+  });
+}
+
+export const useReferenceRackets = (q: string, enabled = true) =>
+  useReference<ReferenceRacket>('rackets', q, enabled, REFERENCE_FETCH);
+
+export const useReferenceStrings = (q: string, enabled = true) =>
+  useReference<ReferenceString>('strings', q, enabled, REFERENCE_FETCH);
+
+// How many of the reference rackets a picker that lists all of them asks for at a time; the next page is asked for when
+// the end of it is near.
+const REFERENCE_PAGE = 30;
+
+/** The reference rackets a page at a time, all of them or the ones that fit what is typed: for a picker to scroll through. */
+export function useReferenceRacketPages(q: string, enabled = true) {
+  const request = useRequest();
+  const text = q.trim();
+  return useInfiniteQuery({
+    queryKey: ['reference', 'racket-pages', text],
+    enabled,
+    initialPageParam: 0,
+    queryFn: ({ pageParam }) =>
+      request<{ items: ReferenceRacket[]; has_more: boolean }>(
+        `/api/reference/rackets?q=${encodeURIComponent(text)}&limit=${REFERENCE_PAGE}&offset=${pageParam}`
+      ),
+    getNextPageParam: (last, pages) => (last.has_more ? pages.length * REFERENCE_PAGE : undefined),
+    staleTime: REFERENCE_STALE_MS,
+    // While a search is being typed the previous results stay up instead of flashing empty.
+    placeholderData: keepPreviousData,
+  });
+}
+
+/** The lists of rackets and strings, read again: for when the server says that what they show is out of date (what ran out, or is gone). */
+export function useRefreshCatalog() {
+  const queryClient = useQueryClient();
+  return () => {
+    void queryClient.invalidateQueries({ queryKey: ['rackets'] });
+    void queryClient.invalidateQueries({ queryKey: ['strings'] });
+  };
+}
 
 export const useServices = () => {
   const request = useRequest();
@@ -169,15 +250,25 @@ export function usePhotoUri(id: string) {
 /**
  * A change to the data. Once it has worked, everything on screen that may show it is read again:
  * an order is on the home screen, in two lists, on the client's page and in the racket's history.
+ *
+ * What is only added (a string, a racket, a client, a service) is on no order and in no total yet: it changes the lists
+ * it is in, and `affects` names them. Reading all of the rest again, each with its screen drawn again behind the form
+ * that was just saved, made saving a string a pause.
  */
-function useAction<Vars, Result>(run: (request: Request, vars: Vars) => Promise<Result>) {
+function useAction<Vars, Result>(
+  run: (request: Request, vars: Vars) => Promise<Result>,
+  affects?: readonly string[]
+) {
   const request = useRequest();
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (vars: Vars) => run(request, vars),
     onSuccess: () => {
-      // Not returned: the caller carries on at once, and the screens update as the answers arrive.
-      void queryClient.invalidateQueries();
+      // Not returned: the caller carries on at once, and the screens update as the answers arrive. The reference
+      // list is nobody's data: nothing done here changes it.
+      void queryClient.invalidateQueries({
+        predicate: ({ queryKey: [root] }) => (affects ? affects.includes(String(root)) : root !== 'reference'),
+      });
     },
   });
 }
@@ -198,8 +289,9 @@ export const useDeleteOrder = () =>
 export type ClientInput = { name?: string; phone?: string | null; email?: string | null; notes?: string | null };
 
 export const useCreateClient = () =>
-  useAction((request, input: ClientInput) =>
-    request<Client>('/api/clients', { method: 'POST', body: input })
+  useAction(
+    (request, input: ClientInput) => request<Client>('/api/clients', { method: 'POST', body: input }),
+    ['clients']
   );
 
 export const useUpdateClient = () =>
@@ -210,11 +302,21 @@ export const useUpdateClient = () =>
 export const useDeleteClient = () =>
   useAction((request, id: string) => request<{ ok: true }>(`/api/clients/${id}`, { method: 'DELETE' }));
 
-export type RacketInput = { client_id?: string; brand?: string; model?: string; notes?: string | null };
+export type RacketInput = {
+  // Left out, the racket is a catalog racket: one the stringer keeps in stock.
+  client_id?: string;
+  brand?: string;
+  model?: string;
+  notes?: string | null;
+  track_stock?: boolean;
+  stock?: number;
+};
 
+// A client's racket is in the client's page and in how many rackets the client has.
 export const useCreateRacket = () =>
-  useAction((request, input: RacketInput) =>
-    request<Racket>('/api/rackets', { method: 'POST', body: input })
+  useAction(
+    (request, input: RacketInput) => request<Racket>('/api/rackets', { method: 'POST', body: input }),
+    ['rackets', 'clients', 'client']
   );
 
 export const useUpdateRacket = () =>
@@ -231,11 +333,14 @@ export type StringInput = {
   gauge?: string | null;
   type?: StringType;
   default_price?: number | null;
+  track_stock?: boolean;
+  stock?: number;
 };
 
 export const useCreateString = () =>
-  useAction((request, input: StringInput) =>
-    request<CatalogString>('/api/strings', { method: 'POST', body: input })
+  useAction(
+    (request, input: StringInput) => request<CatalogString>('/api/strings', { method: 'POST', body: input }),
+    ['strings']
   );
 
 export const useUpdateString = () =>
@@ -249,8 +354,9 @@ export const useDeleteString = () =>
 export type ServiceInput = { name?: string; price?: number | null; kind?: 'labor' | 'extra'; active?: boolean };
 
 export const useCreateService = () =>
-  useAction((request, input: ServiceInput) =>
-    request<Service>('/api/services', { method: 'POST', body: input })
+  useAction(
+    (request, input: ServiceInput) => request<Service>('/api/services', { method: 'POST', body: input }),
+    ['services']
   );
 
 export const useUpdateService = () =>

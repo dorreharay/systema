@@ -4,6 +4,7 @@ import {
   date,
   index,
   integer,
+  jsonb,
   numeric,
   pgTable,
   smallint,
@@ -75,17 +76,21 @@ export const clients = pgTable(
   (table) => [index('clients_user_idx').on(table.user_id, table.deleted_at)]
 );
 
+// A racket either belongs to a client (the one they bring to be strung) or, with no `client_id`, is an item of the
+// stringer's catalog: a racket they keep in stock.
 export const rackets = pgTable(
   'rackets',
   {
     id: uuid('id').primaryKey().defaultRandom(),
     user_id: owner(),
-    client_id: uuid('client_id')
-      .notNull()
-      .references(() => clients.id),
+    client_id: uuid('client_id').references(() => clients.id),
     brand: text('brand').notNull(),
     model: text('model').notNull(),
     notes: text('notes'),
+    // Only a catalog racket has a stock. While `track_stock` is off the racket is always available and `stock` means
+    // nothing; with it on, an order takes one out of `stock` and cannot be made once it is 0.
+    track_stock: boolean('track_stock').notNull().default(false),
+    stock: integer('stock').notNull().default(0),
     deleted_at: timestamp('deleted_at', { withTimezone: true }),
     ...timestamps,
   },
@@ -108,6 +113,10 @@ export const catalogStrings = pgTable(
     gauge: text('gauge'), // "1.25 mm", "16L": written the way the string is sold
     type: text('type').notNull().default('other'), // one of STRING_TYPES
     default_price: numeric('default_price', { precision: 10, scale: 2 }),
+    // How many sets are in stock, counted only while `track_stock` is on (see rackets). A hybrid takes half a set of
+    // each of its two strings, so halves are kept.
+    track_stock: boolean('track_stock').notNull().default(false),
+    stock: numeric('stock', { precision: 8, scale: 1 }).notNull().default('0'),
     deleted_at: timestamp('deleted_at', { withTimezone: true }),
     ...timestamps,
   },
@@ -174,6 +183,10 @@ export const orders = pgTable(
     string_price: numeric('string_price', { precision: 10, scale: 2 }),
     // Labor + strings + extra services, worked out on every save. Null while no price is known.
     total: numeric('total', { precision: 10, scale: 2 }),
+
+    // What this order took out of the stock, `[{ kind: 'racket' | 'string', id, qty }]`, so that deleting or changing
+    // the order gives back exactly that. Orders made before the stock was counted took nothing.
+    stock_used: jsonb('stock_used').notNull().default([]),
 
     started_at: timestamp('started_at', { withTimezone: true }),
     ready_at: timestamp('ready_at', { withTimezone: true }),

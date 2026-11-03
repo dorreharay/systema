@@ -14,6 +14,7 @@ const MESSAGES: Record<string, TKey> = {
   unsupported_image: 'error_unsupported_image',
   photo_limit: 'error_photo_limit',
   payload_too_large: 'error_photo_too_large',
+  out_of_stock: 'error_out_of_stock',
 };
 
 /** What to tell the person when a request to the backend fails: never the raw text the server sent. */

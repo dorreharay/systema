@@ -8,17 +8,13 @@ import { ErrorState } from '@/components/ui/states';
 import { useAuth } from '@/lib/auth';
 import { todayIso } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
-import { applySetup, emptyDraft, lastSetupOf, withRacket, type Draft } from '@/lib/order-draft';
+import { applySetup, emptyDraft, lastSetupOf, orderRacketChoice, withRacket, type Draft } from '@/lib/order-draft';
 import { useOrder, useRacket, useRackets } from '@/lib/queries';
-import { useSavedDraft } from '@/lib/saved-draft';
 
 /**
  * A new order. It can start from nothing, from a customer (their only racket is chosen), from a racket
  * (its last setup is copied in: "Repeat Last Setup"), or from an earlier order ("Repeat Order"). The
  * earlier order is only read; the new one is a separate order.
- *
- * An order that is not finished is kept on the device as a draft, and the form starts from it the next time.
- * Each way in has its own draft, so starting an order for one racket does not take over the draft of another.
  */
 export default function NewOrder() {
   const { t } = useI18n();
@@ -27,16 +23,6 @@ export default function NewOrder() {
   const racket = useRacket(params.racketId);
   const source = useOrder(params.from);
   const clientRackets = useRackets({ clientId: params.clientId });
-  const draftKey = [
-    user?.id ?? 'guest',
-    'new',
-    params.from && `from-${params.from}`,
-    params.racketId && `racket-${params.racketId}`,
-    params.clientId && `client-${params.clientId}`,
-  ]
-    .filter(Boolean)
-    .join('-');
-  const saved = useSavedDraft(draftKey);
 
   const needed = [
     params.racketId ? racket : undefined,
@@ -44,7 +30,7 @@ export default function NewOrder() {
     params.clientId ? clientRackets : undefined,
   ].filter((item) => !!item);
   const failed = needed.find((item) => item.isError);
-  const loading = saved.loading || needed.some((item) => item.isPending);
+  const loading = needed.some((item) => item.isPending);
 
   if (failed || loading) {
     return (
@@ -69,14 +55,9 @@ export default function NewOrder() {
     initial = {
       ...applySetup(initial, order),
       client: { id: order.client.id, name: order.client.name },
-      racket: {
-        id: order.racket.id,
-        brand: order.racket.brand,
-        model: order.racket.model,
-        client_id: order.client.id,
-        client_name: order.client.name,
-        last_setup: lastSetupOf(order),
-      },
+      racketSource: order.racket.client_id ? 'client' : 'stock',
+      // How it was strung is only offered again for a client's racket: a catalog racket goes to many.
+      racket: { ...orderRacketChoice(order), last_setup: order.racket.client_id ? lastSetupOf(order) : null },
     };
   } else if (racket.data) {
     initial = withRacket(initial, racket.data);
@@ -85,9 +66,9 @@ export default function NewOrder() {
     if (owned.length === 1) {
       initial = withRacket(initial, owned[0]);
     } else if (owned.length > 1) {
-      initial = { ...initial, client: { id: owned[0].client_id, name: owned[0].client_name } };
+      initial = { ...initial, client: { id: params.clientId, name: owned[0].client_name ?? '' } };
     }
   }
 
-  return <OrderForm initial={initial} draftKey={draftKey} saved={saved.saved} />;
+  return <OrderForm initial={initial} />;
 }

@@ -1,5 +1,5 @@
-import { Mail, MessageSquare, Phone } from 'lucide-react-native';
 
+import { Mail, MessageSquare, Phone } from '@/components/icons';
 import ActionSheet from '@/components/ui/action-sheet';
 import { callPhone, emailTo, textPhone } from '@/lib/contact';
 import { useI18n } from '@/lib/i18n';

@@ -5,7 +5,7 @@ import { config } from '../config.js';
 import { db } from '../db/index.js';
 import { users } from '../db/schema.js';
 import { isValidTimeZone } from '../utils/dates.js';
-import { createDefaultServices } from '../utils/defaults.js';
+import { createDefaultServices, createStarterCatalog } from '../utils/defaults.js';
 import { requireAuth } from '../middleware/auth.js';
 import { authLimiter } from '../middleware/rateLimit.js';
 import { validateBody } from '../middleware/validate.js';
@@ -87,6 +87,7 @@ router.post('/register', authLimiter, validateBody(registerSchema), async (req, 
         .values({ email, full_name: full_name || null, password_hash })
         .returning();
       await createDefaultServices(tx, created.id);
+      await createStarterCatalog(tx, created.id);
       return created;
     });
   } catch (err) {

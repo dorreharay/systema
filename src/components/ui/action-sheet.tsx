@@ -1,13 +1,13 @@
-import type { LucideIcon } from 'lucide-react-native';
 import { Pressable, View } from 'react-native';
 
+import type { IconComponent } from '@/components/icons';
 import { colors } from '@/components/ui/colors';
-import Sheet, { CLOSE_WAIT_MS } from '@/components/ui/sheet';
+import Sheet, { afterSheetsClosed } from '@/components/ui/sheet';
 import { Text } from '@/components/ui/text';
 
 export type Action = {
   label: string;
-  icon?: LucideIcon;
+  icon?: IconComponent;
   onPress: () => void;
   // Deleting: red, and kept apart from the other actions.
   destructive?: boolean;
@@ -36,11 +36,11 @@ export default function ActionSheet({ visible, onClose, title, actions }: Action
           onClose();
           // Whatever it opens (another sheet, a question) must wait for this one to be gone: iOS
           // will not show two modals at once.
-          setTimeout(action.onPress, CLOSE_WAIT_MS);
+          afterSheetsClosed(action.onPress);
         }}
         className="min-h-14 flex-row items-center gap-3 rounded-lg px-2 active:bg-surface">
         {Icon ? <Icon size={22} color={color} /> : null}
-        <Text className={`text-[14px] font-medium ${action.destructive ? 'text-danger' : 'text-ink'}`}>
+        <Text className={`text-[16.8px] font-medium ${action.destructive ? 'text-danger' : 'text-ink'}`}>
           {action.label}
         </Text>
       </Pressable>

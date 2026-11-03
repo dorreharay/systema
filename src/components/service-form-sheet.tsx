@@ -1,7 +1,7 @@
-import { Check } from 'lucide-react-native';
 import { useState } from 'react';
 import { View } from 'react-native';
 
+import { Check } from '@/components/icons';
 import PlusIcon from '@/components/icons/plus-icon';
 import { colors } from '@/components/ui/colors';
 import { FormError, Input, NumberInput } from '@/components/ui/input';
@@ -99,6 +99,7 @@ function ServiceForm({ service, onClose }: Omit<ServiceFormSheetProps, 'visible'
       </View>
       <View className="pt-4">
         <Shortcut
+          compact
           icon={service ? Check : PlusIcon}
           label={service ? t('save') : t('add_service')}
           color={colors.primary} contentColor={colors.white}

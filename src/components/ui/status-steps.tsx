@@ -1,6 +1,6 @@
-import { Check } from 'lucide-react-native';
 import { View } from 'react-native';
 
+import { Check } from '@/components/icons';
 import { colors } from '@/components/ui/colors';
 import { Text } from '@/components/ui/text';
 import { useI18n } from '@/lib/i18n';
@@ -57,7 +57,7 @@ export default function StatusSteps({ status }: { status: OrderStatus }) {
                 key={step}
                 className="items-center justify-center rounded-full"
                 style={{ width: DOT, height: DOT, backgroundColor: colors.primary }}>
-                <Check size={16} color={colors.white} strokeWidth={3} />
+                <Check size={16} color={colors.white} />
               </View>
             ) : here ? (
               <View

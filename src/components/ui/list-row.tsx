@@ -1,13 +1,13 @@
-import { ChevronRight, type LucideIcon } from 'lucide-react-native';
 import type { ReactNode } from 'react';
 import { Pressable, View } from 'react-native';
 
+import { ChevronRight, type IconComponent } from '@/components/icons';
 import { BLOCK, BLOCK_ROOM_X } from '@/components/ui/card';
 import { colors } from '@/components/ui/colors';
 import { Text } from '@/components/ui/text';
 
 type ListRowProps = {
-  icon?: LucideIcon;
+  icon?: IconComponent;
   label: string;
   value?: string;
   onPress?: () => void;

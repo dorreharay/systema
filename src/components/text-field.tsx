@@ -1,10 +1,10 @@
 import { BlurView } from 'expo-blur';
 import type { ComponentProps, ComponentRef, Ref } from 'react';
-import { Eye, EyeOff } from 'lucide-react-native';
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { styled } from 'react-native-css';
 
+import { Eye, EyeOff } from '@/components/icons';
 import { useI18n } from '@/lib/i18n';
 
 const FieldBlur = styled(BlurView);
@@ -85,7 +85,8 @@ export default function TextField({
           textAlignVertical="center"
           autoCorrect={false}
           spellCheck={false}
-          className={`absolute inset-0 pl-4 ios:pb-1 text-[1.2375rem] font-normal text-white outline-none ${
+          // Lifted by 1.1 pt, as much as the fields of the app are for the size of its text (see field-text).
+          className={`absolute inset-0 pl-4 ios:pb-[2.25px] text-[1.2375rem] font-normal text-white outline-none ${
             isPassword ? 'pr-12' : 'pr-4'
           }`}
           secureTextEntry={isPassword && !revealed}

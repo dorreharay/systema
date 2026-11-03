@@ -1,6 +1,6 @@
 /**
- * The order form's state, and the rules around it: what a draft starts as, how a previous setup is
- * copied into it, what is required, what it costs, and what is sent to the server.
+ * The order form's state (the "draft" of the order being made), and the rules around it: what it starts as, how a
+ * previous setup is copied into it, what is required, what it costs, and what is sent to the server.
  *
  * Tension is typed in the unit shown on the form (`unit`); the server only ever gets kilograms.
  * A price that was not typed is `null`, which means "whatever the catalog says": it follows the
@@ -20,6 +20,7 @@ import type {
   OrderDetail,
   OrderInput,
   Racket,
+  ReferenceRacket,
   Service,
   Setup,
   TensionUnit,
@@ -30,9 +31,17 @@ export type ClientChoice = { id: string; name: string };
 export type RacketChoice = Pick<Racket, 'id' | 'brand' | 'model' | 'client_id' | 'client_name' | 'last_setup'>;
 export type DraftService = { key: string; serviceId: string | null; name: string; price: string };
 
+/** Where the racket comes from: one the client brings, or one of the catalog's, kept in stock. */
+export type RacketSource = 'client' | 'stock';
+
 export type Draft = {
   client: ClientChoice | null;
+  racketSource: RacketSource;
   racket: RacketChoice | null;
+  // A racket picked by name from the reference list, in place of `racket`: it is not the client's racket until the order
+  // is made, and then the server makes it with the order. Until then it exists only here, so an order that is never made
+  // leaves nothing in the client's rackets.
+  referenceRacket: ReferenceRacket | null;
   customerStrings: boolean;
   customerStringName: string;
   mainString: StringChoice | null;
@@ -67,7 +76,9 @@ export const toStringChoice = (string: CatalogString): StringChoice => ({
 export function emptyDraft(today: string, unit: TensionUnit): Draft {
   return {
     client: null,
+    racketSource: 'client',
     racket: null,
+    referenceRacket: null,
     customerStrings: false,
     customerStringName: '',
     mainString: null,
@@ -127,14 +138,31 @@ export const usesAdvanced = (draft: Draft) =>
   draft.hybrid || draft.differentCross || draft.knots !== 2 || draft.stringingNotes.trim() !== '';
 
 /**
- * The draft with this racket (and so its owner) chosen. When nothing about the strings has been
- * entered yet, the setup the racket was last strung with is copied in.
+ * The draft with this racket chosen. A client's racket brings its owner with it; a catalog racket goes with whoever
+ * the order is for. When nothing about the strings has been entered yet, the setup a client's racket was last strung
+ * with is copied in. A racket that was only picked from the reference list is let go: this one is the racket now.
  */
 export function withRacket(draft: Draft, racket: RacketChoice): Draft {
-  const next: Draft = { ...draft, racket, client: { id: racket.client_id, name: racket.client_name } };
+  const next: Draft = {
+    ...draft,
+    racket,
+    referenceRacket: null,
+    racketSource: racket.client_id ? 'client' : 'stock',
+    client: racket.client_id ? { id: racket.client_id, name: racket.client_name ?? '' } : draft.client,
+  };
   const untouched = !draft.mainString && !draft.customerStrings && draft.mainTension.trim() === '';
   return racket.last_setup && untouched ? applySetup(next, racket.last_setup) : next;
 }
+
+/** The racket of an order as a choice in the form; what the racket was last strung with is not part of it. */
+export const orderRacketChoice = (order: Pick<OrderDetail, 'racket' | 'client'>): RacketChoice => ({
+  id: order.racket.id,
+  brand: order.racket.brand,
+  model: order.racket.model,
+  client_id: order.racket.client_id,
+  client_name: order.racket.client_id ? order.client.name : null,
+  last_setup: null,
+});
 
 /** An order that exists, as a draft to edit. */
 export function draftFromOrder(order: OrderDetail, unit: TensionUnit): Draft {
@@ -142,14 +170,8 @@ export function draftFromOrder(order: OrderDetail, unit: TensionUnit): Draft {
   return {
     ...base,
     client: { id: order.client.id, name: order.client.name },
-    racket: {
-      id: order.racket.id,
-      brand: order.racket.brand,
-      model: order.racket.model,
-      client_id: order.client.id,
-      client_name: order.client.name,
-      last_setup: null,
-    },
+    racketSource: order.racket.client_id ? 'client' : 'stock',
+    racket: orderRacketChoice(order),
     // These are the order's own prices, so they stop following the catalog.
     laborPrice: order.labor_price === null ? '' : formatNumber(order.labor_price, 2),
     stringPrice: order.string_price === null ? '' : formatNumber(order.string_price, 2),
@@ -288,7 +310,7 @@ function checkTension(text: string, unit: TensionUnit) {
 export function validateDraft(draft: Draft, prices: Pricing): DraftErrors {
   const errors: DraftErrors = {};
   if (!draft.client) errors.client = { key: 'order_error_client' };
-  if (!draft.racket) errors.racket = { key: 'order_error_racket' };
+  if (!draft.racket && !draft.referenceRacket) errors.racket = { key: 'order_error_racket' };
   if (!draft.customerStrings && !draft.mainString) errors.mainString = { key: 'order_error_string' };
   if (!draft.customerStrings && draft.hybrid && !draft.crossString) {
     errors.crossString = { key: 'order_error_cross_string' };
@@ -313,6 +335,11 @@ export function buildInput(draft: Draft, prices: Pricing): OrderInput {
   return {
     client_id: draft.client?.id,
     racket_id: draft.racket?.id,
+    // A racket from the reference list is sent by name: the server makes it with the order, or not at all.
+    new_racket:
+      !draft.racket && draft.referenceRacket
+        ? { brand: draft.referenceRacket.brand, model: draft.referenceRacket.model }
+        : undefined,
     customer_strings: draft.customerStrings,
     hybrid: draft.hybrid,
     main_string_id: draft.customerStrings ? null : (draft.mainString?.id ?? null),
@@ -336,6 +363,3 @@ export function buildInput(draft: Draft, prices: Pricing): OrderInput {
     notes: draft.notes.trim() || null,
   };
 }
-
-/** A draft that can be compared with the one it started as, to know whether anything was changed. */
-export const draftSnapshot = (draft: Draft) => JSON.stringify(draft);
