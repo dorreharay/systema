@@ -11,13 +11,15 @@ type IconButtonProps = {
   filled?: boolean;
   // The icon on a round, light grey ground: the close button of a sheet, the call button of an order.
   round?: boolean;
-  // A button that has to be easy to hit: a touch target twice as big, and an icon 1.6 times as big.
+  // A button that has to be easy to hit: a touch target twice as big, and an icon 1.6 times as big. A round one is not twice
+  // as big: its ground is a third bigger.
   large?: boolean;
   disabled?: boolean;
 };
 
 // A 48 x 48 touch target around a 22 pt icon, and 8 pt more on every side that also takes the touch. Large, it is 96 x 96
-// around a 35.2 pt icon (a fifth less than twice as big), and 16 pt more on every side.
+// around a 35.2 pt icon (a fifth less than twice as big), and 16 pt more on every side. Round, the 18 pt icon is on a
+// ground of 36 pt; large, a 24 pt icon is on a ground of 48 pt, which is the whole of the touch target.
 export default function IconButton({
   icon: Icon,
   label,
@@ -34,13 +36,13 @@ export default function IconButton({
       accessibilityLabel={label}
       disabled={disabled}
       onPress={onPress}
-      hitSlop={large ? 16 : 8}
-      className={`${large ? 'size-24' : 'size-12'} items-center justify-center active:opacity-60 ${
+      hitSlop={large && !round ? 16 : 8}
+      className={`${large && !round ? 'size-24' : 'size-12'} items-center justify-center active:opacity-60 ${
         round ? '' : 'rounded-lg'
       } ${filled && !round ? 'bg-primary' : ''} ${disabled ? 'opacity-40' : ''}`}>
       {round ? (
-        <View className="size-9 items-center justify-center rounded-full bg-[#ECEEF1]">
-          <Icon size={18} color={color} />
+        <View className={`${large ? 'size-12' : 'size-9'} items-center justify-center rounded-full bg-[#ECEEF1]`}>
+          <Icon size={large ? 24 : 18} color={color} />
         </View>
       ) : (
         <Icon size={large ? 35.2 : 22} color={filled ? colors.white : color} />

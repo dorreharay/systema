@@ -8,8 +8,9 @@ import { FormError, Input, type InputRef } from '@/components/ui/input';
 import Sheet from '@/components/ui/sheet';
 import Shortcut from '@/components/ui/shortcut';
 import { useToast } from '@/components/ui/toast';
-import { describeError, fieldError } from '@/lib/errors';
-import { useI18n } from '@/lib/i18n';
+import { describeError, fieldError, isApiError } from '@/lib/errors';
+import { clientFromSearch } from '@/lib/format';
+import { useI18n, type Translate } from '@/lib/i18n';
 import { useCreateClient, useUpdateClient } from '@/lib/queries';
 import type { Client } from '@/lib/types';
 
@@ -18,18 +19,25 @@ type ClientFormSheetProps = {
   onClose: () => void;
   // Editing this client; without it a new one is made.
   client?: Pick<Client, 'id' | 'name' | 'phone' | 'email' | 'notes'>;
-  // What was typed into a search before choosing "new client".
-  initialName?: string;
+  // What was typed into a search before choosing "new client": a phone number goes into the phone, anything else into the name.
+  search?: string;
   onSaved?: (client: Client) => void;
 };
 
-function ClientForm({ client, initialName, onClose, onSaved }: Omit<ClientFormSheetProps, 'visible'>) {
+// What to say about a phone number the server refused: whose it is, when another client has it; otherwise that it is not one.
+const phoneMessage = (error: unknown, t: Translate) =>
+  isApiError(error, 'phone_taken') && error.data?.client
+    ? t('error_phone_taken', { name: error.data.client.name })
+    : t('error_phone_required');
+
+function ClientForm({ client, search, onClose, onSaved }: Omit<ClientFormSheetProps, 'visible'>) {
   const { t } = useI18n();
   const toast = useToast();
   const create = useCreateClient();
   const update = useUpdateClient();
-  const [name, setName] = useState(client?.name ?? initialName ?? '');
-  const [phone, setPhone] = useState(client?.phone ?? '');
+  const typed = clientFromSearch(search);
+  const [name, setName] = useState(client?.name ?? typed.name ?? '');
+  const [phone, setPhone] = useState(client?.phone ?? typed.phone ?? '');
   const [email, setEmail] = useState(client?.email ?? '');
   const [notes, setNotes] = useState(client?.notes ?? '');
   const [errors, setErrors] = useState<{ name?: string; phone?: string; email?: string }>({});
@@ -64,7 +72,7 @@ function ClientForm({ client, initialName, onClose, onSaved }: Omit<ClientFormSh
       if (emailProblem || phoneProblem) {
         setErrors({
           email: emailProblem ? t('error_email_invalid') : undefined,
-          phone: phoneProblem ? t('error_phone_required') : undefined,
+          phone: phoneProblem ? phoneMessage(error, t) : undefined,
         });
       } else setFormError(describeError(error, t));
       setSaving(false);

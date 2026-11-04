@@ -2,7 +2,7 @@ import { Text as NativeText, type TextProps } from 'react-native';
 
 // A class that sets the color. When there is none, text is dark.
 const HAS_COLOR =
-  /(^|\s)text-(ink|muted|white|primary|danger|secondary|black|transparent|(red|green|blue|amber|emerald|neutral|gray|slate|orange|yellow|sky)-\d+)/;
+  /(^|\s)text-(ink|muted|white|primary|danger|secondary|black|transparent|(red|green|blue|amber|emerald|neutral|gray|slate|orange|yellow|sky|teal)-\d+)/;
 
 /**
  * The app's text: Euclid regular and dark by default. A heavier `font-*` class in `className` wins (the

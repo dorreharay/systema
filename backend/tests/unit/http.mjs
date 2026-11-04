@@ -15,6 +15,8 @@ assert.deepEqual(error.fields, { email: 'Taken' });
 assert.ok(error instanceof Error);
 
 assert.equal(new HttpError(400, 'x').code, undefined, 'no code unless given');
+assert.equal(new HttpError(400, 'x').data, undefined, 'no data unless given');
+assert.deepEqual(new HttpError(409, 'x', { data: { client: { id: '1', name: 'Ann' } } }).data, { client: { id: '1', name: 'Ann' } });
 assert.equal(notFound().status, 404);
 assert.equal(forbidden().status, 403);
 

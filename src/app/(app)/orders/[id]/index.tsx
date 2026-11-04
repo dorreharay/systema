@@ -5,7 +5,18 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import CallButton from '@/components/call-button';
 import ContactSheet from '@/components/contact-sheet';
-import { Check, Copy, Mail, MoreHorizontal, Pencil, Phone, Repeat, Trash2, Undo2 } from '@/components/icons';
+import {
+  Check,
+  ChevronsRight,
+  Copy,
+  Mail,
+  MoreHorizontal,
+  Pencil,
+  Phone,
+  Repeat,
+  Trash2,
+  Undo2,
+} from '@/components/icons';
 import UserIcon from '@/components/icons/user-icon';
 import { useDueText } from '@/components/order-card';
 import ReadyMessageSheet from '@/components/ready-message-sheet';
@@ -166,7 +177,9 @@ export default function OrderDetails() {
       flush
       dock={
         next ? (
+          // Two arrows to the right: the order moves on to the next status.
           <Shortcut
+            icon={ChevronsRight}
             label={t(next.label)}
             color={statusColors[next.status].fill}
             contentColor="#000000"
@@ -197,7 +210,7 @@ export default function OrderDetails() {
             <StatusBadge status={order.status} />
             <Badge
               label={order.is_paid ? t('payment_paid') : t('payment_unpaid')}
-              tone={order.is_paid ? 'success' : 'warning'}
+              tone={order.is_paid ? 'info' : 'warning'}
             />
             {overdue ? <Badge label={t('order_overdue')} tone="danger" /> : null}
           </View>
@@ -224,12 +237,8 @@ export default function OrderDetails() {
                   </Text>
                 </View>
               </Pressable>
-              {/* The round ground is 6 pt in from the edge of its touch target: pulled out, it stands at the edge of the card's content. */}
-              {order.client.phone ? (
-                <View className="-mr-1.5">
-                  <CallButton phone={order.client.phone} round />
-                </View>
-              ) : null}
+              {/* The ground of a large round button is the whole of its touch target: it stands at the edge of the card's content. */}
+              {order.client.phone ? <CallButton phone={order.client.phone} round large /> : null}
             </View>
             {!order.client.phone && order.client.email ? (
               <Shortcut
@@ -330,7 +339,7 @@ export default function OrderDetails() {
               <Text className="text-[16.5px] text-muted">{t('payment_status')}</Text>
               <Badge
                 label={order.is_paid ? t('payment_paid') : t('payment_unpaid')}
-                tone={order.is_paid ? 'success' : 'warning'}
+                tone={order.is_paid ? 'info' : 'warning'}
               />
             </View>
             {order.is_paid ? (

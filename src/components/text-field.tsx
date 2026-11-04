@@ -1,6 +1,7 @@
 import { BlurView } from 'expo-blur';
 import type { ComponentProps, ComponentRef, Ref } from 'react';
 import { useEffect, useRef, useState } from 'react';
+import type { TextInputKeyPressEvent } from 'react-native';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { styled } from 'react-native-css';
 
@@ -26,6 +27,9 @@ export default function TextField({
   error,
   onFocus,
   onBlur,
+  onChangeText,
+  onKeyPress,
+  value,
   secureTextEntry,
   ...props
 }: TextFieldProps) {
@@ -35,6 +39,9 @@ export default function TextField({
   const isPassword = !!secureTextEntry;
   const inputRef = useRef<TextFieldRef | null>(null);
   const refocus = useRef(false);
+  // What the field held when it was hidden again, and the last key pressed (see handleChangeText).
+  const securedWith = useRef<string | null>(null);
+  const lastKey = useRef('');
 
   // The parent's ref (to move to the next field) and this component's own.
   const setRefs = (node: TextFieldRef | null) => {
@@ -49,11 +56,40 @@ export default function TextField({
   // iOS clears what was typed when a field becomes secure while it is being edited, on the next
   // key. So a field that has the keyboard leaves it, changes, and takes it back.
   const toggleRevealed = () => {
+    securedWith.current = revealed && typeof value === 'string' ? value : null;
+    lastKey.current = '';
     if (inputRef.current?.isFocused()) {
       refocus.current = true;
       inputRef.current.blur();
     }
-    setRevealed((value) => !value);
+    setRevealed((current) => !current);
+  };
+
+  const handleKeyPress = (event: TextInputKeyPressEvent) => {
+    lastKey.current = event.nativeEvent.key;
+    onKeyPress?.(event);
+  };
+
+  // That is not enough: the first key typed into the field that was hidden again still wipes the old text. iOS reports a
+  // typed key as an empty text and then the key alone, a delete as an empty text only. What the field held when it was hidden
+  // is kept, and put back in front of the key (or, for a delete, taken one character short). Longer text is a paste or an
+  // autofill, and replaces the old as it should.
+  const handleChangeText = (text: string) => {
+    const before = securedWith.current;
+    if (before === null) {
+      onChangeText?.(text);
+      return;
+    }
+    if (lastKey.current === 'Backspace') {
+      securedWith.current = null;
+      onChangeText?.(text === '' ? before.slice(0, -1) : text);
+      return;
+    }
+    if (text === '') {
+      return;
+    }
+    securedWith.current = null;
+    onChangeText?.(text.length === 1 ? before + text : text);
   };
 
   useEffect(() => {
@@ -90,6 +126,9 @@ export default function TextField({
             isPassword ? 'pr-12' : 'pr-4'
           }`}
           secureTextEntry={isPassword && !revealed}
+          value={value}
+          onChangeText={handleChangeText}
+          onKeyPress={handleKeyPress}
           onFocus={(event) => {
             setFocused(true);
             onFocus?.(event);

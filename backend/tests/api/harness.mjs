@@ -8,10 +8,12 @@
  * Run the tests with:  npm run test:api
  */
 import { spawn, spawnSync } from 'node:child_process';
+import { createServer } from 'node:http';
 import os from 'node:os';
 import { dirname, join } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
+import { SignJWT, exportJWK, generateKeyPair } from 'jose';
 
 const BACKEND = join(dirname(fileURLToPath(import.meta.url)), '../..');
 
@@ -169,6 +171,39 @@ export async function startServer({ port = CONFIG.port, env = {} } = {}) {
       child.kill('SIGTERM');
       await new Promise((resolve) => child.once('exit', resolve));
     },
+  };
+}
+
+/**
+ * Stands in for Google. It serves the public key its ID tokens are checked with and signs tokens the way Google does, so
+ * the server's real check runs without the network: start the server with GOOGLE_CLIENT_IDS=`clientId` and
+ * GOOGLE_CERTS_URL=`certsUrl`.
+ */
+export async function startFakeGoogle({ clientId = 'test-web-client.apps.googleusercontent.com' } = {}) {
+  const { publicKey, privateKey } = await generateKeyPair('RS256');
+  const jwk = { ...(await exportJWK(publicKey)), kid: 'test-key', alg: 'RS256', use: 'sig' };
+  const server = createServer((req, res) => {
+    res.setHeader('content-type', 'application/json');
+    res.end(JSON.stringify({ keys: [jwk] }));
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+
+  return {
+    clientId,
+    certsUrl: `http://127.0.0.1:${server.address().port}/certs`,
+    /**
+     * An ID token as Google would issue it to this app. `claims` add to or replace its claims; `key` signs it with another
+     * key than the one served, and `expires` is when it stops being valid (seconds since 1970, or a duration such as '1h').
+     */
+    idToken: ({ key = privateKey, expires = '1h', ...claims } = {}) =>
+      new SignJWT({ iss: 'https://accounts.google.com', aud: clientId, email_verified: true, ...claims })
+        .setProtectedHeader({ alg: 'RS256', kid: 'test-key' })
+        .setIssuedAt()
+        .setExpirationTime(expires)
+        .sign(key),
+    /** A key Google never published, for a token that is forged. */
+    otherKey: async () => (await generateKeyPair('RS256')).privateKey,
+    stop: () => new Promise((resolve) => server.close(resolve)),
   };
 }
 

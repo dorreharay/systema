@@ -3,8 +3,10 @@ import { createContext, use, useEffect, useState, type ReactNode } from 'react';
 
 import { ApiError } from '@/lib/api';
 import {
+  deleteAccountRequest,
   fetchMe,
   forgotPasswordRequest,
+  googleLoginRequest,
   loginRequest,
   logoutRequest,
   registerRequest,
@@ -14,7 +16,9 @@ import {
   type ProfilePatch,
   type User,
 } from '@/lib/auth-api';
+import { forgetGoogleAccount, requestGoogleIdToken } from '@/lib/google-sign-in';
 import { getItem, removeItem, setItem } from '@/lib/local-storage';
+import { clearReminders } from '@/lib/reminders';
 import { clearToken, getToken, saveToken } from '@/lib/token-storage';
 
 type AuthState =
@@ -45,7 +49,14 @@ type AuthContextValue = {
   token: string | null;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string) => Promise<void>;
+  /** Opens Google's sign-in and, once the person has chosen an account, signs in with it. Closing the sheet is not an error. */
+  signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
+  /**
+   * Deletes the account and everything in it for good, then signs out. The password is what the server asks for when the
+   * account has one (`invalid_password` otherwise); the session stays when it is refused.
+   */
+  deleteAccount: (password?: string) => Promise<void>;
   /** Saves preferences to the account and returns the user as the server now has them. */
   updateProfile: (patch: ProfilePatch) => Promise<User>;
   requestPasswordReset: (email: string) => Promise<void>;
@@ -160,22 +171,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setState({ status: 'signedIn', user, token });
   }
 
+  /** Forgets the session on this device: the token, the saved profile, the Google account, the reminders and what was cached. */
+  async function forgetSession() {
+    await clearToken();
+    await removeItem(USER_KEY);
+    // The next sign-in with Google must ask which account, not hand over this one.
+    await forgetGoogleAccount();
+    // The reminders are about this stringer's orders: they must not go on showing up on a phone nobody is signed in on.
+    await clearReminders();
+    // The next person to sign in on this device must not see this stringer's orders, even for a moment.
+    queryClient.clear();
+    setState({ status: 'signedOut' });
+  }
+
   const value: AuthContextValue = {
     status: state.status,
     user: state.status === 'signedIn' ? state.user : null,
     token: state.status === 'signedIn' ? state.token : null,
     signIn: async (email, password) => startSession(await loginRequest(email, password)),
     signUp: async (email, password) => startSession(await registerRequest(email, password)),
+    signInWithGoogle: async () => {
+      const idToken = await requestGoogleIdToken();
+      // The person closed Google's sheet without choosing an account.
+      if (idToken) {
+        await startSession(await googleLoginRequest(idToken));
+      }
+    },
     signOut: async () => {
       if (state.status === 'signedIn') {
         // Ending the session on the server is best effort: the device forgets it either way.
         await logoutRequest(state.token).catch(() => undefined);
       }
-      await clearToken();
-      await removeItem(USER_KEY);
-      // The next person to sign in on this device must not see this stringer's orders, even for a moment.
-      queryClient.clear();
-      setState({ status: 'signedOut' });
+      await forgetSession();
+    },
+    deleteAccount: async (password) => {
+      if (state.status !== 'signedIn') {
+        throw new Error('Not signed in');
+      }
+      await deleteAccountRequest(state.token, password);
+      await forgetSession();
     },
     updateProfile: async (patch) => {
       if (state.status !== 'signedIn') {

@@ -1,12 +1,13 @@
-import { and, desc, eq, isNull, sql } from 'drizzle-orm';
+import { and, desc, eq, isNotNull, isNull, ne, sql } from 'drizzle-orm';
 import express from 'express';
 import { z } from 'zod';
 import { db } from '../db/index.js';
 import { clients, orders, rackets } from '../db/schema.js';
 import { requireAuth } from '../middleware/auth.js';
 import { parseQuery, validateBody } from '../middleware/validate.js';
-import { notFound, rejectMalformedIds } from '../utils/http.js';
+import { HttpError, notFound, rejectMalformedIds } from '../utils/http.js';
 import { orderColumns, serializeOrder, withOrderJoins } from '../utils/orders.js';
+import { phoneKey } from '../utils/phone.js';
 import {
   matchesWords, optionalEmail, optionalText, requiredText, searchQuery,
 } from '../utils/validators.js';
@@ -43,6 +44,48 @@ async function findClient(id, userId) {
   return client;
 }
 
+/**
+ * Makes the stringer's other requests that make or change a client wait, so that two of them at the same moment cannot
+ * both find a phone number free. (A unique index would say the same without the wait, but clients made before this check
+ * may already share a number, and an index could not be built over them.)
+ */
+const lockClients = (tx, userId) =>
+  tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`clients:${userId}`}))`);
+
+/** A client of this stringer, other than `exceptId`, whose phone is the same number as this one. */
+async function findByPhone(tx, userId, phone, exceptId) {
+  const key = phoneKey(phone);
+  if (!key) return undefined;
+  // The numbers that end in the same digits, so that few rows are read; the same number is then told from them by its key.
+  const digits = sql`regexp_replace(${clients.phone}, '[^0-9]', '', 'g')`;
+  const candidates = await tx
+    .select({ id: clients.id, name: clients.name, phone: clients.phone })
+    .from(clients)
+    .where(
+      and(
+        eq(clients.user_id, userId),
+        isNull(clients.deleted_at),
+        isNotNull(clients.phone),
+        sql`${digits} like ${`%${key.slice(-9)}`}`,
+        exceptId && ne(clients.id, exceptId)
+      )
+    );
+  return candidates.find((candidate) => phoneKey(candidate.phone) === key);
+}
+
+const PHONE_TAKEN = 'A client with this phone number already exists';
+
+/** Throws the 409 that names the client who already has the number. */
+async function rejectTakenPhone(tx, userId, phone, exceptId) {
+  const taken = await findByPhone(tx, userId, phone, exceptId);
+  if (!taken) return;
+  throw new HttpError(409, PHONE_TAKEN, {
+    code: 'phone_taken',
+    fields: { phone: PHONE_TAKEN },
+    data: { client: { id: taken.id, name: taken.name } },
+  });
+}
+
 const serialize = ({ client, rackets_count, orders_count, last_order_date }) => ({
   id: client.id,
   name: client.name,
@@ -75,12 +118,17 @@ router.get('/', async (req, res) => {
   res.json({ items: rows.map(serialize) });
 });
 
-// POST /api/clients
+// POST /api/clients: a phone number that another client of the stringer has is a 409 (`phone_taken`)
 router.post('/', validateBody(clientSchema), async (req, res) => {
-  const [client] = await db
-    .insert(clients)
-    .values({ ...req.body, user_id: req.user.id })
-    .returning();
+  const client = await db.transaction(async (tx) => {
+    await lockClients(tx, req.user.id);
+    await rejectTakenPhone(tx, req.user.id, req.body.phone);
+    const [created] = await tx
+      .insert(clients)
+      .values({ ...req.body, user_id: req.user.id })
+      .returning();
+    return created;
+  });
   res.status(201).json(serialize({ client, rackets_count: 0, orders_count: 0, last_order_date: null }));
 });
 
@@ -108,10 +156,18 @@ router.get('/:id', async (req, res) => {
   res.json({ ...serialize(found), rackets: clientRackets, orders: history.map(serializeOrder) });
 });
 
-// PATCH /api/clients/:id
+// PATCH /api/clients/:id: a new phone number that another client has is a 409 too
 router.patch('/:id', validateBody(clientSchema.partial()), async (req, res) => {
-  await findClient(req.params.id, req.user.id);
-  await db.update(clients).set(req.body).where(owned(req.params.id, req.user.id));
+  const { client } = await findClient(req.params.id, req.user.id);
+  // Only a number that changes is looked up: a client who shares theirs with another (made before this check) can still be edited.
+  const newNumber = req.body.phone !== undefined && phoneKey(req.body.phone) !== phoneKey(client.phone);
+  await db.transaction(async (tx) => {
+    if (newNumber) {
+      await lockClients(tx, req.user.id);
+      await rejectTakenPhone(tx, req.user.id, req.body.phone, client.id);
+    }
+    await tx.update(clients).set(req.body).where(owned(req.params.id, req.user.id));
+  });
   res.json(serialize(await findClient(req.params.id, req.user.id)));
 });
 

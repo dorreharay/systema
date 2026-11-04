@@ -43,6 +43,17 @@ export async function requestReminderPermission() {
   }
 }
 
+/** Takes back every scheduled reminder: once the person is signed out, nothing about their orders may show up on the phone. */
+export async function clearReminders() {
+  const Notifications = await load();
+  if (!Notifications) return;
+  try {
+    await Notifications.cancelAllScheduledNotificationsAsync();
+  } catch {
+    // none to take back
+  }
+}
+
 type Texts = { title: (order: Order) => string; body: (order: Order) => string };
 
 /**

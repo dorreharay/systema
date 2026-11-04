@@ -6,6 +6,7 @@ import type { TKey, Translate } from '@/lib/i18n';
 const MESSAGES: Record<string, TKey> = {
   network: 'error_network',
   invalid_credentials: 'error_invalid_credentials',
+  invalid_password: 'error_invalid_password',
   account_inactive: 'error_account_inactive',
   email_taken: 'error_email_taken',
   rate_limited: 'error_rate_limited',
@@ -15,10 +16,36 @@ const MESSAGES: Record<string, TKey> = {
   photo_limit: 'error_photo_limit',
   payload_too_large: 'error_photo_too_large',
   out_of_stock: 'error_out_of_stock',
+  google_token_invalid: 'error_google_token',
+  google_email_unverified: 'error_google_email_unverified',
+  google_account_mismatch: 'error_google_mismatch',
+  google_not_configured: 'error_google_unavailable',
+};
+
+/** Why signing in with Google could not be done on this device. The server turning a token down is an `ApiError`. */
+export class GoogleSignInError extends Error {
+  reason: 'not_configured' | 'unavailable' | 'play_services' | 'failed';
+
+  constructor(reason: GoogleSignInError['reason']) {
+    super(`Google sign-in: ${reason}`);
+    this.name = 'GoogleSignInError';
+    this.reason = reason;
+  }
+}
+
+const GOOGLE_MESSAGES: Record<GoogleSignInError['reason'], TKey> = {
+  // The build has no client IDs, or was made before the sign-in was added: nothing the person can do about either.
+  not_configured: 'error_google_unavailable',
+  unavailable: 'error_google_unavailable',
+  play_services: 'error_google_play_services',
+  failed: 'error_google_failed',
 };
 
 /** What to tell the person when a request to the backend fails: never the raw text the server sent. */
 export function describeError(error: unknown, t: Translate) {
+  if (error instanceof GoogleSignInError) {
+    return t(GOOGLE_MESSAGES[error.reason]);
+  }
   if (error instanceof ApiError) {
     if (error.code && MESSAGES[error.code]) {
       return t(MESSAGES[error.code]);
@@ -33,7 +60,7 @@ export function describeError(error: unknown, t: Translate) {
   return t('error_generic');
 }
 
-export const isApiError = (error: unknown, code: string) =>
+export const isApiError = (error: unknown, code: string): error is ApiError =>
   error instanceof ApiError && error.code === code;
 
 /** The server's message for one field of a form, when it named one. */

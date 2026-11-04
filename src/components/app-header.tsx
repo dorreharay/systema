@@ -25,6 +25,10 @@ const HEADER_FONT_SIZE = 24;
 // screens, and higher on the home page of someone who is signed in, where the page starts right under it.
 const LOGO_RAISE = 14;
 const LOGO_RAISE_HOME = 30;
+// The letters of the title sit a little below the middle of the line the text is set in.
+const LETTERS_DROP = 2;
+/** Where the middle of the letters is once the logo has docked on the sign-in screens, from the top of the header: what the back button is centred on. */
+export const LOGO_MIDDLE = HEADER_HEIGHT / 2 - LOGO_RAISE + LETTERS_DROP;
 /** Where the logo of the home page ends, from the top of the header: its middle, and half the height of its letters. */
 export const LOGO_FOOT = HEADER_HEIGHT / 2 - LOGO_RAISE_HOME + HEADER_FONT_SIZE * 0.6;
 const INTRO_TEXT_COLOR = '#ffffff';

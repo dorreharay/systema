@@ -12,6 +12,8 @@ export function toPublicUser(user) {
     timezone: user.timezone,
     language: user.language,
     notifications_enabled: user.notifications_enabled,
+    // An account made with Google has none: the app does not ask such a person for a password to confirm deleting it.
+    has_password: Boolean(user.password_hash),
     // False until the first-run setup is done; the app shows the setup screen while it is.
     setup_completed: user.setup_completed_at !== null,
     created_at: user.created_at,

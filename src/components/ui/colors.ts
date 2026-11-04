@@ -27,12 +27,12 @@ export const colors = {
   dangerInk: '#B42318',
 } as const;
 
-// The colour of the button that moves an order to a status (the text on it is black). It follows the badge of that
-// status in badge.tsx, except for "completed": its badge is grey, which on a button reads as disabled, so the
-// hand-over is violet. (The steps of the status scale are in the brand colour, not in these.)
+// The colour of the button that moves an order to a status: the three colours of the buttons of the home screen, so that
+// the order page looks like it (the text and the icon on them are black). They are not the colours of the badges in
+// badge.tsx. (The steps of the status scale are in the brand colour, not in these.)
 export const statusColors = {
-  received: { fill: '#DBEAFE' },
-  in_progress: { fill: '#FDE68A' },
-  ready: { fill: '#A7F3D0' },
-  completed: { fill: '#DDD6FE' },
+  received: { fill: colors.newOrder },
+  in_progress: { fill: colors.clients },
+  ready: { fill: colors.catalog },
+  completed: { fill: colors.newOrder },
 } as const;

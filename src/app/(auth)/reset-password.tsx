@@ -84,6 +84,8 @@ function ResetPasswordForm() {
         submitBehavior="submit"
         onSubmitEditing={() => confirmationRef.current?.focus()}
       />
+      {/* No new-password hint on this one: with it, iOS goes on showing what was typed after the eye hides it again.
+          It fills this field with the strong password it suggests for the one above all the same. */}
       <TextField
         ref={confirmationRef}
         label={t('field_confirm_password')}
@@ -93,8 +95,6 @@ function ResetPasswordForm() {
         placeholder={t('confirm_password_placeholder')}
         secureTextEntry
         autoCapitalize="none"
-        autoComplete="new-password"
-        textContentType="newPassword"
         returnKeyType="done"
         onSubmitEditing={submit}
       />

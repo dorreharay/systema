@@ -7,7 +7,7 @@ export const notFoundHandler = (req, res) => {
 
 /**
  * Turns whatever a route threw into the one error shape the API has:
- * `{ error, code?, fields? }`. Anything unexpected is a 500 whose text is not sent to the client,
+ * `{ error, code?, fields?, data? }`. Anything unexpected is a 500 whose text is not sent to the client,
  * because it could name a table, a query or a path.
  */
 // Express recognises an error handler by its four parameters.
@@ -19,6 +19,7 @@ export function errorHandler(err, req, res, next) {
       error: err.message,
       ...(err.code && { code: err.code }),
       ...(err.fields && { fields: err.fields }),
+      ...(err.data && { data: err.data }),
     });
   }
 

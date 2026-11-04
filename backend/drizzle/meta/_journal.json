@@ -22,6 +22,13 @@
       "when": 1793700187484,
       "tag": "0002_catalog_stock",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1793799248588,
+      "tag": "0003_google_sign_in",
+      "breakpoints": true
     }
   ]
 }

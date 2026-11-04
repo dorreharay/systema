@@ -5,9 +5,9 @@ import { useI18n } from '@/lib/i18n';
 import type { OrderStatus } from '@/lib/types';
 
 const STATUS_STYLES: Record<OrderStatus, { container: string; dot: string; label: string }> = {
-  received: { container: 'bg-blue-50', dot: 'bg-blue-500', label: 'text-blue-700' },
+  received: { container: 'bg-blue-50', dot: 'bg-blue-500', label: 'text-blue-500' },
   in_progress: { container: 'bg-amber-50', dot: 'bg-amber-500', label: 'text-amber-700' },
-  ready: { container: 'bg-emerald-50', dot: 'bg-emerald-500', label: 'text-emerald-700' },
+  ready: { container: 'bg-teal-50', dot: 'bg-teal-500', label: 'text-teal-700' },
   completed: { container: 'bg-neutral-100', dot: 'bg-neutral-400', label: 'text-neutral-600' },
 };
 
@@ -26,11 +26,12 @@ export function StatusBadge({ status }: { status: OrderStatus }) {
   );
 }
 
-type Tone = 'success' | 'warning' | 'danger' | 'neutral';
+type Tone = 'success' | 'warning' | 'danger' | 'info' | 'neutral';
 const TONES: Record<Tone, { container: string; label: string }> = {
   success: { container: 'bg-emerald-50', label: 'text-emerald-700' },
   warning: { container: 'bg-amber-50', label: 'text-amber-700' },
   danger: { container: 'bg-red-50', label: 'text-red-600' },
+  info: { container: 'bg-teal-50', label: 'text-teal-700' },
   neutral: { container: 'bg-neutral-100', label: 'text-neutral-600' },
 };
 

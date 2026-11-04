@@ -204,3 +204,15 @@ export function isOverdue(order: Pick<Order, 'status' | 'due_date'>, today: stri
 export const racketName = (racket: { brand: string; model: string }) => `${racket.brand} ${racket.model}`;
 
 export const orderNumber = (number: number) => `#${number}`;
+
+/**
+ * What was typed into a search for a client, as the start of a new one: digits with only what goes with them in a phone
+ * number (a plus, spaces, brackets, dashes) are a phone, anything with a letter in it (and digits with the letters) is a
+ * name, and a few symbols alone are neither.
+ */
+export function clientFromSearch(search: string | undefined): { name?: string; phone?: string } {
+  const text = search?.trim();
+  if (!text) return {};
+  if (/\p{L}/u.test(text)) return { name: text };
+  return /\d/.test(text) ? { phone: text } : {};
+}

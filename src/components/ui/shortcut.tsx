@@ -58,7 +58,7 @@ export default function Shortcut({
       } ${className}`}>
       {loading ? <ActivityIndicator color={ink} /> : Icon ? <Icon size={size.icon} color={ink} /> : null}
       <Text
-        className={`${size.label} font-semibold text-primary`}
+        className={`${size.label} font-semibold text-ink`}
         style={contentColor ? { color: contentColor } : undefined}
         numberOfLines={1}>
         {label}

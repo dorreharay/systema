@@ -34,6 +34,7 @@ import { useToast } from '@/components/ui/toast';
 import { useAuth } from '@/lib/auth';
 import { describeError, fieldError, isApiError } from '@/lib/errors';
 import {
+  clientFromSearch,
   currencySymbol,
   formatDate,
   formatMoney,
@@ -762,7 +763,11 @@ export default function OrderForm({ initial, order }: OrderFormProps) {
         onRetry={() => clients.refetch()}
         onQueryChange={setClientQuery}
         emptyHint={t('clients_empty_hint')}
-        createLabel={(query) => (query ? t('create_client_named', { name: query }) : t('add_client'))}
+        createLabel={(query) => {
+          const typed = clientFromSearch(query);
+          if (typed.phone) return t('create_client_phone', { phone: typed.phone });
+          return typed.name ? t('create_client_named', { name: typed.name }) : t('add_client');
+        }}
         onCreate={(name) => {
           setPicking(null);
           afterSheetsClosed(() => setCreating({ kind: 'client', name }));
@@ -896,7 +901,7 @@ export default function OrderForm({ initial, order }: OrderFormProps) {
       <ClientFormSheet
         visible={creating?.kind === 'client'}
         onClose={() => setCreating(null)}
-        initialName={creating?.kind === 'client' ? creating.name : undefined}
+        search={creating?.kind === 'client' ? creating.name : undefined}
         onSaved={(client) => {
           void chooseClient(client);
           // A customer who was just made has no racket yet: the list of rackets opens next, for it to be found by name

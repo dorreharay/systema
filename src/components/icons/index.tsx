@@ -1,4 +1,5 @@
 import type { ComponentType } from 'react';
+import { ChevronsRight as LucideChevronsRight } from 'lucide-react-native';
 import Svg, { Path } from 'react-native-svg';
 
 /**
@@ -44,6 +45,12 @@ export {
   TrendingUp,
   Undo2,
 } from 'lucide-react-native';
+
+// Two arrows to the right, for what moves on to the next step: a fifth heavier than the other arrows (a stroke of 2.4,
+// where theirs is 2), so that they hold their own beside a bold label.
+export const ChevronsRight: IconComponent = ({ size = 24, color = '#000000' }) => (
+  <LucideChevronsRight size={size} color={color} strokeWidth={2.4} />
+);
 
 // A plus is the app's own drawing: the same one as on the buttons that add something.
 export { default as Plus } from './plus-icon';

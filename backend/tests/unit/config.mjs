@@ -14,6 +14,9 @@ assert.equal(production.appUrl, 'https://app.example.com', 'no trailing slash');
 assert.deepEqual(production.corsOrigins, ['https://app.example.com'], 'only the app in production');
 assert.equal(production.databaseSsl, true);
 assert.equal(production.trustProxy, 1);
+assert.equal(production.clientIpHeader, undefined, 'the address is req.ip unless a header is named');
+assert.equal(loadConfig({ CLIENT_IP_HEADER: 'X-Real-IP' }).clientIpHeader, 'x-real-ip', 'a header name is lower case');
+assert.equal(loadConfig({ CLIENT_IP_HEADER: '' }).clientIpHeader, undefined, 'an empty setting is none');
 
 const custom = loadConfig({ PORT: '4000', DATABASE_SSL: 'false', NODE_ENV: 'production', CORS_ORIGINS: 'https://a.test, https://b.test', SMTP_PORT: 'x' });
 assert.equal(custom.port, 4000);
@@ -23,6 +26,14 @@ assert.equal(custom.smtp.port, 587, 'a value that is not a number falls back');
 assert.equal(loadConfig({ SEED_ADMIN_EMAIL: 'Root@Test.Local' }).seedAdmin.email, 'root@test.local');
 assert.equal(dev.starterCatalog, true, 'a new account starts with a catalog');
 assert.equal(loadConfig({ STARTER_CATALOG: 'false' }).starterCatalog, false, 'unless it is turned off');
+assert.deepEqual(dev.googleClientIds, [], 'Google sign-in is off until a client ID is given');
+assert.deepEqual(
+  loadConfig({ GOOGLE_CLIENT_IDS: 'a.apps.googleusercontent.com, b.apps.googleusercontent.com' }).googleClientIds,
+  ['a.apps.googleusercontent.com', 'b.apps.googleusercontent.com'],
+  'a list'
+);
+assert.deepEqual(loadConfig({ GOOGLE_CLIENT_IDS: '' }).googleClientIds, [], 'an empty setting is none');
+assert.equal(dev.googleCertsUrl, 'https://www.googleapis.com/oauth2/v3/certs', 'Google\'s own keys');
 
 assert.throws(() => assertConfig(loadConfig({})), /DATABASE_URL[\s\S]*JWT_SECRET/);
 assert.throws(() => assertConfig(loadConfig({ DATABASE_URL: 'postgres://x', JWT_SECRET: 'short' })), /too short/);

@@ -14,6 +14,7 @@ export default function Welcome() {
     <AuthLayout
       title={t('welcome_title')}
       subtitle={t('welcome_subtitle')}
+      shade={false}
       footer={
         <View className="flex-row justify-center gap-1" accessibilityRole="radiogroup">
           {LANGUAGES.map((item) => (

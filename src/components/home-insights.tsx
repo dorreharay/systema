@@ -32,8 +32,9 @@ import { useI18n } from '@/lib/i18n';
 import { useInsights } from '@/lib/queries';
 import type { ClientTotal, Insights } from '@/lib/types';
 
-// The bars of the days that are done are in the brand colour; the days of the week ahead that are not today are in a
-// softer one of it, so that today stands out.
+// Green is for the charts alone: the bars of the days that are done are in the brand colour, and the days of the week
+// ahead that are not today in a softer one of it, so that today stands out. The rest of the slider (its figures, the dot
+// of the card in view) is black.
 const BAR_SOFT = '#a9b9b3';
 const DOT_OFF = '#c2c8d0';
 
@@ -58,7 +59,7 @@ function Dot({ index, title, selected, interval, offset, onPress }: DotProps) {
     const distance = Math.min(Math.abs(offset.get() / Math.max(interval, 1) - index), 1);
     return {
       width: 6 + (1 - distance) * 12,
-      backgroundColor: interpolateColor(distance, [0, 1], [colors.primary, DOT_OFF]),
+      backgroundColor: interpolateColor(distance, [0, 1], [colors.ink, DOT_OFF]),
     };
   });
 
@@ -159,7 +160,7 @@ function Frame({ title, aside, children }: FrameProps) {
 function Figure({ value, caption }: { value: string; caption: string }) {
   return (
     <View className="flex-row items-baseline gap-2">
-      <Text className="text-[28.6px] font-semibold text-primary" numberOfLines={1} adjustsFontSizeToFit>
+      <Text className="text-[28.6px] font-semibold" numberOfLines={1} adjustsFontSizeToFit>
         {value}
       </Text>
       <Text className="shrink text-[14.3px] text-muted" numberOfLines={2}>
@@ -172,7 +173,7 @@ function Figure({ value, caption }: { value: string; caption: string }) {
 function Hint({ icon: Icon, text }: { icon: IconComponent; text: string }) {
   return (
     <View className="flex-1 items-center justify-center gap-2 px-4">
-      <Icon size={26} color={colors.primary} />
+      <Icon size={26} color={colors.ink} />
       <Text className="text-center text-[15.4px] text-muted">{text}</Text>
     </View>
   );
@@ -196,7 +197,7 @@ function Delta({ total, previous }: { total: number; previous: number }) {
 
   const up = percent > 0;
   const Icon = up ? TrendingUp : TrendingDown;
-  const tone = up ? colors.primary : colors.dangerInk;
+  const tone = up ? colors.ink : colors.dangerInk;
   return (
     <View className="flex-row items-center gap-1.5">
       <Icon size={16} color={tone} />
@@ -349,7 +350,7 @@ function ClientList({ title, empty, items, rows, owed }: ClientListProps) {
       </Text>
       {items.length === 0 ? (
         <View className="flex-row items-center gap-1.5">
-          {owed ? <Check size={16} color={colors.primary} /> : null}
+          {owed ? <Check size={16} color={colors.ink} /> : null}
           <Text className="shrink text-[14.3px] text-muted" maxFontSizeMultiplier={LIST_TEXT_SCALE}>
             {empty}
           </Text>

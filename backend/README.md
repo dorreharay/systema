@@ -31,7 +31,7 @@ backend/
     scripts/seed.js
   drizzle/                generated SQL migrations (commit them)
   tests/                  api/ (integration, real server + test database), unit/
-  Dockerfile  railway.toml  drizzle.config.js  eslint.config.js  .env.example
+  Dockerfile  drizzle.config.js  eslint.config.js  .env.example
 ```
 
 ## Running it locally
@@ -73,7 +73,8 @@ commit it with the schema, then `npm run db:migrate`.
 
 See `.env.example`; every variable is described there. Required: `DATABASE_URL`, `JWT_SECRET` (32+
 characters). The server refuses to start without them. In production also set `APP_URL` (the app's
-address, used in email links and as the only allowed browser origin).
+address, used in email links and as the only allowed browser origin). To offer sign-in with Google also set
+`GOOGLE_CLIENT_IDS` (see below).
 
 ## API
 
@@ -84,9 +85,11 @@ Every error is `{ "error": "message", "code"?: "machine_reason", "fields"?: { "f
 | `GET` | `/api/health` | `{ ok: true }`, no auth |
 | `POST` | `/api/auth/register` | `{ email, password, full_name? }` → `201 { user, token }`, 409 `email_taken` |
 | `POST` | `/api/auth/login` | `{ email, password }` → `{ user, token }`, 401 `invalid_credentials` |
+| `POST` | `/api/auth/google` | `{ id_token }`, the ID token from Google Sign-In → `{ user, token }` (`201` for a new account); 401 `google_token_invalid`, 403 `google_email_unverified` / `account_inactive`, 409 `google_account_mismatch`, 503 `google_not_configured` / `google_unavailable` |
 | `POST` | `/api/auth/logout` | clears the cookie |
 | `GET` | `/api/auth/me` | the signed-in user |
 | `PATCH` | `/api/auth/me` | any of `full_name`, `workshop_name`, `currency` (ISO code), `tension_unit` (`kg`/`lbs`), `timezone` (IANA), `language` (`en`/`uk`), `notifications_enabled`, `setup_completed: true` → the user |
+| `POST` | `/api/auth/delete-account` | `{ password }` → `{ ok: true }`; deletes the account and everything it owns (clients, rackets, strings, services, orders, photos) for good. The password is checked when the account has one (`403 invalid_password`), and `/me` says whether it does (`has_password`) |
 | `POST` | `/api/auth/forgot-password` | `{ email }` → always `{ ok: true }`; emails a link when the address has an account |
 | `POST` | `/api/auth/reset-password` | `{ token, password }`; the token works once, for 60 minutes |
 
@@ -95,7 +98,27 @@ A password is 8 to 72 bytes, as in the app. Sign-in answers with the cookie `aut
 and sends `Authorization: Bearer <token>`.
 
 Changing a password with a reset link ends every session opened before.
-Register, login, forgot-password and reset-password are limited to 20 attempts per IP and 15 minutes.
+Register, login, Google sign-in, delete-account, forgot-password and reset-password are limited to 20 attempts per IP and 15 minutes.
+
+### Sign in with Google
+
+The app signs in with Google on the device and sends the **ID token** to `POST /api/auth/google`. The server checks
+it (`src/utils/google.js`): signed with Google's published keys, issued to one of the client IDs in
+`GOOGLE_CLIENT_IDS`, not expired, and the email verified by Google. Then it answers with the same `{ user, token }`
+as a password sign-in. With no `GOOGLE_CLIENT_IDS` the endpoint answers 503 `google_not_configured`. The Google Cloud
+side is set up as described in [`../docs/google-sign-in.md`](../docs/google-sign-in.md).
+
+Which account the token belongs to, in this order:
+
+1. The one already linked to the Google user (`users.google_sub`, Google's own id, which does not change when the
+   person changes their address).
+2. The one with the same email. It is linked now. Signing up with a password never checked that the address is the
+   person's, so a password somebody else set must not survive Google showing whose address it is: the password is
+   removed and every session opened before ends (the person can set a password again with "Forgot password").
+   An address already linked to a *different* Google user is refused (409 `google_account_mismatch`).
+3. Otherwise a new account, made like one from `/register` but with no password (`users.password_hash` is null).
+
+An inactive account is refused (403) and left as it was.
 
 ### Stringing: clients, rackets, strings, services, orders
 
@@ -203,9 +226,33 @@ docker build -t systema-backend .
 docker run -p 4000:4000 --env-file .env -e NODE_ENV=production systema-backend
 ```
 
-**Railway**: create a service with the root directory `backend/`, add the PostgreSQL plugin (it sets
-`DATABASE_URL`), and set `JWT_SECRET` and `APP_URL`. `railway.toml` has the start command and the
-health check.
+**Railway** (the project `restring-api`: a `Postgres` service and an `api` one, in EU West). Railway builds from the
+`Dockerfile` by itself, so nothing else is needed in the repository: `railway.toml` is deprecated (Railway reads it only for
+old services, and no longer at all from 2026-12-01), so the settings live in the service. From this folder, with the
+[Railway CLI](https://docs.railway.com/cli) signed in (`railway login`):
+
+```bash
+railway init --name restring-api                    # the project; links this folder to it
+railway add --database postgres                     # the database
+railway add --service api                           # the server, empty for now
+# The Hobby plan deploys to one region only. A new service also lands in the workspace's default one (US East,
+# `iad`), so it is taken out explicitly; the database is moved the same way:
+railway service scale --service api iad=0 eu-west=1
+railway service scale --service Postgres iad=0 eu-west=1
+railway variable set 'DATABASE_URL=${{Postgres.DATABASE_URL}}' --service api --skip-deploys
+railway variable set 'APP_URL=systema://' --service api --skip-deploys
+railway variable set PORT=4000 --service api --skip-deploys
+railway variable set CLIENT_IP_HEADER=x-real-ip --service api --skip-deploys
+openssl rand -base64 48 | tr -d '\n' | railway variable set JWT_SECRET --stdin --service api --skip-deploys
+railway up . --path-as-root --service api --detach  # the first deploy, and every later one
+railway domain --service api --port 4000            # the public address (https://….up.railway.app)
+```
+
+The health check (`/api/health`) is set on the service with the API: `serviceInstanceUpdate(… input: { healthcheckPath:
+"/api/health", dockerfilePath: "Dockerfile" })` (`railway api '<mutation>'`). `CLIENT_IP_HEADER=x-real-ip` is needed
+because Railway does not say how many proxies are in front of the server: its edge overwrites `x-real-ip` with the client's
+address, and the limit on login attempts counts by it (see `.env.example`). Without it every request would be counted under
+whatever proxy it came through. Set `SMTP_*` too when emails (a password reset) are to be sent.
 
 With more than one instance, run `node src/db/migrate.js` as a separate step instead of in the start command.
 

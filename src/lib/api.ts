@@ -52,20 +52,29 @@ function apiUrl() {
 }
 
 /**
- * An answer from the backend that is not a success: `{ error, code?, fields? }`. Status 0 and code
- * `network` mean the server could not be reached at all.
+ * An answer from the backend that is not a success: `{ error, code?, fields?, data? }`. Status 0 and code
+ * `network` mean the server could not be reached at all. `data` is what more the server said: the client who already
+ * has the phone number (`phone_taken`).
  */
 export class ApiError extends Error {
   status: number;
   code?: string;
   fields?: Record<string, string>;
+  data?: { client?: { id: string; name: string } };
 
-  constructor(status: number, message: string, code?: string, fields?: Record<string, string>) {
+  constructor(
+    status: number,
+    message: string,
+    code?: string,
+    fields?: Record<string, string>,
+    data?: ApiError['data']
+  ) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
     this.code = code;
     this.fields = fields;
+    this.data = data;
   }
 }
 
@@ -103,7 +112,7 @@ async function send(path: string, { method, headers, body, token, timeoutMs }: S
 
   if (!response.ok) {
     const data = await response.json().catch(() => undefined);
-    throw new ApiError(response.status, data?.error ?? response.statusText, data?.code, data?.fields);
+    throw new ApiError(response.status, data?.error ?? response.statusText, data?.code, data?.fields, data?.data);
   }
   return response;
 }

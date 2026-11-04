@@ -1,5 +1,5 @@
 import type { Href } from 'expo-router';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useNavigation } from 'expo-router';
 import type { ReactNode } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { LayoutChangeEvent } from 'react-native';
@@ -16,16 +16,15 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { scheduleOnRN } from 'react-native-worklets';
 
-import { HEADER_HEIGHT } from '@/components/app-header';
-import { AuthLeaveContext } from '@/components/auth-leave';
+import { HEADER_HEIGHT, LOGO_MIDDLE } from '@/components/app-header';
+import { AuthLeaveContext, addCover, coverAll } from '@/components/auth-leave';
 import AuthLink from '@/components/auth-link';
 import { ArrowLeft } from '@/components/icons';
 import { useI18n } from '@/lib/i18n';
 
-// Size of the round back button at the top left, in line with the logo.
-const BACK_BUTTON_SIZE = 44;
-// The logo's letters sit a little below the middle of the header row.
-const BACK_BUTTON_OFFSET = 4;
+// Height of the strip the back button sits in at the top left. The strip is centred on the letters of the logo and the
+// button on the strip, so the two are on one line whatever size the button is.
+const BACK_STRIP_HEIGHT = 44;
 // How far the content sits above the bottom edge, on top of the safe area.
 const CONTENT_LIFT = 56;
 // Space kept between the primary button and the top of the keyboard.
@@ -36,9 +35,10 @@ const TITLE_FADE = 48;
 const KEYBOARD_DURATION = 250;
 const RELAYOUT_DURATION = 150;
 const LIFT_EASING = Easing.bezier(0.25, 0.1, 0.25, 1);
-// The stack does not animate between the auth screens. A screen's content fades out first, then
+// A tap does not animate the stack between the auth screens. The screen's content fades out first, then
 // the navigation runs and the next screen's content fades in and rises into place, so two
-// screens' content never shows at once.
+// screens' content never shows at once. The stack's own back swipe is not touched: it moves the whole
+// screen, and the one below is there to be seen (see the listeners below).
 const LEAVE_DURATION = 160;
 const ENTER_DELAY = 90;
 const ENTER_DURATION = 360;
@@ -55,9 +55,19 @@ type AuthLayoutProps = {
   backHref?: Href;
   // Centers the content on the screen instead of pinning it to the bottom.
   centered?: boolean;
+  // The dark shade over the upper part of the photo, for the forms. It is part of the screen, so that it goes with the
+  // screen when the stack's back swipe moves it away. The welcome screen has none.
+  shade?: boolean;
 };
 
-// The photo and its shade are drawn by the auth group's layout. The content sits either at the
+// The listeners need only this much of the stack's navigation object.
+type StackNavigation = {
+  addListener(type: 'transitionStart', listener: (event: { data: { closing: boolean } }) => void): () => void;
+  addListener(type: 'gestureCancel', listener: () => void): () => void;
+  isFocused(): boolean;
+};
+
+// The photo and the dark bottom of it are drawn by the auth group's layout. The content sits either at the
 // bottom of the screen or, when centered, in the middle of it.
 export default function AuthLayout({
   title,
@@ -66,27 +76,60 @@ export default function AuthLayout({
   footer,
   backHref,
   centered = false,
+  shade = true,
 }: AuthLayoutProps) {
   const { t } = useI18n();
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
   const headerSpace = insets.top + HEADER_HEIGHT;
+  const navigation = useNavigation() as unknown as StackNavigation;
 
   // The content starts hidden and comes in once the screen is focused. Screens that are only
   // preloaded stay hidden.
   const shown = useSharedValue(0);
   const rise = useSharedValue(ENTER_RISE);
   const leaving = useRef(false);
+  const wasFocused = useRef(false);
 
   useFocusEffect(
     useCallback(() => {
       leaving.current = false;
-      rise.set(ENTER_RISE);
-      shown.set(withDelay(ENTER_DELAY, withTiming(1, { duration: ENTER_DURATION, easing: ENTER_EASING })));
-      rise.set(withDelay(ENTER_DELAY, withTiming(0, { duration: ENTER_DURATION, easing: ENTER_EASING })));
+      wasFocused.current = true;
+      // The content fades in, unless the stack's back swipe has already put it in place.
+      if (shown.get() < 1) {
+        rise.set(ENTER_RISE);
+        shown.set(withDelay(ENTER_DELAY, withTiming(1, { duration: ENTER_DURATION, easing: ENTER_EASING })));
+        rise.set(withDelay(ENTER_DELAY, withTiming(0, { duration: ENTER_DURATION, easing: ENTER_EASING })));
+      }
       return () => shown.set(withTiming(0, { duration: LEAVE_DURATION, easing: LEAVE_EASING }));
     }, [rise, shown])
   );
+
+  // The back swipe belongs to the stack and moves the whole screen. The screen it uncovers is not in focus yet (the focus
+  // moves when the swipe is done; a move made by a tap has the focus first) and its content is hidden: it is shown at once,
+  // so what is under the screen being moved away is not an empty photo. If the swipe is let go too soon, the screen
+  // that was dragged says so (`gestureCancel`) and the one it had uncovered is hidden again.
+  useEffect(() => {
+    const cover = () => {
+      if (wasFocused.current && !navigation.isFocused()) {
+        shown.set(0);
+        rise.set(ENTER_RISE);
+      }
+    };
+    const removeCover = addCover(cover);
+    const uncovered = navigation.addListener('transitionStart', (event) => {
+      if (!event.data.closing && wasFocused.current && !navigation.isFocused()) {
+        shown.set(1);
+        rise.set(0);
+      }
+    });
+    const cancelled = navigation.addListener('gestureCancel', coverAll);
+    return () => {
+      removeCover();
+      uncovered();
+      cancelled();
+    };
+  }, [navigation, rise, shown]);
 
   // Fades the content out, then navigates. A second press while leaving is ignored.
   const leave = useCallback(
@@ -108,6 +151,7 @@ export default function AuthLayout({
     opacity: shown.get(),
     transform: [{ translateY: rise.get() }],
   }));
+  const shadeStyle = useAnimatedStyle(() => ({ opacity: shown.get() }));
 
   // On iOS the centered form is lifted so the primary button sits just above the keyboard.
   // The lift is animated once per keyboard change, over the keyboard's own duration, so moving
@@ -180,6 +224,13 @@ export default function AuthLayout({
 
   return (
     <AuthLeaveContext value={leave}>
+      {shade ? (
+        <Animated.View
+          pointerEvents="none"
+          className="absolute inset-0 bg-linear-to-b from-black/40 via-black/80 to-transparent"
+          style={shadeStyle}
+        />
+      ) : null}
       <Animated.View className="flex-1" style={screenStyle}>
         {centered ? (
           <ScrollView bounces={false} overScrollMode="never"
@@ -204,8 +255,8 @@ export default function AuthLayout({
         )}
         {backHref ? (
           <View
-            className="absolute left-4"
-            style={{ top: insets.top + (HEADER_HEIGHT - BACK_BUTTON_SIZE) / 2 + BACK_BUTTON_OFFSET }}>
+            className="absolute left-4 justify-center"
+            style={{ top: insets.top + LOGO_MIDDLE - BACK_STRIP_HEIGHT / 2, height: BACK_STRIP_HEIGHT }}>
             <AuthLink href={backHref} dismissTo asChild>
               <Pressable
                 accessibilityRole="link"

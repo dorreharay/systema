@@ -29,7 +29,11 @@ export const users = pgTable(
     // Always stored trimmed and in lower case, so the unique constraint means what it says.
     email: text('email').notNull().unique(),
     full_name: text('full_name'),
-    password_hash: text('password_hash').notNull(),
+    // Empty for an account that was made by signing in with Google and has not set a password since.
+    password_hash: text('password_hash'),
+    // Google's id of the person (the "sub" of their ID token), once they have signed in with Google. It stays the same when
+    // they change their address, so it, and not the email, says whose account this is.
+    google_sub: text('google_sub').unique(),
     role: text('role').notNull().default('user'), // user, admin
     is_active: boolean('is_active').notNull().default(true),
     // A password reset link carries a random token. Only its SHA-256 is stored, so a copy of the

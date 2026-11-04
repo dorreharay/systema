@@ -37,6 +37,12 @@ export function loadConfig(env = process.env) {
     resetTokenMinutes: 60,
     bcryptRounds: integer(env.BCRYPT_ROUNDS, 12),
 
+    // Sign in with Google: the OAuth client IDs an ID token may be meant for. The Web client ID is the one the app asks
+    // the token for; the iOS one can be listed too. Empty turns Google sign-in off (see ../docs/google-sign-in.md).
+    googleClientIds: list(env.GOOGLE_CLIENT_IDS, []),
+    // Where Google publishes the keys it signs those tokens with. Only a test has a reason to change it.
+    googleCertsUrl: text(env.GOOGLE_CERTS_URL) ?? 'https://www.googleapis.com/oauth2/v3/certs',
+
     appUrl,
     // Browsers only: a native app sends no Origin header and is not affected by CORS.
     corsOrigins: list(
@@ -46,6 +52,9 @@ export function loadConfig(env = process.env) {
     // Number of proxies in front of the server (Railway, a load balancer), so that `req.ip` is the
     // client and not the proxy.
     trustProxy: integer(env.TRUST_PROXY, isProduction ? 1 : 0),
+    // The header in which the host's own edge puts the address of the client (Railway: x-real-ip), for a host whose number
+    // of proxies is not fixed, so that `trustProxy` cannot be set right. Empty: the address is `req.ip`.
+    clientIpHeader: text(env.CLIENT_IP_HEADER)?.toLowerCase(),
 
     // Attempts per IP and 15 minutes at the endpoints that take a password or send an email.
     authRateLimit: { windowMs: 15 * 60 * 1000, max: integer(env.AUTH_RATE_LIMIT_MAX, 20) },

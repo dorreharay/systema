@@ -158,6 +158,7 @@ export default function Clients() {
       <ClientFormSheet
         visible={adding}
         onClose={() => setAdding(false)}
+        search={text}
         onSaved={(client) => {
           setAdded(client);
           afterSheetsClosed(() => setStep('picking'));

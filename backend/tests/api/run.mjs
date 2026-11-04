@@ -9,7 +9,7 @@
  */
 import {
   CONFIG, Client, assertEq, assertStatus, assertTrue,
-  dbExec, dbScalar, resetDatabase, startServer,
+  dbExec, dbScalar, resetDatabase, startFakeGoogle, startServer,
 } from './harness.mjs';
 
 const tests = [];
@@ -218,6 +218,163 @@ test('Reset', 'an unknown or expired token is refused', async (ctx) => {
 });
 
 // ---------------------------------------------------------------------------
+// Sign in with Google (Google itself is played by the harness: see startFakeGoogle)
+// ---------------------------------------------------------------------------
+let googleCounter = 0;
+/** The claims of a Google user nobody has met before. */
+const googleUser = (extra = {}) => {
+  const n = ++googleCounter;
+  return { sub: `google-sub-${n}`, email: `google${n}@test.local`, name: 'Gina Google', ...extra };
+};
+/** Signs in with an ID token made from `options` (see idToken in the harness), as a client of its own. */
+async function googleLogin(ctx, options) {
+  const client = new Client(ctx.server.base);
+  const res = await client.post('/api/auth/google', { id_token: await ctx.google.idToken(options) });
+  return { client, res };
+}
+const googleUserCount = (email) => dbScalar(`SELECT count(*) FROM users WHERE email='${email}'`);
+
+test('Google', 'a first sign-in makes the account, signs in and keeps the secrets', async (ctx) => {
+  const user = googleUser({ email: 'Gina.Google@Test.Local' });
+  const { client, res } = await googleLogin(ctx, user);
+  assertStatus(res, 201);
+  assertEq(res.data.user.email, 'gina.google@test.local', 'the email, in lower case');
+  assertEq(res.data.user.full_name, 'Gina Google', 'the name is Google\'s');
+  assertEq(res.data.user.setup_completed, false, 'the first-run setup is still to do');
+  assertTrue(res.data.token, 'a token is returned for native clients');
+  assertTrue(client.cookies.has('auth_token'), 'the session cookie is set');
+  assertTrue(!('google_sub' in res.data.user) && !('password_hash' in res.data.user), 'the secrets are not exposed');
+  assertEq(dbScalar(`SELECT google_sub FROM users WHERE email='gina.google@test.local'`), user.sub, 'the Google id is kept');
+  assertEq(dbScalar(`SELECT password_hash IS NULL FROM users WHERE email='gina.google@test.local'`), 't', 'there is no password');
+  assertEq((await client.get('/api/auth/me')).data.email, 'gina.google@test.local', 'the session works');
+  assertTrue(Number(dbScalar(`SELECT count(*) FROM services WHERE user_id='${res.data.user.id}'`)) > 0, 'the default services are made');
+});
+test('Google', 'the same Google user gets the same account, whatever address Google now has for them', async (ctx) => {
+  const user = googleUser();
+  const first = await googleLogin(ctx, user);
+  const again = await googleLogin(ctx, { ...user, email: 'moved@test.local' });
+  assertStatus(again.res, 200);
+  assertEq(again.res.data.user.id, first.res.data.user.id, 'the same account');
+  assertEq(again.res.data.user.email, user.email, 'the address of the account is not rewritten');
+  assertEq(googleUserCount('moved@test.local'), '0', 'no second account');
+});
+test('Google', 'an account with the same email is linked: its password is removed and its sessions end', async (ctx) => {
+  const { client: oldSession, email, res: registered } = await register(ctx);
+  // Sessions are compared by the second, so let the old one be older than the change.
+  await new Promise((r) => setTimeout(r, 1100));
+
+  const { client, res } = await googleLogin(ctx, googleUser({ email }));
+  assertStatus(res, 200);
+  assertEq(res.data.user.id, registered.data.user.id, 'the account that was there');
+  assertEq(res.data.user.full_name, 'Gina Google', 'a name it did not have is filled in');
+  assertStatus(await new Client(ctx.server.base).post('/api/auth/login', { email, password }), 401);
+  assertStatus(await oldSession.get('/api/auth/me'), 401);
+  assertStatus(await client.get('/api/auth/me'), 200);
+});
+test('Google', 'linking keeps the name the account already has', async (ctx) => {
+  const { email } = await register(ctx, newEmail(), { full_name: 'Ann' });
+  const { res } = await googleLogin(ctx, googleUser({ email }));
+  assertStatus(res, 200);
+  assertEq(res.data.user.full_name, 'Ann', 'name');
+});
+test('Google', 'an address linked to one Google user is not given to another', async (ctx) => {
+  const user = googleUser();
+  await googleLogin(ctx, user);
+  const other = await googleLogin(ctx, googleUser({ email: user.email }));
+  assertStatus(other.res, 409);
+  assertEq(other.res.data.code, 'google_account_mismatch', 'code');
+});
+test('Google', 'refuses a token made for another app', async (ctx) => {
+  const user = googleUser();
+  const { res } = await googleLogin(ctx, { ...user, aud: 'someone-elses-app.apps.googleusercontent.com' });
+  assertStatus(res, 401);
+  assertEq(res.data.code, 'google_token_invalid', 'code');
+  assertEq(googleUserCount(user.email), '0', 'no account');
+});
+test('Google', 'refuses an expired token', async (ctx) => {
+  const { res } = await googleLogin(ctx, { ...googleUser(), expires: Math.floor(Date.now() / 1000) - 60 });
+  assertStatus(res, 401);
+  assertEq(res.data.code, 'google_token_invalid', 'code');
+});
+test('Google', 'refuses a token from another issuer', async (ctx) => {
+  const { res } = await googleLogin(ctx, { ...googleUser(), iss: 'https://accounts.evil.example' });
+  assertStatus(res, 401);
+  assertEq(res.data.code, 'google_token_invalid', 'code');
+});
+test('Google', 'refuses a token that Google did not sign', async (ctx) => {
+  const user = googleUser();
+  const { res } = await googleLogin(ctx, { ...user, key: await ctx.google.otherKey() });
+  assertStatus(res, 401);
+  assertEq(res.data.code, 'google_token_invalid', 'code');
+  assertEq(googleUserCount(user.email), '0', 'no account');
+});
+test('Google', 'refuses something that is not a token, and a request without one', async (ctx) => {
+  const garbage = await ctx.anon.post('/api/auth/google', { id_token: 'not.a.jwt' });
+  assertStatus(garbage, 401);
+  assertEq(garbage.data.code, 'google_token_invalid', 'code');
+
+  const missing = await ctx.anon.post('/api/auth/google', {});
+  assertStatus(missing, 400);
+  assertTrue(missing.data.fields.id_token, 'id_token is named');
+});
+test('Google', 'refuses an address Google has not verified, and makes no account', async (ctx) => {
+  const user = googleUser();
+  const { res } = await googleLogin(ctx, { ...user, email_verified: false });
+  assertStatus(res, 403);
+  assertEq(res.data.code, 'google_email_unverified', 'code');
+  assertEq(googleUserCount(user.email), '0', 'no account');
+});
+test('Google', 'an inactive account cannot sign in with Google either, and is left as it was', async (ctx) => {
+  const { email } = await register(ctx);
+  dbExec(`UPDATE users SET is_active=false WHERE email='${email}'`);
+  const { res } = await googleLogin(ctx, googleUser({ email }));
+  assertStatus(res, 403);
+  assertEq(res.data.code, 'account_inactive', 'code');
+  assertEq(dbScalar(`SELECT google_sub IS NULL AND password_hash IS NOT NULL FROM users WHERE email='${email}'`), 't', 'not linked, password kept');
+});
+test('Google', 'a first sign-in that arrives three times at once makes one account', async (ctx) => {
+  const user = googleUser();
+  const token = await ctx.google.idToken(user);
+  const results = await Promise.all(
+    [1, 2, 3].map(() => new Client(ctx.server.base).post('/api/auth/google', { id_token: token }))
+  );
+  assertEq(results.map((r) => r.status).sort(), [200, 200, 201], 'one makes the account, the others find it');
+  assertEq(googleUserCount(user.email), '1', 'one account');
+});
+test('Google', 'an address a Google account has cannot be registered with a password', async (ctx) => {
+  const user = googleUser();
+  await googleLogin(ctx, user);
+  const res = await ctx.anon.post('/api/auth/register', { email: user.email, password });
+  assertStatus(res, 409);
+  assertEq(res.data.code, 'email_taken', 'code');
+});
+test('Google', 'an account made with Google has no password until it sets one, and Google keeps working', async (ctx) => {
+  const user = googleUser();
+  await googleLogin(ctx, user);
+
+  const wrong = await new Client(ctx.server.base).post('/api/auth/login', { email: user.email, password });
+  assertStatus(wrong, 401);
+  assertEq(wrong.data.code, 'invalid_credentials', 'the answer for a wrong password');
+
+  await ctx.anon.post('/api/auth/forgot-password', { email: user.email });
+  await new Promise((r) => setTimeout(r, 300));
+  const token = resetTokenFor(ctx, user.email);
+  assertStatus(await ctx.anon.post('/api/auth/reset-password', { token, password: 'a-brand-new-pass-2' }), 200);
+  assertStatus(await new Client(ctx.server.base).post('/api/auth/login', { email: user.email, password: 'a-brand-new-pass-2' }), 200);
+  assertStatus((await googleLogin(ctx, user)).res, 200);
+});
+test('Google', 'is off while the server has no client IDs', async (ctx) => {
+  const server = await startServer({ port: CONFIG.port + 1, env: { GOOGLE_CLIENT_IDS: '' } });
+  try {
+    const res = await new Client(server.base).post('/api/auth/google', { id_token: await ctx.google.idToken(googleUser()) });
+    assertStatus(res, 503);
+    assertEq(res.data.code, 'google_not_configured', 'code');
+  } finally {
+    await server.stop();
+  }
+});
+
+// ---------------------------------------------------------------------------
 // Profile and preferences
 // ---------------------------------------------------------------------------
 test('Profile', 'a new account has the default preferences and has not done the setup', async (ctx) => {
@@ -340,6 +497,56 @@ test('Clients', 'one stringer never sees or changes another one\'s data', async 
   assertTrue(stolen.data.fields.client_id, 'the client is named');
   assertStatus(await new Client(ctx.server.base).get('/api/clients'), 401);
   assertStatus(await s.client.get('/api/clients/not-a-uuid'), 404);
+});
+
+test('Clients', 'a phone number another client has is refused, however it is typed', async (ctx) => {
+  const s = await shop(ctx);
+  for (const typed of ['+380501112233', '0501112233', '050 111-22-33', '+38 (050) 111 22 33', '80501112233']) {
+    const res = await s.client.post('/api/clients', { name: 'Twin', phone: typed });
+    assertStatus(res, 409);
+    assertEq(res.data.code, 'phone_taken', `code for ${typed}`);
+    assertTrue(res.data.fields.phone, 'the phone is named');
+    assertEq(res.data.data.client, { id: s.customer.id, name: 'Maria Sharapova' }, 'the client who has it is named');
+  }
+  assertEq((await s.client.get('/api/clients')).data.items.length, 1, 'nothing was made');
+  assertStatus(await s.client.post('/api/clients', { name: 'Zed', phone: '+380501112234' }), 201);
+});
+test('Clients', 'clients made at the same moment cannot share a phone number', async (ctx) => {
+  const { client } = await register(ctx);
+  const answers = await Promise.all(
+    Array.from({ length: 5 }, (_, i) => client.post('/api/clients', { name: `Twin ${i}`, phone: '+380631234567' }))
+  );
+  assertEq(answers.map((a) => a.status).sort(), [201, 409, 409, 409, 409], 'one is made, the others are refused');
+  assertEq((await client.get('/api/clients')).data.items.length, 1, 'one client');
+});
+test('Clients', 'another stringer may have a client with the same phone number', async (ctx) => {
+  await shop(ctx);
+  const { client: other } = await register(ctx);
+  assertStatus(await other.post('/api/clients', { name: 'Maria', phone: '+380501112233' }), 201);
+});
+test('Clients', 'the number of a deleted client can be used again', async (ctx) => {
+  const s = await shop(ctx);
+  assertStatus(await s.client.delete(`/api/clients/${s.customer.id}`), 200);
+  assertStatus(await s.client.post('/api/clients', { name: 'Maria again', phone: '0501112233' }), 201);
+});
+test('Clients', 'editing cannot give a client the number of another, but their own number can be retyped', async (ctx) => {
+  const s = await shop(ctx);
+  const zed = (await s.client.post('/api/clients', { name: 'Zed', phone: '+380671234567' })).data;
+  const taken = await s.client.patch(`/api/clients/${zed.id}`, { phone: '050 111 22 33' });
+  assertStatus(taken, 409);
+  assertEq([taken.data.code, taken.data.data.client.name], ['phone_taken', 'Maria Sharapova'], 'who has it');
+  assertEq((await s.client.get(`/api/clients/${zed.id}`)).data.phone, '+380671234567', 'the number is unchanged');
+  const retyped = await s.client.patch(`/api/clients/${zed.id}`, { phone: '067 123 45 67', notes: 'Left-handed' });
+  assertStatus(retyped, 200);
+  assertEq([retyped.data.phone, retyped.data.notes], ['067 123 45 67', 'Left-handed'], 'saved as typed');
+});
+test('Clients', 'a client who already shares a number (made before the check) can still be edited', async (ctx) => {
+  const s = await shop(ctx);
+  const zed = (await s.client.post('/api/clients', { name: 'Zed', phone: '+380671234567' })).data;
+  dbExec(`UPDATE clients SET phone = '+380501112233' WHERE id = '${zed.id}'`);
+  const res = await s.client.patch(`/api/clients/${zed.id}`, { name: 'Zed Z', phone: '+380501112233' });
+  assertStatus(res, 200);
+  assertEq(res.data.name, 'Zed Z', 'edited');
 });
 
 test('Rackets', 'brand and model are required; a client is not (without one it is a catalog racket)', async (ctx) => {
@@ -729,6 +936,116 @@ test('Photos', 'only real images are accepted, up to a limit', async (ctx) => {
   for (let i = 0; i < 10; i++) assertStatus(await s.client.rawRequest('POST', url, JPEG, 'image/jpeg'), 201);
   const extra = await s.client.rawRequest('POST', url, JPEG, 'image/jpeg');
   assertEq([extra.status, extra.data.code], [400, 'photo_limit'], 'eleventh photo');
+});
+
+// ---------------------------------------------------------------------------
+// Deleting the account
+// ---------------------------------------------------------------------------
+/** How many rows of each table belong to this user, counted around the API. */
+const ownedRows = (userId) =>
+  Object.fromEntries(
+    ['clients', 'rackets', 'strings', 'services', 'orders', 'order_photos'].map((table) => [
+      table,
+      Number(dbScalar(`SELECT count(*) FROM ${table} WHERE user_id='${userId}'`)),
+    ])
+  );
+/** An account with a bit of everything: clients with rackets, a catalog racket, strings, an order with service lines and a photo. */
+async function furnished(ctx) {
+  const s = await shop(ctx);
+  const second = (await s.client.post('/api/clients', { name: 'Serena Williams', phone: '+380509998877' })).data;
+  await s.client.post('/api/rackets', { client_id: second.id, brand: 'Babolat', model: 'Pure Aero' });
+  await s.client.post('/api/rackets', { brand: 'Yonex', model: 'Vcore 98', track_stock: true, stock: 3 });
+  const order = (
+    await s.client.post('/api/orders', minimalOrder(s, {
+      main_string_id: s.string.id, main_tension: 24, labor_price: 20,
+      services: [{ name: 'Grip', price: 5 }, { name: 'Overgrip', price: 2 }],
+    }))
+  ).data;
+  assertStatus(await s.client.rawRequest('POST', `/api/orders/${order.id}/photos`, JPEG, 'image/jpeg'), 201);
+  const userId = (await s.client.get('/api/auth/me')).data.id;
+  return { ...s, order, userId };
+}
+
+test('Account', '/me says whether the account has a password', async (ctx) => {
+  const { client } = await register(ctx);
+  assertEq((await client.get('/api/auth/me')).data.has_password, true, 'made with a password');
+  const google = await googleLogin(ctx, googleUser());
+  assertEq((await google.client.get('/api/auth/me')).data.has_password, false, 'made with Google');
+});
+test('Account', 'deleting it removes the account and everything it owns', async (ctx) => {
+  const s = await furnished(ctx);
+  const before = ownedRows(s.userId);
+  assertTrue(Object.values(before).every((count) => count > 0), `there is something in every table: ${JSON.stringify(before)}`);
+  const lines = () => Number(dbScalar(`SELECT count(*) FROM order_services WHERE order_id='${s.order.id}'`));
+  assertEq(lines(), 2, 'the order has its service lines');
+
+  const res = await s.client.post('/api/auth/delete-account', { password });
+  assertStatus(res, 200);
+  assertEq(res.data, { ok: true }, 'body');
+
+  assertEq(Number(dbScalar(`SELECT count(*) FROM users WHERE id='${s.userId}'`)), 0, 'the user is gone');
+  assertEq(ownedRows(s.userId), { clients: 0, rackets: 0, strings: 0, services: 0, orders: 0, order_photos: 0 }, 'and all it owned');
+  assertEq(lines(), 0, 'with the lines of its orders');
+  assertTrue(!s.client.cookies.has('auth_token'), 'the cookie is cleared');
+});
+test('Account', 'a deleted account can no longer sign in, and its session ends', async (ctx) => {
+  const { client, email, res } = await register(ctx);
+  const token = res.data.token;
+  assertStatus(await client.post('/api/auth/delete-account', { password }), 200);
+
+  assertStatus(await client.get('/api/auth/me'), 401);
+  const stale = new Client(ctx.server.base);
+  stale.token = token;
+  assertEq((await stale.get('/api/auth/me')).data.code, 'invalid_token', 'the old token is turned down');
+  const login = await new Client(ctx.server.base).post('/api/auth/login', { email, password });
+  assertEq([login.status, login.data.code], [401, 'invalid_credentials'], 'no sign-in');
+});
+test('Account', 'the address can be used again, for a new and empty account', async (ctx) => {
+  const s = await furnished(ctx);
+  const { email } = (await s.client.get('/api/auth/me')).data;
+  assertStatus(await s.client.post('/api/auth/delete-account', { password }), 200);
+
+  const again = await register(ctx, email);
+  assertTrue(again.res.data.user.id !== s.userId, 'a new account');
+  assertEq((await again.client.get('/api/clients')).data.items, [], 'with none of the old clients');
+});
+test('Account', 'it needs the password: none or a wrong one deletes nothing', async (ctx) => {
+  const s = await furnished(ctx);
+  const rows = ownedRows(s.userId);
+  for (const body of [{}, { password: '' }, { password: 'not-the-password' }]) {
+    const res = await s.client.post('/api/auth/delete-account', body);
+    assertEq([res.status, res.data.code], [403, 'invalid_password'], `refused for ${JSON.stringify(body)}`);
+  }
+  assertEq(ownedRows(s.userId), rows, 'nothing was deleted');
+  // A wrong password is not an ended session: the app would sign the person out on a 401.
+  assertStatus(await s.client.get('/api/auth/me'), 200);
+});
+test('Account', 'it needs a session', async (ctx) => {
+  // A client of its own: `ctx.anon` may have signed in during an earlier test.
+  assertEq((await new Client(ctx.server.base).post('/api/auth/delete-account', { password })).status, 401, 'no token');
+});
+test('Account', 'another account is left alone', async (ctx) => {
+  const mine = await furnished(ctx);
+  const other = await furnished(ctx);
+  const rows = ownedRows(other.userId);
+  assertStatus(await mine.client.post('/api/auth/delete-account', { password }), 200);
+
+  assertEq(ownedRows(other.userId), rows, 'the rows of the other account');
+  assertEq((await other.client.get('/api/clients')).data.items.length, 2, 'its clients');
+  assertEq((await other.client.get(`/api/orders/${other.order.id}`)).data.photos.length, 1, 'its order and photo');
+});
+test('Account', 'an account made with Google is deleted without a password', async (ctx) => {
+  const user = googleUser();
+  const { client, res } = await googleLogin(ctx, user);
+  assertEq(res.data.user.has_password, false, 'it has none');
+  await client.post('/api/clients', { name: 'Maria Sharapova', phone: '+380501112233' });
+
+  assertStatus(await client.post('/api/auth/delete-account', {}), 200);
+  assertEq(Number(googleUserCount(user.email)), 0, 'the account is gone');
+  // Signing in with the same Google account starts over: a new account, with no clients.
+  const again = await googleLogin(ctx, user);
+  assertStatus(again.res, 201);
+  assertEq((await again.client.get('/api/clients')).data.items, [], 'nothing of the old one');
 });
 
 test('Dashboard', 'counts the active, ready and completed orders and lists what is due first', async (ctx) => {
@@ -1170,15 +1487,15 @@ test('Insights', 'the week ahead counts the work still to do on each day, and wh
 });
 test('Insights', 'what is unpaid, who owes it and who pays the most', async (ctx) => {
   const s = await shop(ctx);
-  const racketOf = async (name) => {
-    const client = (await s.client.post('/api/clients', { name, phone: '+380501112244' })).data;
+  const racketOf = async (name, phone) => {
+    const client = (await s.client.post('/api/clients', { name, phone })).data;
     const racket = (await s.client.post('/api/rackets', { client_id: client.id, brand: 'Babolat', model: 'Pure Drive' })).data;
     return { client, racket };
   };
   const make = (who, extra) => s.client.post('/api/orders', { client_id: who.client.id, racket_id: who.racket.id, ...extra });
   const maria = { client: s.customer, racket: s.racket };
-  const serena = await racketOf('Serena Williams');
-  const gone = await racketOf('Gone');
+  const serena = await racketOf('Serena Williams', '+380501112244');
+  const gone = await racketOf('Gone', '+380501112255');
 
   await make(maria, { labor_price: 100 });
   await make(maria, { labor_price: 50 });
@@ -1224,12 +1541,43 @@ test('Rate limit', 'login is answered with 429 after too many attempts', async (
     await server.stop();
   }
 });
+test('Rate limit', 'the address in the configured header is what is counted, and without it no header is believed', async () => {
+  const attempt = (client, address) =>
+    client.post('/api/auth/login', { email: 'a@test.local', password: 'x' }, address && { 'x-real-ip': address });
+
+  // A host's edge names the client in x-real-ip: each address has a count of its own.
+  const named = await startServer({ port: CONFIG.port + 1, env: { AUTH_RATE_LIMIT_MAX: '2', CLIENT_IP_HEADER: 'X-Real-IP' } });
+  try {
+    const client = new Client(named.base);
+    const first = [];
+    for (let i = 0; i < 3; i++) first.push((await attempt(client, '198.51.100.1')).status);
+    assertEq(first, [401, 401, 429], 'one address runs out');
+    assertEq((await attempt(client, '198.51.100.2')).status, 401, 'another has its own count');
+    assertEq((await attempt(client, 'not-an-address')).status, 401, 'a header with no address falls back to req.ip, which has not run out');
+  } finally {
+    await named.stop();
+  }
+
+  // Not named: the header is only a header, and cannot be used to get a count of one's own.
+  const plain = await startServer({ port: CONFIG.port + 1, env: { AUTH_RATE_LIMIT_MAX: '2' } });
+  try {
+    const client = new Client(plain.base);
+    const statuses = [];
+    for (const address of ['198.51.100.1', '198.51.100.2', '198.51.100.3', '198.51.100.4']) {
+      statuses.push((await attempt(client, address)).status);
+    }
+    assertEq(statuses, [401, 401, 429, 429], 'every address counts as the same client');
+  } finally {
+    await plain.stop();
+  }
+});
 
 // ---------------------------------------------------------------------------
 async function main() {
   resetDatabase();
-  const server = await startServer();
-  const ctx = { server, anon: new Client(server.base) };
+  const google = await startFakeGoogle();
+  const server = await startServer({ env: { GOOGLE_CLIENT_IDS: google.clientId, GOOGLE_CERTS_URL: google.certsUrl } });
+  const ctx = { server, anon: new Client(server.base), google };
 
   let failed = 0;
   let lastGroup;
@@ -1248,6 +1596,7 @@ async function main() {
   }
 
   await server.stop();
+  await google.stop();
   console.log(`\n${tests.length - failed} passed, ${failed} failed`);
   process.exit(failed ? 1 : 0);
 }

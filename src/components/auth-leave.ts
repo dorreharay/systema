@@ -8,6 +8,18 @@ export const AuthLeaveContext = createContext<(navigate: () => void) => void>((n
   navigate()
 );
 
+// A sign-in screen keeps its content hidden while it is not in focus. The stack's back swipe shows the screen under the one
+// being dragged, and that screen shows its content for as long as the swipe lasts. If the swipe is let go too soon, only
+// the screen that was dragged hears of it, so it tells all the others (to hide again).
+const covers = new Set<() => void>();
+export const addCover = (cover: () => void) => {
+  covers.add(cover);
+  return () => {
+    covers.delete(cover);
+  };
+};
+export const coverAll = () => covers.forEach((cover) => cover());
+
 // Navigation for code inside an AuthLayout that is not a link, for example a form submit.
 export function useAuthRouter() {
   const router = useRouter();

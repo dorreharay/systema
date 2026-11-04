@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "systema",
+    "name": "re:string",
     "slug": "systema",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -8,12 +8,16 @@
     "scheme": "systema",
     "userInterfaceStyle": "light",
     "ios": {
-      "icon": "./assets/expo.icon",
-      "bundleIdentifier": "com.dorreharay.systema",
-      "appleTeamId": "SGMN4DGZ42"
+      "icon": "./assets/images/icon.png",
+      "bundleIdentifier": "com.velar.restring",
+      "appleTeamId": "SGMN4DGZ42",
+      "config": {
+        "usesNonExemptEncryption": false
+      }
     },
     "backgroundColor": "#0b1210",
     "android": {
+      "package": "com.velar.restring",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
@@ -65,6 +69,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "runtimeVersion": {
+      "policy": "fingerprint"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/1aa37823-550e-40e0-b9e8-909265bb86f7"
     },
     "extra": {
       "router": {},

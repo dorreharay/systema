@@ -14,6 +14,9 @@ export type User = {
   timezone: string;
   language: Language;
   notifications_enabled: boolean;
+  // False for an account made with Google: there is no password to confirm deleting it with. A profile that an older version
+  // of the app saved on the device does not say, and is taken to have one.
+  has_password: boolean;
   // False until the first-run setup has been completed.
   setup_completed: boolean;
   created_at: string;
@@ -42,11 +45,19 @@ export const loginRequest = (email: string, password: string) =>
 export const registerRequest = (email: string, password: string) =>
   api<AuthResponse>('/api/auth/register', { method: 'POST', body: { email, password } });
 
+/** Signs in (or up) with the ID token Google gave the app: the server checks it, and finds or makes the account. */
+export const googleLoginRequest = (idToken: string) =>
+  api<AuthResponse>('/api/auth/google', { method: 'POST', body: { id_token: idToken } });
+
 // A short timeout: this is the request the app waits for before it shows anything.
 export const fetchMe = (token: string) => api<User>('/api/auth/me', { token, timeoutMs: 8_000 });
 
 export const logoutRequest = (token: string) =>
   api<{ ok: true }>('/api/auth/logout', { method: 'POST', token });
+
+/** Deletes the account and everything in it, for good. The password is what the server asks for when the account has one. */
+export const deleteAccountRequest = (token: string, password?: string) =>
+  api<{ ok: true }>('/api/auth/delete-account', { method: 'POST', token, body: { password } });
 
 export const forgotPasswordRequest = (email: string) =>
   api<{ ok: true }>('/api/auth/forgot-password', { method: 'POST', body: { email } });

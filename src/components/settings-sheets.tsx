@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { View } from 'react-native';
 
-import { Check, KeyRound } from '@/components/icons';
+import { Check, KeyRound, Trash2 } from '@/components/icons';
 import { colors } from '@/components/ui/colors';
 import { FormError, Input } from '@/components/ui/input';
 import PickerField from '@/components/ui/picker-field';
@@ -12,7 +12,7 @@ import { Text } from '@/components/ui/text';
 import { useToast } from '@/components/ui/toast';
 import { useAuth } from '@/lib/auth';
 import { CURRENCIES, TIME_ZONES, deviceTimeZone, timeZoneLabel } from '@/lib/choices';
-import { describeError } from '@/lib/errors';
+import { describeError, isApiError } from '@/lib/errors';
 import { currencySymbol } from '@/lib/format';
 import { LANGUAGES, useI18n, type Language } from '@/lib/i18n';
 
@@ -258,11 +258,94 @@ export function WorkshopSheet({ visible, onClose }: SheetProps) {
   );
 }
 
+function DeleteAccountForm() {
+  const { user, deleteAccount } = useAuth();
+  const { t } = useI18n();
+  const toast = useToast();
+  const [password, setPassword] = useState('');
+  const [passwordError, setPasswordError] = useState<string>();
+  const [formError, setFormError] = useState<string>();
+  const [deleting, setDeleting] = useState(false);
+  // An account made with Google has no password to ask for. A profile saved by an older version of the app does not say,
+  // and is taken to have one.
+  const needsPassword = user?.has_password !== false;
+
+  const remove = async () => {
+    if (deleting) return;
+    if (needsPassword && !password) {
+      setPasswordError(t('validation_password_required'));
+      return;
+    }
+    setDeleting(true);
+    setPasswordError(undefined);
+    setFormError(undefined);
+    try {
+      await deleteAccount(needsPassword ? password : undefined);
+      // The person is signed out by now and this form is gone: the message is shown over the sign-in screens.
+      toast.success(t('account_deleted'));
+    } catch (error) {
+      if (isApiError(error, 'invalid_password')) {
+        setPasswordError(describeError(error, t));
+      } else {
+        setFormError(describeError(error, t));
+      }
+      setDeleting(false);
+    }
+  };
+
+  return (
+    <>
+      <View className="gap-3 pt-2">
+        <Text className="text-[16.5px] text-muted">{t('account_delete_warning')}</Text>
+        {needsPassword ? (
+          <Input
+            label={t('account_delete_password')}
+            value={password}
+            onChangeText={(text) => {
+              setPassword(text);
+              setPasswordError(undefined);
+            }}
+            error={passwordError}
+            secureTextEntry
+            autoCapitalize="none"
+            autoComplete="current-password"
+            textContentType="password"
+            returnKeyType="done"
+            onSubmitEditing={remove}
+          />
+        ) : null}
+        {formError ? <FormError message={formError} /> : null}
+      </View>
+      <View className="pt-4">
+        <Shortcut
+          compact
+          icon={Trash2}
+          label={t('account_delete_confirm')}
+          color={colors.danger}
+          contentColor={colors.white}
+          onPress={remove}
+          loading={deleting}
+        />
+      </View>
+    </>
+  );
+}
+
+function DeleteAccountSheet({ visible, onClose }: SheetProps) {
+  const { t } = useI18n();
+  return (
+    <Sheet visible={visible} onClose={onClose} form title={t('account_delete')}>
+      <DeleteAccountForm />
+    </Sheet>
+  );
+}
+
 function AccountBody({ onClose }: { onClose: () => void }) {
   const { user, requestPasswordReset } = useAuth();
   const { t } = useI18n();
   const toast = useToast();
   const [sending, setSending] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const sendReset = async () => {
     if (!user) return;
@@ -292,6 +375,17 @@ function AccountBody({ onClose }: { onClose: () => void }) {
         onPress={sendReset}
         loading={sending}
       />
+      <View className="border-t border-line pt-4">
+        <Shortcut
+          compact
+          icon={Trash2}
+          label={t('account_delete')}
+          color={colors.surface}
+          contentColor={colors.danger}
+          onPress={() => setDeleting(true)}
+        />
+      </View>
+      <DeleteAccountSheet visible={deleting} onClose={() => setDeleting(false)} />
     </View>
   );
 }

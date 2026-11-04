@@ -4,6 +4,7 @@ import { View } from 'react-native';
 import AuthLayout from '@/components/auth-layout';
 import AuthSwitch from '@/components/auth-switch';
 import FormMessage from '@/components/form-message';
+// import GoogleSignInButton from '@/components/google-sign-in-button';
 import TextField, { type TextFieldRef } from '@/components/text-field';
 import { colors } from '@/components/ui/colors';
 import Shortcut from '@/components/ui/shortcut';
@@ -118,6 +119,8 @@ export default function Register() {
           submitBehavior="submit"
           onSubmitEditing={() => confirmationRef.current?.focus()}
         />
+        {/* No new-password hint on this one: with it, iOS goes on showing what was typed after the eye hides it again.
+            It fills this field with the strong password it suggests for the one above all the same. */}
         <TextField
           ref={confirmationRef}
           label={t('field_confirm_password')}
@@ -127,14 +130,14 @@ export default function Register() {
           placeholder={t('confirm_password_placeholder')}
           secureTextEntry
           autoCapitalize="none"
-          autoComplete="new-password"
-          textContentType="newPassword"
           returnKeyType="done"
           onSubmitEditing={submit}
         />
         {formError ? <FormMessage message={formError} /> : null}
-        <View className="pt-4">
+        <View className="gap-4 pt-4">
           <Shortcut label={t('create_account')} color={colors.white} contentColor={colors.primary} onPress={submit} loading={submitting} />
+          {/* Sign in with Google is off for now: set it up as in docs/google-sign-in.md, then uncomment this and the import. */}
+          {/* <GoogleSignInButton disabled={submitting} onError={setFormError} /> */}
         </View>
       </View>
     </AuthLayout>

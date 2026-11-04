@@ -11,6 +11,7 @@ import { authLimiter } from '../middleware/rateLimit.js';
 import { validateBody } from '../middleware/validate.js';
 import { sendEmailsBestEffort } from '../utils/email.js';
 import { passwordResetEmail } from '../utils/emailTemplates.js';
+import { verifyGoogleIdToken } from '../utils/google.js';
 import { HttpError } from '../utils/http.js';
 import { optionalText } from '../utils/validators.js';
 import { hashPassword, newPasswordSchema, verifyAgainstDecoy, verifyPassword } from '../utils/password.js';
@@ -21,6 +22,7 @@ import { toPublicUser } from '../utils/user.js';
 const router = express.Router();
 
 const UNIQUE_VIOLATION = '23505';
+const isUniqueViolation = (err) => err?.code === UNIQUE_VIOLATION || err?.cause?.code === UNIQUE_VIOLATION;
 
 const emailSchema = z.preprocess(
   (value) => (typeof value === 'string' ? value.trim().toLowerCase() : value),
@@ -35,6 +37,9 @@ const registerSchema = z.object({
 const loginSchema = z.object({
   email: emailSchema,
   password: z.string({ error: 'Password is required' }).min(1, 'Password is required'),
+});
+const googleSchema = z.object({
+  id_token: z.string({ error: 'Google token is required' }).min(1, 'Google token is required').max(8192),
 });
 const LANGUAGES = ['en', 'uk'];
 const profileSchema = z
@@ -56,6 +61,7 @@ const profileSchema = z
   .refine((profile) => Object.values(profile).some((value) => value !== undefined), {
     message: 'Nothing to change',
   });
+const deleteAccountSchema = z.object({ password: z.string().optional() });
 const forgotPasswordSchema = z.object({ email: emailSchema });
 const resetPasswordSchema = z.object({
   token: z.string({ error: 'Token is required' }).min(1, 'Token is required'),
@@ -92,7 +98,7 @@ router.post('/register', authLimiter, validateBody(registerSchema), async (req, 
     });
   } catch (err) {
     // Two sign-ups with the same address at the same moment: the database settles which one wins.
-    if (err?.code === UNIQUE_VIOLATION || err?.cause?.code === UNIQUE_VIOLATION) throw emailTaken();
+    if (isUniqueViolation(err)) throw emailTaken();
     throw err;
   }
 
@@ -105,7 +111,9 @@ router.post('/login', authLimiter, validateBody(loginSchema), async (req, res) =
   const invalid = () => new HttpError(401, 'Invalid email or password', { code: 'invalid_credentials' });
 
   const [user] = await db.select().from(users).where(eq(users.email, email)).limit(1);
-  if (!user) {
+  // An account made with Google has no password. Refusing it takes as long as a wrong password does, so the two answers
+  // cannot be told apart by the time they take.
+  if (!user?.password_hash) {
     await verifyAgainstDecoy(password);
     throw invalid();
   }
@@ -117,6 +125,71 @@ router.post('/login', authLimiter, validateBody(loginSchema), async (req, res) =
   }
 
   signIn(res, user);
+});
+
+/**
+ * The account a Google sign-in is for: the one already linked to this Google user, else the one with the same email (it
+ * is linked now), else a new one.
+ */
+async function accountForGoogle({ sub, email, name }) {
+  const [linked] = await db.select().from(users).where(eq(users.google_sub, sub)).limit(1);
+  if (linked) return { user: linked, created: false };
+
+  const [sameEmail] = await db.select().from(users).where(eq(users.email, email)).limit(1);
+  if (sameEmail) {
+    // The caller turns this one away; nothing about it is changed.
+    if (!sameEmail.is_active) return { user: sameEmail, created: false };
+    if (sameEmail.google_sub) {
+      // The same address but another Google user: Google does not give an address to someone else, but a company's
+      // mailbox can pass to a new colleague.
+      throw new HttpError(409, 'This email is linked to another Google account', { code: 'google_account_mismatch' });
+    }
+    // Signing up never checked that the address is the person's, so a password somebody else set must not outlive
+    // Google showing whose address it is. It is removed, and every session opened before now ends; to use a password
+    // again, the person resets it.
+    const [user] = await db
+      .update(users)
+      .set({
+        google_sub: sub,
+        ...(!sameEmail.full_name && { full_name: name }),
+        ...(sameEmail.password_hash && { password_hash: null, password_changed_at: new Date() }),
+      })
+      .where(eq(users.id, sameEmail.id))
+      .returning();
+    return { user, created: false };
+  }
+
+  const user = await db.transaction(async (tx) => {
+    const [created] = await tx.insert(users).values({ email, full_name: name, google_sub: sub }).returning();
+    await createDefaultServices(tx, created.id);
+    await createStarterCatalog(tx, created.id);
+    return created;
+  });
+  return { user, created: true };
+}
+
+// POST /api/auth/google
+router.post('/google', authLimiter, validateBody(googleSchema), async (req, res) => {
+  const google = await verifyGoogleIdToken(req.body.id_token);
+  if (!google.emailVerified) {
+    throw new HttpError(403, 'The email of this Google account is not verified', { code: 'google_email_unverified' });
+  }
+
+  let account;
+  try {
+    account = await accountForGoogle(google);
+  } catch (err) {
+    // The first sign-in of one person arrived twice at once: the database let one of them make the account, and the
+    // other finds it now.
+    if (!isUniqueViolation(err)) throw err;
+    account = await accountForGoogle(google);
+  }
+
+  // Said after the token is checked, so it only tells that to someone who has this Google account.
+  if (!account.user.is_active) {
+    throw new HttpError(403, 'Account is inactive. Contact support.', { code: 'account_inactive' });
+  }
+  signIn(res, account.user, account.created ? 201 : 200);
 });
 
 // POST /api/auth/logout
@@ -143,6 +216,23 @@ router.patch('/me', requireAuth, validateBody(profileSchema), async (req, res) =
     .where(eq(users.id, req.user.id))
     .returning();
   res.json(toPublicUser(updated));
+});
+
+// POST /api/auth/delete-account
+router.post('/delete-account', requireAuth, authLimiter, validateBody(deleteAccountSchema), async (req, res) => {
+  const { password } = req.body;
+  // A stolen session could change anything else in the account, but not end it: the password has to be given as well. An
+  // account made with Google has none, and there the session is all there is to go by. It is a 403 and not a 401, so that
+  // the app does not take a wrong password for an ended session and sign the person out.
+  if (req.user.password_hash && !(password && (await verifyPassword(password, req.user.password_hash)))) {
+    throw new HttpError(403, 'The password is wrong', { code: 'invalid_password' });
+  }
+
+  // Everything the account owns goes with it: its clients, rackets, strings, services, orders and photos are deleted by
+  // the foreign keys, in the same statement, so there is no half-deleted account.
+  await db.delete(users).where(eq(users.id, req.user.id));
+  clearSessionCookie(res);
+  res.json({ ok: true });
 });
 
 // POST /api/auth/forgot-password

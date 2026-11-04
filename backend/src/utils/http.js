@@ -13,14 +13,16 @@ export const isUuid = (value) => typeof value === 'string' && UUID.test(value);
 /**
  * An error a route can throw to answer with a specific status. `code` is a short machine-readable
  * reason (`email_taken`) for a screen that wants to react to one case in particular, rather than
- * match on the message. `fields` maps a field name to what is wrong with it.
+ * match on the message. `fields` maps a field name to what is wrong with it. `data` is what the screen
+ * may need to say more about it (the client that already has the phone number).
  */
 export class HttpError extends Error {
-  constructor(status, message, { code, fields } = {}) {
+  constructor(status, message, { code, fields, data } = {}) {
     super(message);
     this.status = status;
     if (code) this.code = code;
     if (fields) this.fields = fields;
+    if (data) this.data = data;
   }
 }
 
