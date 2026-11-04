@@ -1,0 +1,51 @@
+# Caddy config for the Railway deployment (see README.md). It does what _headers and _redirects do on Netlify, which a plain
+# Caddy server does not read. Railway ends TLS at its edge, so this server only speaks http, on the port Railway gives it.
+{
+	admin off
+	auto_https off
+}
+
+:{$PORT:8080} {
+	root * /srv
+	encode zstd gzip
+
+	# Same headers as _headers. The CSP is what keeps "no third-party anything" true: scripts, fonts, frames and inline
+	# styles are not allowed, so none can slip in unnoticed.
+	header {
+		Content-Security-Policy "default-src 'none'; img-src 'self'; style-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+		Referrer-Policy "no-referrer"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+		-Server
+	}
+
+	# Railway's edge sends http to https itself; this is only a guard in case a request arrives that way.
+	@http header X-Forwarded-Proto http
+	redir @http https://{host}{uri} 308
+
+	# www and the domain of the app's mail and API send visitors to the one canonical address.
+	@www host www.tryrestring.com
+	redir @www https://tryrestring.com{uri} 301
+
+	@mail host myrestring.com www.myrestring.com
+	redir @mail https://tryrestring.com{uri} 301
+
+	# Optional password for the whole site (HTTP basic auth). docker-entrypoint.sh writes this snippet when the variable
+	# SITE_PASSWORD_HASH is set; without it the pattern matches no file and the site is open. The redirects above run first,
+	# which reveals nothing.
+	import /etc/caddy/auth/*.caddy
+
+	# Files of the deployment that visitors must not see (the Dockerfile also deletes them from the image).
+	file_server {
+		hide README.md Dockerfile Caddyfile docker-entrypoint.sh _headers _redirects
+	}
+
+	handle_errors {
+		@notfound expression {err.status_code} == 404
+		handle @notfound {
+			rewrite * /404.html
+			file_server
+		}
+	}
+}

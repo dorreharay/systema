@@ -1,0 +1,12 @@
+# Netlify rules (see README.md). Another host ignores this file, or wants the "!" and the lines with a domain removed.
+#
+# The README is for the owner, not for visitors. "!" makes the rule win over the file that exists at this path.
+/README.md  /  302!
+
+# myrestring.com is the domain of the app's mail and API; whoever types it into a browser lands on the site. For this the
+# domain has to be added to the Netlify project as a domain alias, with its DNS pointing at Netlify. http and https are
+# separate rules.
+http://myrestring.com/*  https://tryrestring.com/:splat  301!
+https://myrestring.com/*  https://tryrestring.com/:splat  301!
+http://www.myrestring.com/*  https://tryrestring.com/:splat  301!
+https://www.myrestring.com/*  https://tryrestring.com/:splat  301!

@@ -1,0 +1,119 @@
+/* re:string site. Colours follow the app (src/global.css, src/components/ui/colors.ts). System fonts, no scripts, no inline styles (see _headers). */
+:root {
+  color-scheme: light dark;
+  --bg: #fff; --surface: #f4f5f6; --line: #e3e5e8; --ink: #12171c; --muted: #667085;
+  --brand: #173c32; --brand-soft: #e6efeb; --hero: #173c32; --hero-lead: #e6efeb;
+  --blue: #c3ddf0; --yellow: #f3d590; --green: #cce7ac;
+  --focus: #1d6fb8;
+  --r: 18px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0b1210; --surface: #131d19; --line: #25332d; --ink: #e9f0ed; --muted: #9bada6;
+    --brand: #8fd0b6; --brand-soft: #1b2b25; --hero: #12291f; --hero-lead: #cfe3da;
+    --blue: #1a2e3a; --yellow: #38301a; --green: #233420;
+    --focus: #7ab8ee;
+  }
+}
+
+*, ::before, ::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+@media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 400 1.0625rem/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+img, svg { max-width: 100%; }
+h1, h2, h3 { margin: 0 0 .5em; line-height: 1.2; letter-spacing: -.012em; font-weight: 700; }
+h1 { font-size: clamp(1.9rem, 6.6vw, 3rem); }
+h2 { font-size: 1.45rem; }
+h3 { font-size: 1.1rem; }
+p, ul, ol, dl { margin: 0 0 1em; }
+a { color: var(--brand); text-underline-offset: .18em; }
+a:hover { text-decoration-thickness: 2px; }
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; border-radius: 4px; }
+
+.wrap { width: 100%; max-width: 64rem; margin: 0 auto; padding: 0 1rem; }
+@media (min-width: 40rem) { .wrap { padding: 0 1.5rem; } }
+.skip { position: absolute; left: -999px; top: 0; z-index: 10; padding: .6rem 1rem; background: var(--ink); color: var(--bg); }
+.skip:focus { left: 0; }
+
+/* Header: the wordmark and the language switch */
+.top { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding-block: 1rem; }
+.brand { display: inline-flex; color: var(--brand); }
+.logo { display: block; height: 1.5rem; width: auto; }
+.lang { display: flex; gap: .2rem; padding: .2rem; border-radius: 999px; background: var(--surface); font-size: .9rem; font-weight: 600; }
+.lang a { padding: .3rem .8rem; border-radius: 999px; color: var(--muted); text-decoration: none; }
+.lang a[aria-current] { background: var(--bg); color: var(--ink); box-shadow: 0 0 0 1px var(--line); }
+
+/* Landing hero: dark green like the app's welcome screen */
+.hero { background: var(--hero); color: #fff; }
+header.hero { box-shadow: 0 1px 0 var(--hero); } /* no hairline between the bar and the hero below it */
+.hero .brand { color: #fff; }
+.hero .lang { background: rgba(255, 255, 255, .14); }
+.hero .lang a { color: var(--hero-lead); }
+.hero .lang a[aria-current] { background: #fff; color: var(--hero); box-shadow: none; }
+.hero-body { padding-block: 1.5rem 3.2rem; }
+.app-icon { display: block; width: 5.5rem; height: 5.5rem; margin-bottom: 1.4rem; border-radius: 22.4%; box-shadow: 0 0 0 1px rgba(255, 255, 255, .16), 0 10px 30px rgba(0, 0, 0, .35); }
+.eyebrow { margin-bottom: .6rem; font-size: .95rem; font-weight: 600; color: var(--hero-lead); }
+.lead { max-width: 34rem; font-size: 1.2rem; color: var(--hero-lead); }
+.soon { display: inline-block; margin: .6rem 0 .5rem; padding: .8rem 1.2rem; border: 1px dashed rgba(255, 255, 255, .5); border-radius: 14px; background: rgba(255, 255, 255, .1); font-weight: 600; }
+.soon-note { margin: 0; font-size: .92rem; color: var(--hero-lead); }
+/* once the app is live: <a class="soon" href="https://apps.apple.com/...">, see README.md */
+a.soon { border-style: solid; border-color: #fff; background: #fff; color: var(--hero); text-decoration: none; }
+a.soon:hover { text-decoration: underline; }
+
+/* Sections and cards */
+section { padding: 2.4rem 0 .4rem; }
+.grid { display: grid; gap: 1rem; margin-bottom: 1rem; }
+@media (min-width: 40rem) { .grid { grid-template-columns: repeat(2, 1fr); } }
+@media (min-width: 60rem) { .grid-3 { grid-template-columns: repeat(3, 1fr); } }
+.card { padding: 1.3rem 1.4rem; border-radius: var(--r); background: var(--surface); }
+.card h3 { margin-bottom: .35rem; }
+.card p { margin: 0; }
+.blue { background: var(--blue); }
+.yellow { background: var(--yellow); }
+.green { background: var(--green); }
+.band { margin: 2rem 0 0; padding: 1.4rem; border-radius: var(--r); background: var(--brand-soft); }
+.band p { margin-bottom: .5rem; }
+.band a { font-weight: 600; }
+
+/* Where the screenshots will go */
+.shots { display: grid; grid-template-columns: repeat(3, 1fr); gap: .75rem; max-width: 30rem; margin: 1rem 0 .6rem; }
+.shot { display: grid; place-items: center; aspect-ratio: 9 / 19.5; border: 2px dashed var(--line); border-radius: 1.2rem; background: var(--surface); color: var(--muted); font-weight: 600; }
+.shots img { width: 100%; height: auto; border: 1px solid var(--line); border-radius: 1.2rem; } /* real screenshots, see README.md */
+.shots-note { font-size: .95rem; color: var(--muted); }
+
+/* Legal and support pages */
+.page { padding-block: 1rem 0; }
+.prose { max-width: 42rem; }
+.prose h2 { margin-top: 2.4rem; scroll-margin-top: 1rem; }
+.prose ul, .prose ol { padding-left: 1.3rem; }
+.prose li { margin: .3rem 0; }
+.meta { color: var(--muted); font-size: .95rem; }
+.sum, .toc { margin: 0 0 1.2rem; padding: 1.1rem 1.25rem; border-radius: var(--r); background: var(--brand-soft); }
+.toc { background: var(--surface); }
+.sum h2 { margin: 0 0 .5rem; font-size: 1.1rem; }
+.sum ul { margin: 0; }
+.toc ol { margin: 0; }
+@media (min-width: 40rem) { .toc ol { columns: 2; column-gap: 2rem; } }
+.toc li { break-inside: avoid; }
+.prov dt { margin-top: 1rem; font-weight: 700; }
+.prov dd { margin: .15rem 0 0; }
+.mail { display: inline-block; padding: .85rem 1.4rem; border-radius: 14px; background: var(--brand); color: var(--bg); font-size: 1.1rem; font-weight: 700; text-decoration: none; }
+.mail:hover { text-decoration: underline; }
+details { margin: .6rem 0; padding: .1rem 1rem; border: 1px solid var(--line); border-radius: 14px; }
+summary { display: flex; justify-content: space-between; gap: 1rem; padding: .8rem 0; font-weight: 650; cursor: pointer; list-style: none; }
+summary::-webkit-details-marker { display: none; }
+summary::after { content: "+"; font-size: 1.4rem; font-weight: 400; line-height: 1.1; }
+details[open] summary::after { content: "\2013"; }
+details > :not(summary) { margin-bottom: .9rem; }
+
+/* Footer */
+.foot { margin-top: 3rem; padding: 1.5rem 0 2.5rem; border-top: 1px solid var(--line); color: var(--muted); font-size: .95rem; }
+.foot nav { display: flex; flex-wrap: wrap; gap: .4rem 1.2rem; margin-bottom: .8rem; }
+.foot a { color: var(--muted); }
+.foot p { margin-bottom: .4rem; }
+
+@media print { .skip, .lang, .foot nav { display: none; } }
