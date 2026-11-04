@@ -1,10 +1,14 @@
 import nodemailer from 'nodemailer';
 import { config } from '../config.js';
 import { describeEmailFailure } from './emailFailure.js';
+import { sendWithResend } from './resend.js';
 
 let transporter;
 
 const smtpConfigured = () => Boolean(config.smtp.host && config.smtp.user);
+
+/** `"re:string" <noreply@example.com>`: the name in quotes, as a name with a colon in it has to be. */
+const sender = () => `"${config.emailFrom.name.replace(/["\\]/g, '')}" <${config.emailFrom.address}>`;
 
 function getTransporter() {
   transporter ??= nodemailer.createTransport({
@@ -26,21 +30,27 @@ function getTransporter() {
  * the email *is* the job. An email that merely goes with an action is sent with
  * `sendEmailsBestEffort` instead.
  *
- * Without SMTP settings nothing is sent. While developing, the email is printed instead, with its
- * links, so a password reset can be tried without a mail server.
+ * It goes out through Resend's HTTP API when RESEND_API_KEY is set, else over SMTP. With neither, nothing
+ * is sent. While developing, the email is printed instead, with its links, so a password reset can be
+ * tried without a mail server.
  */
 export async function sendEmail({ to, subject, text, html }) {
+  if (config.resend.apiKey) {
+    await sendWithResend({ ...config.resend, from: sender(), to, subject, text, html });
+    return;
+  }
+
   if (!smtpConfigured()) {
     if (config.isProduction) {
-      console.warn(`[email] Not sent, SMTP is not configured. To: ${to}, Subject: ${subject}`);
+      console.warn(`[email] Not sent, no email service is configured. To: ${to}, Subject: ${subject}`);
     } else {
-      console.log(`[email] Not sent, SMTP is not configured. To: ${to}\n  Subject: ${subject}\n\n${text}\n`);
+      console.log(`[email] Not sent, no email service is configured. To: ${to}\n  Subject: ${subject}\n\n${text}\n`);
     }
     return;
   }
 
   await getTransporter().sendMail({
-    from: `"${config.smtp.fromName}" <${config.smtp.fromAddress}>`,
+    from: sender(),
     to,
     subject,
     text,

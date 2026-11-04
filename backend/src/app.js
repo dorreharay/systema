@@ -9,6 +9,7 @@ import clientsRouter from './routes/clients.js';
 import dashboardRouter from './routes/dashboard.js';
 import insightsRouter from './routes/insights.js';
 import ordersRouter from './routes/orders.js';
+import pagesRouter from './routes/pages.js';
 import photosRouter from './routes/photos.js';
 import racketsRouter from './routes/rackets.js';
 import referenceRouter from './routes/reference.js';
@@ -28,6 +29,9 @@ export function createApp() {
 
   // No authentication: used by the host (Railway, a load balancer) to see that the server is up.
   app.get('/api/health', (req, res) => res.json({ ok: true }));
+
+  // The few pages the server has, outside the API: the one behind the link in a password reset email.
+  app.use(pagesRouter);
 
   app.use('/api/auth', authRouter);
   app.use('/api/dashboard', dashboardRouter);

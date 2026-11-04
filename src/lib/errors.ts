@@ -20,6 +20,10 @@ const MESSAGES: Record<string, TKey> = {
   google_email_unverified: 'error_google_email_unverified',
   google_account_mismatch: 'error_google_mismatch',
   google_not_configured: 'error_google_unavailable',
+  apple_token_invalid: 'error_apple_token',
+  apple_email_missing: 'error_apple_email_missing',
+  apple_account_mismatch: 'error_apple_mismatch',
+  apple_not_configured: 'error_apple_unavailable',
 };
 
 /** Why signing in with Google could not be done on this device. The server turning a token down is an `ApiError`. */
@@ -41,10 +45,30 @@ const GOOGLE_MESSAGES: Record<GoogleSignInError['reason'], TKey> = {
   failed: 'error_google_failed',
 };
 
+/** Why signing in with Apple could not be done on this device. The server turning a token down is an `ApiError`. */
+export class AppleSignInError extends Error {
+  reason: 'unavailable' | 'failed';
+
+  constructor(reason: AppleSignInError['reason']) {
+    super(`Apple sign-in: ${reason}`);
+    this.name = 'AppleSignInError';
+    this.reason = reason;
+  }
+}
+
+const APPLE_MESSAGES: Record<AppleSignInError['reason'], TKey> = {
+  // A build made before the sign-in was added: nothing the person can do about it.
+  unavailable: 'error_apple_unavailable',
+  failed: 'error_apple_failed',
+};
+
 /** What to tell the person when a request to the backend fails: never the raw text the server sent. */
 export function describeError(error: unknown, t: Translate) {
   if (error instanceof GoogleSignInError) {
     return t(GOOGLE_MESSAGES[error.reason]);
+  }
+  if (error instanceof AppleSignInError) {
+    return t(APPLE_MESSAGES[error.reason]);
   }
   if (error instanceof ApiError) {
     if (error.code && MESSAGES[error.code]) {

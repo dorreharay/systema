@@ -10,10 +10,10 @@ const urlSchemeOf = (clientId) => clientId.split('.').reverse().join('.');
 // on a scheme, so it gets one that matches no real client.
 const UNSET_SCHEME = 'com.googleusercontent.apps.not-set-up';
 
-// The build profiles of eas.json whose apps are installed on phones other than the developer's. Metro is not there to
-// show such an app the backend, so it is told the address, and a build without it would be uploaded to the store and then
-// fail on every request.
-const SHIPPED_PROFILES = ['preview', 'production'];
+// The build profiles of eas.json whose apps are finished apps: installed on other people's phones, or run in a simulator
+// with no Metro. Nothing is there to show such an app the backend, so it is told the address, and a build without it would
+// be uploaded to the store and then fail on every request.
+const SHIPPED_PROFILES = ['preview', 'simulator', 'production'];
 
 module.exports = ({ config }) => {
   const iosClientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID?.trim();

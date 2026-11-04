@@ -13,7 +13,7 @@ import os from 'node:os';
 import { dirname, join } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
-import { SignJWT, exportJWK, generateKeyPair } from 'jose';
+import { SignJWT, exportJWK, exportPKCS8, generateKeyPair, jwtVerify } from 'jose';
 
 const BACKEND = join(dirname(fileURLToPath(import.meta.url)), '../..');
 
@@ -145,6 +145,13 @@ export async function startServer({ port = CONFIG.port, env = {} } = {}) {
       SEED_ADMIN_NAME: CONFIG.seedAdmin.name,
       // The tests of everything else start from an empty catalog; the ones of the starter catalog turn it on.
       STARTER_CATALOG: 'false',
+      // Sign in with Apple is off unless a test turns it on (startFakeApple().env): a developer's .env must not decide that.
+      APPLE_CLIENT_IDS: '',
+      APPLE_KEYS_URL: '',
+      APPLE_AUTH_URL: '',
+      APPLE_TEAM_ID: '',
+      APPLE_KEY_ID: '',
+      APPLE_PRIVATE_KEY: '',
       ...env,
     },
   });
@@ -203,6 +210,142 @@ export async function startFakeGoogle({ clientId = 'test-web-client.apps.googleu
         .sign(key),
     /** A key Google never published, for a token that is forged. */
     otherKey: async () => (await generateKeyPair('RS256')).privateKey,
+    stop: () => new Promise((resolve) => server.close(resolve)),
+  };
+}
+
+/**
+ * Stands in for Apple. It serves the public key its identity tokens are checked with and signs tokens the way Apple does, and
+ * it answers the two calls the server makes for itself, `/auth/token` and `/auth/revoke`, after checking the client secret
+ * they come with as Apple does (signed with the Sign in with Apple key, naming the team, the key and the app). Start the
+ * server with `env`, which is everything Sign in with Apple needs.
+ */
+export async function startFakeApple({ clientId = 'com.test.restring' } = {}) {
+  const { publicKey, privateKey } = await generateKeyPair('RS256');
+  const jwk = { ...(await exportJWK(publicKey)), kid: 'apple-test-key', alg: 'RS256', use: 'sig' };
+  // The key (a .p8 file) the server asks Apple for things with: Apple knows the public half.
+  const signing = await generateKeyPair('ES256', { extractable: true });
+  const teamId = 'TESTTEAM01';
+  const keyId = 'TESTKEY001';
+  const privatePem = await exportPKCS8(signing.privateKey);
+
+  const asked = [];
+  const answers = {};
+  const server = createServer((req, res) => {
+    let raw = '';
+    req.on('data', (chunk) => (raw += chunk));
+    req.on('end', async () => {
+      const send = (status, body) => {
+        res.statusCode = status;
+        if (body === undefined) return res.end();
+        res.setHeader('content-type', 'application/json');
+        return res.end(JSON.stringify(body));
+      };
+      if (req.method === 'GET' && req.url === '/auth/keys') return send(200, { keys: [jwk] });
+
+      const endpoint = req.method === 'POST' ? { '/auth/token': 'token', '/auth/revoke': 'revoke' }[req.url] : undefined;
+      if (!endpoint) return send(404, { error: 'not_found' });
+
+      const { client_secret: clientSecret, ...fields } = Object.fromEntries(new URLSearchParams(raw));
+      const secret = await jwtVerify(clientSecret ?? '', signing.publicKey, {
+        algorithms: ['ES256'],
+        issuer: teamId,
+        audience: 'https://appleid.apple.com',
+        subject: clientId,
+      }).then(
+        ({ payload, protectedHeader }) => ({ valid: true, header: protectedHeader, claims: payload }),
+        (err) => ({ valid: false, reason: err.message })
+      );
+      asked.push({ endpoint, contentType: req.headers['content-type'], fields, secret });
+
+      if (answers[endpoint]) return send(answers[endpoint].status, answers[endpoint].body);
+      if (!secret.valid || fields.client_id !== clientId) return send(400, { error: 'invalid_client' });
+      if (endpoint === 'token') {
+        if (fields.grant_type !== 'authorization_code' || !fields.code) return send(400, { error: 'invalid_request' });
+        // The refresh token is made from the code, so that a test can tell whose it is.
+        return send(200, {
+          access_token: `access-${fields.code}`,
+          token_type: 'Bearer',
+          expires_in: 3600,
+          refresh_token: `refresh-${fields.code}`,
+          id_token: 'not-read.by.the-server',
+        });
+      }
+      // /revoke answers 200 with nothing.
+      return fields.token ? send(200) : send(400, { error: 'invalid_request' });
+    });
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const authUrl = `http://127.0.0.1:${server.address().port}/auth`;
+  const keysUrl = `${authUrl}/keys`;
+
+  return {
+    clientId,
+    teamId,
+    keyId,
+    authUrl,
+    keysUrl,
+    /** What a server needs to sign in with this Apple and to ask it for things. The key is on one line, the way a host holds it. */
+    env: {
+      APPLE_CLIENT_IDS: clientId,
+      APPLE_KEYS_URL: keysUrl,
+      APPLE_AUTH_URL: authUrl,
+      APPLE_TEAM_ID: teamId,
+      APPLE_KEY_ID: keyId,
+      APPLE_PRIVATE_KEY: privatePem.trim().replace(/\n/g, '\\n'),
+    },
+    /**
+     * An identity token as Apple would issue it to this app. `claims` add to or replace its claims (`sub`, `email`,
+     * `email_verified`, `is_private_email`, `aud`, `iss`); `key` signs it with another key than the one served, and `expires`
+     * is when it stops being valid (seconds since 1970, or a duration such as '10m').
+     */
+    identityToken: ({ key = privateKey, expires = '10m', ...claims } = {}) =>
+      new SignJWT({ iss: 'https://appleid.apple.com', aud: clientId, email_verified: 'true', ...claims })
+        .setProtectedHeader({ alg: 'RS256', kid: 'apple-test-key' })
+        .setIssuedAt()
+        .setExpirationTime(expires)
+        .sign(key),
+    /** A key Apple never published, for a token that is forged. */
+    otherKey: async () => (await generateKeyPair('RS256')).privateKey,
+    /** What the server asked of `endpoint` (`'token'` or `'revoke'`), oldest first: `{ fields, contentType, secret }`. */
+    asked: (endpoint) => asked.filter((request) => request.endpoint === endpoint),
+    /** From now on `endpoint` answers `status` and `body` whatever it is asked; with no arguments, as it should again. */
+    answer: (endpoint, status, body) => {
+      if (status === undefined) delete answers[endpoint];
+      else answers[endpoint] = { status, body };
+    },
+    stop: () => new Promise((resolve) => server.close(resolve)),
+  };
+}
+
+/**
+ * Stands in for Resend. It keeps every request it is asked to send an email with in `sent` and answers 200 with an id, or,
+ * after `answer(status, body)`, with that. Start the server with RESEND_API_KEY and RESEND_API_URL=`apiUrl`.
+ */
+export async function startFakeResend() {
+  const sent = [];
+  const reply = { status: 200, body: { id: 'fake-email-id' } };
+  const server = createServer((req, res) => {
+    let raw = '';
+    req.on('data', (chunk) => (raw += chunk));
+    req.on('end', () => {
+      sent.push({
+        method: req.method,
+        url: req.url,
+        authorization: req.headers.authorization,
+        body: raw ? JSON.parse(raw) : undefined,
+      });
+      res.statusCode = reply.status;
+      res.setHeader('content-type', 'application/json');
+      res.end(JSON.stringify(reply.body));
+    });
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+
+  return {
+    apiUrl: `http://127.0.0.1:${server.address().port}`,
+    sent,
+    answer: (status, body) => Object.assign(reply, { status, body }),
     stop: () => new Promise((resolve) => server.close(resolve)),
   };
 }

@@ -1,4 +1,5 @@
 import { api } from '@/lib/api';
+import type { AppleCredential } from '@/lib/apple-sign-in';
 import type { Language } from '@/lib/i18n';
 import type { TensionUnit } from '@/lib/types';
 
@@ -14,7 +15,7 @@ export type User = {
   timezone: string;
   language: Language;
   notifications_enabled: boolean;
-  // False for an account made with Google: there is no password to confirm deleting it with. A profile that an older version
+  // False for an account made with Google or Apple: there is no password to confirm deleting it with. A profile that an older version
   // of the app saved on the device does not say, and is taken to have one.
   has_password: boolean;
   // False until the first-run setup has been completed.
@@ -48,6 +49,20 @@ export const registerRequest = (email: string, password: string) =>
 /** Signs in (or up) with the ID token Google gave the app: the server checks it, and finds or makes the account. */
 export const googleLoginRequest = (idToken: string) =>
   api<AuthResponse>('/api/auth/google', { method: 'POST', body: { id_token: idToken } });
+
+/**
+ * Signs in (or up) with what Apple gave the app: the server checks the identity token, and finds or makes the account.
+ * The name is sent because Apple gives it only the first time; the code lets the server revoke Apple's token on deletion.
+ */
+export const appleLoginRequest = (credential: AppleCredential) =>
+  api<AuthResponse>('/api/auth/apple', {
+    method: 'POST',
+    body: {
+      identity_token: credential.identityToken,
+      ...(credential.authorizationCode && { authorization_code: credential.authorizationCode }),
+      ...(credential.fullName && { full_name: credential.fullName }),
+    },
+  });
 
 // A short timeout: this is the request the app waits for before it shows anything.
 export const fetchMe = (token: string) => api<User>('/api/auth/me', { token, timeoutMs: 8_000 });

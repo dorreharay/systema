@@ -21,6 +21,15 @@ export function loadConfig(env = process.env) {
   const isProduction = nodeEnv === 'production';
   // Where the app lives. Links in emails (a password reset) point here.
   const appUrl = (text(env.APP_URL) ?? 'http://localhost:8081').replace(/\/+$/, '');
+  const smtp = {
+    host: text(env.SMTP_HOST),
+    port: integer(env.SMTP_PORT, 587),
+    secure: flag(env.SMTP_SECURE, false),
+    user: text(env.SMTP_USER),
+    pass: text(env.SMTP_PASS),
+    fromName: text(env.SMTP_FROM_NAME) ?? text(env.APP_NAME) ?? 're:string',
+    fromAddress: text(env.SMTP_FROM_ADDRESS) ?? text(env.SMTP_USER),
+  };
 
   return {
     nodeEnv,
@@ -43,7 +52,23 @@ export function loadConfig(env = process.env) {
     // Where Google publishes the keys it signs those tokens with. Only a test has a reason to change it.
     googleCertsUrl: text(env.GOOGLE_CERTS_URL) ?? 'https://www.googleapis.com/oauth2/v3/certs',
 
+    // Sign in with Apple: the app's bundle IDs, which are what the identity token it sends is meant for. Empty turns Apple
+    // sign-in off (see utils/apple.js).
+    appleClientIds: list(env.APPLE_CLIENT_IDS, []),
+    // Where Apple publishes the keys it signs those tokens with, and the base of its /token and /revoke endpoints. Only a
+    // test has a reason to change either.
+    appleKeysUrl: text(env.APPLE_KEYS_URL) ?? 'https://appleid.apple.com/auth/keys',
+    appleAuthUrl: (text(env.APPLE_AUTH_URL) ?? 'https://appleid.apple.com/auth').replace(/\/+$/, ''),
+    // What the server needs to ask Apple for something itself (to turn the authorization code of a sign-in into a refresh
+    // token, and to revoke that token when the account is deleted): the Developer team, and a Sign in with Apple key (.p8).
+    // All three or none. A .p8 file in a one-line variable has its line breaks written as \n.
+    appleTeamId: text(env.APPLE_TEAM_ID),
+    appleKeyId: text(env.APPLE_KEY_ID),
+    applePrivateKey: text(env.APPLE_PRIVATE_KEY)?.replace(/\\n/g, '\n'),
+
     appUrl,
+    // The app's own URL scheme (app.json: `scheme`), which the page behind a password reset link opens the app with.
+    appScheme: text(env.APP_SCHEME) ?? 'systema',
     // Browsers only: a native app sends no Origin header and is not affected by CORS.
     corsOrigins: list(
       env.CORS_ORIGINS,
@@ -59,14 +84,17 @@ export function loadConfig(env = process.env) {
     // Attempts per IP and 15 minutes at the endpoints that take a password or send an email.
     authRateLimit: { windowMs: 15 * 60 * 1000, max: integer(env.AUTH_RATE_LIMIT_MAX, 20) },
 
-    smtp: {
-      host: text(env.SMTP_HOST),
-      port: integer(env.SMTP_PORT, 587),
-      secure: flag(env.SMTP_SECURE, false),
-      user: text(env.SMTP_USER),
-      pass: text(env.SMTP_PASS),
-      fromName: text(env.SMTP_FROM_NAME) ?? text(env.APP_NAME) ?? 're:string',
-      fromAddress: text(env.SMTP_FROM_ADDRESS) ?? text(env.SMTP_USER),
+    smtp,
+    // Resend, over HTTPS: where the host lets a server open no SMTP connection (Railway's Hobby plan does not), a key is all
+    // it takes. `apiUrl` is only changed by a test, which stands in for Resend.
+    resend: {
+      apiKey: text(env.RESEND_API_KEY),
+      apiUrl: (text(env.RESEND_API_URL) ?? 'https://api.resend.com').replace(/\/+$/, ''),
+    },
+    // Who emails come from, whichever way they go out. An EMAIL_FROM_* setting wins over the SMTP_FROM_* ones.
+    emailFrom: {
+      name: text(env.EMAIL_FROM_NAME) ?? smtp.fromName,
+      address: text(env.EMAIL_FROM_ADDRESS) ?? smtp.fromAddress,
     },
 
     // Whether a new account starts with a catalog of common rackets and strings, none in stock (see utils/defaults.js).
@@ -91,6 +119,23 @@ export function assertConfig(settings = config) {
     problems.push('JWT_SECRET is not set (generate one with: openssl rand -base64 48)');
   } else if (settings.jwtSecret.length < 32) {
     problems.push('JWT_SECRET is too short: use at least 32 characters');
+  }
+  if (settings.resend.apiKey && !settings.emailFrom.address) {
+    problems.push('EMAIL_FROM_ADDRESS is not set (RESEND_API_KEY needs the address emails come from, on a domain verified with Resend)');
+  }
+  // The key that lets the server talk to Apple is a set of three, and is no use without the app it is for.
+  const appleKey = {
+    APPLE_TEAM_ID: settings.appleTeamId,
+    APPLE_KEY_ID: settings.appleKeyId,
+    APPLE_PRIVATE_KEY: settings.applePrivateKey,
+  };
+  if (Object.values(appleKey).some(Boolean)) {
+    for (const [name, value] of Object.entries(appleKey)) {
+      if (!value) problems.push(`${name} is not set (APPLE_TEAM_ID, APPLE_KEY_ID and APPLE_PRIVATE_KEY go together)`);
+    }
+    if (settings.appleClientIds.length === 0) {
+      problems.push('APPLE_CLIENT_IDS is not set (the Apple key needs the bundle ID of the app it is for)');
+    }
   }
   if (problems.length > 0) {
     throw new Error(`Invalid configuration:\n  - ${problems.join('\n  - ')}\nSee backend/.env.example.`);

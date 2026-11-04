@@ -6,7 +6,7 @@ import AuthLayout from '@/components/auth-layout';
 import AuthLink from '@/components/auth-link';
 import AuthSwitch from '@/components/auth-switch';
 import FormMessage from '@/components/form-message';
-// import GoogleSignInButton from '@/components/google-sign-in-button';
+import SocialSignIn from '@/components/social-sign-in';
 import TextField, { type TextFieldRef } from '@/components/text-field';
 import { colors } from '@/components/ui/colors';
 import Shortcut from '@/components/ui/shortcut';
@@ -116,8 +116,7 @@ export default function Login() {
         {formError ? <FormMessage message={formError} /> : null}
         <View className="gap-4 pt-4">
           <Shortcut label={t('sign_in')} color={colors.white} contentColor={colors.primary} onPress={submit} loading={submitting} />
-          {/* Sign in with Google is off for now: set it up as in docs/google-sign-in.md, then uncomment this and the import. */}
-          {/* <GoogleSignInButton disabled={submitting} onError={setFormError} /> */}
+          <SocialSignIn disabled={submitting} onError={setFormError} />
         </View>
       </View>
     </AuthLayout>

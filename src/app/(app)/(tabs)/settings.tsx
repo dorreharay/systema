@@ -3,7 +3,7 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { ScrollView, View } from 'react-native';
 
-import { Banknote, Bell, Gauge, Languages, LogOut, ShieldCheck, Store, Tags } from '@/components/icons';
+import { Banknote, Bell, ClipboardList, Eye, Gauge, Languages, LogOut, ShieldCheck, Store, Tags } from '@/components/icons';
 import {
   AccountSheet,
   CurrencySheet,
@@ -21,6 +21,7 @@ import { useToast } from '@/components/ui/toast';
 import { useAuth } from '@/lib/auth';
 import { describeError } from '@/lib/errors';
 import { LANGUAGES, useI18n } from '@/lib/i18n';
+import { openLegalPage, type LegalPage } from '@/lib/legal';
 import { requestReminderPermission } from '@/lib/reminders';
 import type { TensionUnit } from '@/lib/types';
 
@@ -57,6 +58,10 @@ export default function Settings() {
       destructive: true,
     });
     if (ok) await signOut();
+  };
+
+  const openLegal = async (page: LegalPage) => {
+    if (!(await openLegalPage(page, language))) toast.error(t('legal_open_failed'));
   };
 
   return (
@@ -118,6 +123,11 @@ export default function Settings() {
           />
         </ListGroup>
         <Text className="-mt-3 px-1 text-[14.3px] text-muted">{t('settings_notifications_hint')}</Text>
+
+        <ListGroup>
+          <ListRow icon={Eye} label={t('settings_privacy_policy')} onPress={() => void openLegal('privacy')} />
+          <ListRow icon={ClipboardList} label={t('settings_terms')} onPress={() => void openLegal('terms')} />
+        </ListGroup>
 
         <ListGroup>
           <ListRow icon={ShieldCheck} label={t('settings_account')} onPress={() => setSheet('account')} />

@@ -29,6 +29,13 @@
       "when": 1793799248588,
       "tag": "0003_google_sign_in",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1793831033802,
+      "tag": "0004_apple_sign_in",
+      "breakpoints": true
     }
   ]
 }

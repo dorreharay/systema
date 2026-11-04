@@ -9,7 +9,7 @@
  */
 import {
   CONFIG, Client, assertEq, assertStatus, assertTrue,
-  dbExec, dbScalar, resetDatabase, startFakeGoogle, startServer,
+  dbExec, dbScalar, resetDatabase, startFakeApple, startFakeGoogle, startFakeResend, startServer,
 } from './harness.mjs';
 
 const tests = [];
@@ -372,6 +372,384 @@ test('Google', 'is off while the server has no client IDs', async (ctx) => {
   } finally {
     await server.stop();
   }
+});
+
+// ---------------------------------------------------------------------------
+// Sign in with Apple (Apple itself is played by the harness: see startFakeApple)
+// ---------------------------------------------------------------------------
+let appleCounter = 0;
+/** The claims of an Apple user nobody has met before. */
+const appleUser = (extra = {}) => {
+  const n = ++appleCounter;
+  return { sub: `apple-sub-${n}`, email: `apple${n}@test.local`, ...extra };
+};
+/** Signs in with an identity token made from `claims` (see identityToken in the harness), as a client of its own. */
+async function appleLogin(ctx, claims, body = {}) {
+  const client = new Client(ctx.server.base);
+  const res = await client.post('/api/auth/apple', { identity_token: await ctx.apple.identityToken(claims), ...body });
+  return { client, res };
+}
+const appleUserCount = (email) => dbScalar(`SELECT count(*) FROM users WHERE email='${email}'`);
+let appleCodeCounter = 0;
+/** An authorization code nobody has used, so that a test can find what became of it. */
+const appleCode = () => `apple-code-${++appleCodeCounter}`;
+const tradedFor = (ctx, code) => ctx.apple.asked('token').filter((request) => request.fields.code === code);
+const refreshTokenOf = (email) => dbScalar(`SELECT apple_refresh_token FROM users WHERE email='${email}'`);
+
+test('Apple', 'a first sign-in makes the account, signs in and keeps the secrets', async (ctx) => {
+  const user = appleUser({ email: ' Annie.Apple@Test.Local' });
+  const traded = ctx.apple.asked('token').length;
+  const { client, res } = await appleLogin(ctx, user, { full_name: ' Annie Apple ' });
+  assertStatus(res, 201);
+  assertEq(res.data.user.email, 'annie.apple@test.local', 'the email, tidied');
+  assertEq(res.data.user.full_name, 'Annie Apple', 'the name the app passed on, trimmed');
+  assertEq(res.data.user.has_password, false, 'there is no password');
+  assertEq(res.data.user.setup_completed, false, 'the first-run setup is still to do');
+  assertTrue(res.data.token, 'a token is returned for native clients');
+  assertTrue(client.cookies.has('auth_token'), 'the session cookie is set');
+  const hidden = ['apple_sub', 'apple_refresh_token', 'google_sub', 'password_hash'];
+  assertTrue(hidden.every((field) => !(field in res.data.user)), 'the secrets are not exposed');
+  assertEq(dbScalar(`SELECT apple_sub FROM users WHERE email='annie.apple@test.local'`), user.sub, 'the Apple id is kept');
+  assertEq(dbScalar(`SELECT password_hash IS NULL FROM users WHERE email='annie.apple@test.local'`), 't', 'there is no password');
+  assertEq(refreshTokenOf('annie.apple@test.local'), '', 'no code, no token');
+  assertEq(ctx.apple.asked('token').length, traded, 'and Apple was not asked for one');
+  assertEq((await client.get('/api/auth/me')).data.email, 'annie.apple@test.local', 'the session works');
+  assertTrue(Number(dbScalar(`SELECT count(*) FROM services WHERE user_id='${res.data.user.id}'`)) > 0, 'the default services are made');
+});
+test('Apple', 'a person who hides their address gets an account on the one Apple made up for the app', async (ctx) => {
+  const email = 'x7k2m9q4@privaterelay.appleid.com';
+  const { res } = await appleLogin(ctx, appleUser({ email, is_private_email: 'true' }));
+  assertStatus(res, 201);
+  assertEq(res.data.user.email, email, 'the relay address');
+});
+test('Apple', 'the name the app passes on is saved when the account is made, and only then', async (ctx) => {
+  const user = appleUser();
+  assertEq((await appleLogin(ctx, user, { full_name: '  Anna Apple  ' })).res.data.user.full_name, 'Anna Apple', 'saved, trimmed');
+  assertEq((await appleLogin(ctx, user, { full_name: 'Someone Else' })).res.data.user.full_name, 'Anna Apple', 'a later sign-in does not rewrite it');
+  assertEq((await appleLogin(ctx, appleUser())).res.data.user.full_name, null, 'none passed on, none kept');
+  assertEq((await appleLogin(ctx, appleUser(), { full_name: '   ' })).res.data.user.full_name, null, 'a blank one is none');
+
+  // An account that was there already is linked, not made: it does not take the name, whether it has one or not.
+  const nameless = await register(ctx);
+  assertEq((await appleLogin(ctx, appleUser({ email: nameless.email }), { full_name: 'Not Hers' })).res.data.user.full_name, null, 'none');
+  const named = await register(ctx, newEmail(), { full_name: 'Ann' });
+  assertEq((await appleLogin(ctx, appleUser({ email: named.email }), { full_name: 'Not Hers' })).res.data.user.full_name, 'Ann', 'its own');
+});
+test('Apple', 'the same Apple user gets the same account, whatever address Apple now has for them', async (ctx) => {
+  const user = appleUser();
+  const first = await appleLogin(ctx, user);
+  const again = await appleLogin(ctx, { ...user, email: 'moved@test.local' });
+  assertStatus(again.res, 200);
+  assertEq(again.res.data.user.id, first.res.data.user.id, 'the same account');
+  assertEq(again.res.data.user.email, user.email, 'the address of the account is not rewritten');
+  assertEq(appleUserCount('moved@test.local'), '0', 'no second account');
+});
+test('Apple', 'a token with no email signs in the person who has an account, and only them', async (ctx) => {
+  const user = appleUser();
+  const first = await appleLogin(ctx, user);
+  const again = await appleLogin(ctx, { sub: user.sub, email: undefined });
+  assertStatus(again.res, 200);
+  assertEq(again.res.data.user.id, first.res.data.user.id, 'found by the Apple id');
+
+  const stranger = appleUser({ email: undefined });
+  const refused = await appleLogin(ctx, stranger);
+  assertStatus(refused.res, 400);
+  assertEq(refused.res.data.code, 'apple_email_missing', 'code');
+  assertEq(dbScalar(`SELECT count(*) FROM users WHERE apple_sub='${stranger.sub}'`), '0', 'no account');
+  for (const email of ['', '   ', 'not-an-address']) {
+    const odd = await appleLogin(ctx, appleUser({ email }));
+    assertEq([odd.res.status, odd.res.data.code], [400, 'apple_email_missing'], `refused for ${JSON.stringify(email)}`);
+  }
+});
+test('Apple', 'an account with the same verified email is linked: its password is removed and its sessions end', async (ctx) => {
+  const { client: oldSession, email, res: registered } = await register(ctx);
+  // Sessions are compared by the second, so let the old one be older than the change.
+  await new Promise((r) => setTimeout(r, 1100));
+
+  const user = appleUser({ email: email.toUpperCase() });
+  const { client, res } = await appleLogin(ctx, user);
+  assertStatus(res, 200);
+  assertEq(res.data.user.id, registered.data.user.id, 'the account that was there');
+  assertEq(dbScalar(`SELECT apple_sub FROM users WHERE email='${email}'`), user.sub, 'linked');
+  assertStatus(await new Client(ctx.server.base).post('/api/auth/login', { email, password }), 401);
+  assertStatus(await oldSession.get('/api/auth/me'), 401);
+  assertStatus(await client.get('/api/auth/me'), 200);
+  assertEq(res.data.user.has_password, false, 'it has none now');
+  assertEq(appleUserCount(email), '1', 'no second account');
+  assertStatus((await appleLogin(ctx, user)).res, 200);
+});
+test('Apple', 'a flag that is a real boolean counts too', async (ctx) => {
+  const { email } = await register(ctx);
+  assertStatus((await appleLogin(ctx, appleUser({ email, email_verified: true }))).res, 200);
+});
+test('Apple', 'an account with no password keeps its sessions when it is linked', async (ctx) => {
+  const google = await googleLogin(ctx, googleUser());
+  const { res } = await appleLogin(ctx, appleUser({ email: google.res.data.user.email }));
+  assertStatus(res, 200);
+  assertEq(res.data.user.id, google.res.data.user.id, 'the account that was there');
+  assertStatus(await google.client.get('/api/auth/me'), 200);
+});
+test('Apple', 'an email that Apple does not call verified does not link an account', async (ctx) => {
+  const { client, email } = await register(ctx);
+  for (const flag of ['false', false, undefined]) {
+    const user = appleUser({ email, email_verified: flag });
+    const { res } = await appleLogin(ctx, user);
+    assertStatus(res, 409);
+    assertEq(res.data.code, 'email_taken', `code for ${JSON.stringify(flag)}`);
+    assertEq(dbScalar(`SELECT count(*) FROM users WHERE apple_sub='${user.sub}'`), '0', 'no account for the Apple user');
+  }
+  assertEq(dbScalar(`SELECT apple_sub IS NULL AND password_hash IS NOT NULL FROM users WHERE email='${email}'`), 't', 'not linked, password kept');
+  assertStatus(await new Client(ctx.server.base).post('/api/auth/login', { email, password }), 200);
+  assertStatus(await client.get('/api/auth/me'), 200);
+});
+test('Apple', 'an unverified email is no obstacle to an account when nobody has the address', async (ctx) => {
+  const { res } = await appleLogin(ctx, appleUser({ email_verified: 'false' }));
+  assertStatus(res, 201);
+});
+test('Apple', 'an address linked to one Apple user is not given to another', async (ctx) => {
+  const user = appleUser();
+  await appleLogin(ctx, user);
+  const other = await appleLogin(ctx, appleUser({ email: user.email }));
+  assertStatus(other.res, 409);
+  assertEq(other.res.data.code, 'apple_account_mismatch', 'code');
+});
+test('Apple', 'an inactive account cannot sign in with Apple, linked or not, and is left as it was', async (ctx) => {
+  const { email } = await register(ctx);
+  dbExec(`UPDATE users SET is_active=false WHERE email='${email}'`);
+  const unlinked = await appleLogin(ctx, appleUser({ email }));
+  assertStatus(unlinked.res, 403);
+  assertEq(unlinked.res.data.code, 'account_inactive', 'code');
+  assertEq(dbScalar(`SELECT apple_sub IS NULL AND password_hash IS NOT NULL FROM users WHERE email='${email}'`), 't', 'not linked, password kept');
+
+  const user = appleUser();
+  await appleLogin(ctx, user);
+  dbExec(`UPDATE users SET is_active=false WHERE email='${user.email}'`);
+  const linked = await appleLogin(ctx, user);
+  assertEq([linked.res.status, linked.res.data.code], [403, 'account_inactive'], 'linked');
+});
+test('Apple', 'refuses a token made for another app', async (ctx) => {
+  const user = appleUser();
+  const { res } = await appleLogin(ctx, { ...user, aud: 'com.someone.else' });
+  assertStatus(res, 401);
+  assertEq(res.data.code, 'apple_token_invalid', 'code');
+  assertEq(appleUserCount(user.email), '0', 'no account');
+});
+test('Apple', 'refuses an expired token', async (ctx) => {
+  const { res } = await appleLogin(ctx, { ...appleUser(), expires: Math.floor(Date.now() / 1000) - 60 });
+  assertStatus(res, 401);
+  assertEq(res.data.code, 'apple_token_invalid', 'code');
+});
+test('Apple', 'refuses a token from another issuer, Google for one', async (ctx) => {
+  for (const iss of ['https://accounts.google.com', 'https://appleid.apple.com.evil.example']) {
+    const { res } = await appleLogin(ctx, { ...appleUser(), iss });
+    assertStatus(res, 401);
+    assertEq(res.data.code, 'apple_token_invalid', `code for ${iss}`);
+  }
+});
+test('Apple', 'refuses a token that Apple did not sign', async (ctx) => {
+  const user = appleUser();
+  const { res } = await appleLogin(ctx, { ...user, key: await ctx.apple.otherKey() });
+  assertStatus(res, 401);
+  assertEq(res.data.code, 'apple_token_invalid', 'code');
+  assertEq(appleUserCount(user.email), '0', 'no account');
+});
+test('Apple', 'refuses something that is not a token, and a request that is not right', async (ctx) => {
+  const garbage = await ctx.anon.post('/api/auth/apple', { identity_token: 'not.a.jwt' });
+  assertStatus(garbage, 401);
+  assertEq(garbage.data.code, 'apple_token_invalid', 'code');
+
+  const token = await ctx.apple.identityToken(appleUser());
+  const missing = await ctx.anon.post('/api/auth/apple', {});
+  assertStatus(missing, 400);
+  assertTrue(missing.data.fields.identity_token, 'identity_token is named');
+  assertTrue((await ctx.anon.post('/api/auth/apple', { identity_token: '' })).data.fields.identity_token, 'not empty');
+  assertTrue((await ctx.anon.post('/api/auth/apple', { identity_token: 42 })).data.fields.identity_token, 'a string');
+  assertTrue((await ctx.anon.post('/api/auth/apple', { identity_token: 'a'.repeat(8193) })).data.fields.identity_token, 'not huge');
+  assertTrue((await ctx.anon.post('/api/auth/apple', { identity_token: token, full_name: 'n'.repeat(101) })).data.fields.full_name, 'a name of 100 at most');
+  assertTrue((await ctx.anon.post('/api/auth/apple', { identity_token: token, full_name: 7 })).data.fields.full_name, 'a name is text');
+  assertTrue((await ctx.anon.post('/api/auth/apple', { identity_token: token, authorization_code: 'c'.repeat(2049) })).data.fields.authorization_code, 'a code of 2048 at most');
+  assertTrue((await ctx.anon.post('/api/auth/apple', { identity_token: token, authorization_code: 7 })).data.fields.authorization_code, 'a code is text');
+  const limits = await ctx.anon.post('/api/auth/apple', { identity_token: token, full_name: 'n'.repeat(100), authorization_code: 'c'.repeat(2048) });
+  assertStatus(limits, 201);
+});
+test('Apple', 'a first sign-in that arrives three times at once makes one account', async (ctx) => {
+  const user = appleUser();
+  const token = await ctx.apple.identityToken(user);
+  const results = await Promise.all(
+    [1, 2, 3].map(() => new Client(ctx.server.base).post('/api/auth/apple', { identity_token: token, full_name: 'Twice Over' }))
+  );
+  assertEq(results.map((r) => r.status).sort(), [200, 200, 201], 'one makes the account, the others find it');
+  assertEq(appleUserCount(user.email), '1', 'one account');
+});
+test('Apple', 'an address an Apple account has cannot be registered with a password', async (ctx) => {
+  const user = appleUser();
+  await appleLogin(ctx, user);
+  const res = await ctx.anon.post('/api/auth/register', { email: user.email, password });
+  assertStatus(res, 409);
+  assertEq(res.data.code, 'email_taken', 'code');
+});
+test('Apple', 'an account made with Apple has no password until it sets one, and Apple keeps working', async (ctx) => {
+  const user = appleUser();
+  await appleLogin(ctx, user);
+
+  const wrong = await new Client(ctx.server.base).post('/api/auth/login', { email: user.email, password });
+  assertStatus(wrong, 401);
+  assertEq(wrong.data.code, 'invalid_credentials', 'the answer for a wrong password');
+
+  await ctx.anon.post('/api/auth/forgot-password', { email: user.email });
+  await new Promise((r) => setTimeout(r, 300));
+  const token = resetTokenFor(ctx, user.email);
+  assertStatus(await ctx.anon.post('/api/auth/reset-password', { token, password: 'a-brand-new-pass-2' }), 200);
+  assertStatus(await new Client(ctx.server.base).post('/api/auth/login', { email: user.email, password: 'a-brand-new-pass-2' }), 200);
+  assertStatus((await appleLogin(ctx, user)).res, 200);
+});
+test('Apple', 'is off while the server has no bundle IDs', async (ctx) => {
+  const server = await startServer({ port: CONFIG.port + 1, env: { APPLE_CLIENT_IDS: '' } });
+  try {
+    const res = await new Client(server.base).post('/api/auth/apple', { identity_token: await ctx.apple.identityToken(appleUser()) });
+    assertStatus(res, 503);
+    assertEq(res.data.code, 'apple_not_configured', 'code');
+  } finally {
+    await server.stop();
+  }
+});
+test('Apple', 'a new account starts with the default services and the starter catalog, like any other', async (ctx) => {
+  const server = await startServer({ port: CONFIG.port + 1, env: { ...ctx.apple.env, STARTER_CATALOG: 'true' } });
+  try {
+    const client = new Client(server.base);
+    const res = await client.post('/api/auth/apple', { identity_token: await ctx.apple.identityToken(appleUser()) });
+    assertStatus(res, 201);
+    assertEq((await client.get('/api/services')).data.items.length, 3, 'the default services');
+    const rackets = (await client.get('/api/rackets?kind=catalog')).data.items;
+    assertTrue(rackets.length >= 50, `rackets: ${rackets.length}`);
+    assertTrue(rackets.every((r) => r.track_stock && r.stock === 0 && !r.available), 'counted, none in stock');
+    const strings = (await client.get('/api/strings')).data.items;
+    assertTrue(strings.length >= 50, `strings: ${strings.length}`);
+    assertTrue(strings.every((s) => s.track_stock && s.stock === 0 && !s.available), 'counted, none in stock');
+  } finally {
+    await server.stop();
+  }
+});
+
+// The authorization code of a sign-in is traded with Apple for a token that can be revoked when the account is deleted. It
+// is an extra: nothing that goes wrong with it stops the sign-in.
+test('Apple', 'the authorization code is traded for a refresh token, which is kept', async (ctx) => {
+  const user = appleUser();
+  const code = appleCode();
+  const { res } = await appleLogin(ctx, user, { authorization_code: code });
+  assertStatus(res, 201);
+  assertEq(refreshTokenOf(user.email), `refresh-${code}`, 'what Apple gave for the code');
+  assertTrue(!JSON.stringify(res.data).includes(`refresh-${code}`), 'and it is not sent to anyone');
+
+  // What Apple was asked, and how.
+  const [request, ...more] = tradedFor(ctx, code);
+  assertEq(more.length, 0, 'once');
+  assertEq(request.contentType, 'application/x-www-form-urlencoded', 'as a form');
+  assertEq(
+    [request.fields.grant_type, request.fields.code, request.fields.client_id],
+    ['authorization_code', code, ctx.apple.clientId],
+    'for this app'
+  );
+  assertEq(request.secret.valid, true, `with a client secret Apple accepts: ${request.secret.reason}`);
+  assertEq([request.secret.header.alg, request.secret.header.kid], ['ES256', ctx.apple.keyId], 'ES256, and the key it is signed with');
+  const { iss, sub, aud, iat, exp } = request.secret.claims;
+  assertEq([iss, sub, aud], [ctx.apple.teamId, ctx.apple.clientId, 'https://appleid.apple.com'], 'team, app, audience');
+  assertTrue(exp > iat && exp - iat <= 600, 'a few minutes to live');
+
+  // Neither the code nor what came of it is in the log.
+  const logs = ctx.server.logs();
+  assertTrue(!logs.includes(code) && !logs.includes(`refresh-${code}`), 'nothing secret is printed');
+});
+test('Apple', 'a later sign-in with a new code keeps the newer token, and a link with a code keeps one too', async (ctx) => {
+  const user = appleUser();
+  await appleLogin(ctx, user, { authorization_code: appleCode() });
+  const second = appleCode();
+  assertStatus((await appleLogin(ctx, user, { authorization_code: second })).res, 200);
+  assertEq(refreshTokenOf(user.email), `refresh-${second}`, 'the newer');
+
+  // A sign-in that brings no code leaves the token alone.
+  assertStatus((await appleLogin(ctx, user)).res, 200);
+  assertEq(refreshTokenOf(user.email), `refresh-${second}`, 'still the newer');
+
+  const { email } = await register(ctx);
+  const code = appleCode();
+  assertStatus((await appleLogin(ctx, appleUser({ email }), { authorization_code: code })).res, 200);
+  assertEq(refreshTokenOf(email), `refresh-${code}`, 'kept when an account is linked');
+});
+test('Apple', 'a code Apple refuses does not stop the sign-in', async (ctx) => {
+  ctx.apple.answer('token', 400, { error: 'invalid_grant', error_description: 'The code has expired or has been revoked.' });
+  try {
+    const user = appleUser();
+    const code = appleCode();
+    const { res } = await appleLogin(ctx, user, { authorization_code: code });
+    assertStatus(res, 201);
+    assertEq(refreshTokenOf(user.email), '', 'no token');
+    assertEq(tradedFor(ctx, code).length, 1, 'Apple was asked');
+    await until(() => ctx.server.logs().includes('[apple] Could not trade an authorization code: 400 invalid_grant'), 'the reason in the log');
+    assertTrue(!ctx.server.logs().includes(code), 'but not the code');
+
+    ctx.apple.answer('token', 200, { access_token: 'a', token_type: 'Bearer' });
+    const bare = appleUser();
+    assertStatus((await appleLogin(ctx, bare, { authorization_code: appleCode() })).res, 201);
+    assertEq(refreshTokenOf(bare.email), '', 'an answer without a token is no token');
+  } finally {
+    ctx.apple.answer('token');
+  }
+});
+test('Apple', 'an Apple that cannot be reached does not stop the sign-in either', async (ctx) => {
+  // Nothing listens on port 1, so the connection is refused at once.
+  const server = await startServer({ port: CONFIG.port + 1, env: { ...ctx.apple.env, APPLE_AUTH_URL: 'http://127.0.0.1:1/auth' } });
+  try {
+    const user = appleUser();
+    const res = await new Client(server.base).post('/api/auth/apple', {
+      identity_token: await ctx.apple.identityToken(user),
+      authorization_code: appleCode(),
+    });
+    assertStatus(res, 201);
+    assertEq(refreshTokenOf(user.email), '', 'no token');
+    assertTrue(server.logs().includes('[apple] Could not trade an authorization code'), 'and it is said in the log');
+  } finally {
+    await server.stop();
+  }
+});
+test('Apple', 'a server with no key to ask Apple with takes the code and does nothing with it', async (ctx) => {
+  // Signing in only: the app and where Apple's keys are, but not the team, the key and the .p8 file.
+  const { APPLE_CLIENT_IDS, APPLE_KEYS_URL, APPLE_AUTH_URL } = ctx.apple.env;
+  const server = await startServer({ port: CONFIG.port + 1, env: { APPLE_CLIENT_IDS, APPLE_KEYS_URL, APPLE_AUTH_URL } });
+  try {
+    const user = appleUser();
+    const code = appleCode();
+    const res = await new Client(server.base).post('/api/auth/apple', {
+      identity_token: await ctx.apple.identityToken(user),
+      authorization_code: code,
+    });
+    assertStatus(res, 201);
+    assertEq(refreshTokenOf(user.email), '', 'no token');
+    assertEq(tradedFor(ctx, code).length, 0, 'Apple was not asked');
+  } finally {
+    await server.stop();
+  }
+});
+test('Apple', 'a sign-in that is turned away does not trade its code', async (ctx) => {
+  const codes = [];
+  const withCode = () => {
+    codes.push(appleCode());
+    return { authorization_code: codes.at(-1) };
+  };
+
+  const { email } = await register(ctx);
+  dbExec(`UPDATE users SET is_active=false WHERE email='${email}'`);
+  assertStatus((await appleLogin(ctx, appleUser({ email }), withCode())).res, 403);
+
+  const taken = appleUser();
+  await appleLogin(ctx, taken);
+  assertStatus((await appleLogin(ctx, appleUser({ email: taken.email }), withCode())).res, 409);
+
+  assertStatus((await appleLogin(ctx, appleUser({ email: undefined }), withCode())).res, 400);
+  assertStatus((await appleLogin(ctx, { ...appleUser(), aud: 'com.someone.else' }, withCode())).res, 401);
+  assertStatus(await new Client(ctx.server.base).post('/api/auth/apple', { identity_token: 'not.a.jwt', ...withCode() }), 401);
+
+  assertEq(codes.map((code) => tradedFor(ctx, code).length), [0, 0, 0, 0, 0], 'Apple was never asked');
 });
 
 // ---------------------------------------------------------------------------
@@ -971,6 +1349,8 @@ test('Account', '/me says whether the account has a password', async (ctx) => {
   assertEq((await client.get('/api/auth/me')).data.has_password, true, 'made with a password');
   const google = await googleLogin(ctx, googleUser());
   assertEq((await google.client.get('/api/auth/me')).data.has_password, false, 'made with Google');
+  const apple = await appleLogin(ctx, appleUser());
+  assertEq((await apple.client.get('/api/auth/me')).data.has_password, false, 'made with Apple');
 });
 test('Account', 'deleting it removes the account and everything it owns', async (ctx) => {
   const s = await furnished(ctx);
@@ -1046,6 +1426,97 @@ test('Account', 'an account made with Google is deleted without a password', asy
   const again = await googleLogin(ctx, user);
   assertStatus(again.res, 201);
   assertEq((await again.client.get('/api/clients')).data.items, [], 'nothing of the old one');
+});
+// Deleting the account takes the link with the app away at Apple too.
+test('Account', 'an account made with Apple is deleted without a password, and its token is revoked at Apple', async (ctx) => {
+  const user = appleUser();
+  const code = appleCode();
+  const { client, res } = await appleLogin(ctx, user, { authorization_code: code });
+  assertEq(res.data.user.has_password, false, 'it has none');
+  await client.post('/api/clients', { name: 'Maria Sharapova', phone: '+380501112233' });
+  const revoked = ctx.apple.asked('revoke').length;
+
+  assertStatus(await client.post('/api/auth/delete-account', {}), 200);
+  assertEq(appleUserCount(user.email), '0', 'the account is gone');
+  const requests = ctx.apple.asked('revoke').slice(revoked);
+  assertEq(requests.length, 1, 'Apple was told once');
+  assertEq(
+    [requests[0].fields.token, requests[0].fields.token_type_hint, requests[0].fields.client_id],
+    [`refresh-${code}`, 'refresh_token', ctx.apple.clientId],
+    'which token, for this app'
+  );
+  assertEq(requests[0].secret.valid, true, `with a client secret Apple accepts: ${requests[0].secret.reason}`);
+  assertEq(requests[0].contentType, 'application/x-www-form-urlencoded', 'as a form');
+
+  // Signing in with the same Apple account starts over: a new account, with no clients.
+  const again = await appleLogin(ctx, user);
+  assertStatus(again.res, 201);
+  assertEq((await again.client.get('/api/clients')).data.items, [], 'nothing of the old one');
+});
+test('Account', 'the account is deleted whatever Apple answers to the revoking', async (ctx) => {
+  const failures = [[500, { error: 'server_error' }], [400, { error: 'invalid_grant' }], [401, undefined]];
+  try {
+    for (const [status, body] of failures) {
+      ctx.apple.answer('revoke', status, body);
+      const user = appleUser();
+      const { client } = await appleLogin(ctx, user, { authorization_code: appleCode() });
+      const revoked = ctx.apple.asked('revoke').length;
+      const res = await client.post('/api/auth/delete-account', {});
+      assertEq([res.status, res.data], [200, { ok: true }], `deleted when Apple says ${status}`);
+      assertEq(ctx.apple.asked('revoke').length, revoked + 1, `Apple was asked (${status})`);
+      assertEq(appleUserCount(user.email), '0', `the account is gone (${status})`);
+    }
+  } finally {
+    ctx.apple.answer('revoke');
+  }
+  await until(() => ctx.server.logs().includes('[apple] Could not revoke a token: 400 invalid_grant'), 'the reason in the log');
+});
+test('Account', 'the account is deleted when Apple cannot be reached to revoke', async (ctx) => {
+  // The account is made against the working Apple, and deleted by a server that cannot reach it.
+  const user = appleUser();
+  await appleLogin(ctx, user, { authorization_code: appleCode() });
+  const server = await startServer({ port: CONFIG.port + 1, env: { ...ctx.apple.env, APPLE_AUTH_URL: 'http://127.0.0.1:1/auth' } });
+  try {
+    const client = new Client(server.base);
+    const signedIn = await client.post('/api/auth/apple', { identity_token: await ctx.apple.identityToken(user) });
+    assertStatus(signedIn, 200);
+    assertStatus(await client.post('/api/auth/delete-account', {}), 200);
+    assertEq(appleUserCount(user.email), '0', 'the account is gone');
+    assertTrue(server.logs().includes('[apple] Could not revoke a token'), 'and it is said in the log');
+  } finally {
+    await server.stop();
+  }
+});
+test('Account', 'an Apple account with no token kept deletes without asking Apple anything', async (ctx) => {
+  const user = appleUser();
+  const { client } = await appleLogin(ctx, user);
+  const revoked = ctx.apple.asked('revoke').length;
+  assertStatus(await client.post('/api/auth/delete-account', {}), 200);
+  assertEq(ctx.apple.asked('revoke').length, revoked, 'no call');
+  assertEq(appleUserCount(user.email), '0', 'the account is gone');
+});
+test('Account', 'an account with a password and Apple needs the password, and a refused deletion revokes nothing', async (ctx) => {
+  const user = appleUser();
+  const code = appleCode();
+  await appleLogin(ctx, user, { authorization_code: code });
+  await ctx.anon.post('/api/auth/forgot-password', { email: user.email });
+  await new Promise((r) => setTimeout(r, 300));
+  const token = resetTokenFor(ctx, user.email);
+  assertStatus(await ctx.anon.post('/api/auth/reset-password', { token, password: 'a-brand-new-pass-2' }), 200);
+  const { client, res } = await appleLogin(ctx, user);
+  assertEq(res.data.user.has_password, true, 'it has one now');
+  const revoked = ctx.apple.asked('revoke').length;
+
+  for (const body of [{}, { password: 'not-the-password' }]) {
+    const refused = await client.post('/api/auth/delete-account', body);
+    assertEq([refused.status, refused.data.code], [403, 'invalid_password'], `refused for ${JSON.stringify(body)}`);
+  }
+  assertEq(ctx.apple.asked('revoke').length, revoked, 'Apple was not told anything');
+  assertEq(refreshTokenOf(user.email), `refresh-${code}`, 'the token is still kept');
+
+  assertStatus(await client.post('/api/auth/delete-account', { password: 'a-brand-new-pass-2' }), 200);
+  assertEq(ctx.apple.asked('revoke').length, revoked + 1, 'told when the password is right');
+  assertEq(appleUserCount(user.email), '0', 'the account is gone');
 });
 
 test('Dashboard', 'counts the active, ready and completed orders and lists what is due first', async (ctx) => {
@@ -1541,6 +2012,21 @@ test('Rate limit', 'login is answered with 429 after too many attempts', async (
     await server.stop();
   }
 });
+test('Rate limit', 'Sign in with Apple is counted too', async (ctx) => {
+  const server = await startServer({ port: CONFIG.port + 1, env: { ...ctx.apple.env, AUTH_RATE_LIMIT_MAX: '3' } });
+  try {
+    const client = new Client(server.base);
+    const answers = [];
+    for (let i = 0; i < 5; i++) answers.push(await client.post('/api/auth/apple', { identity_token: 'not.a.jwt' }));
+    assertEq(answers.map((r) => r.status), [401, 401, 401, 429, 429], 'statuses');
+    assertEq(answers[3].data.code, 'rate_limited', 'code');
+    // A good token does not get past it either.
+    const good = await client.post('/api/auth/apple', { identity_token: await ctx.apple.identityToken(appleUser()) });
+    assertEq(good.status, 429, 'nor does a good token');
+  } finally {
+    await server.stop();
+  }
+});
 test('Rate limit', 'the address in the configured header is what is counted, and without it no header is believed', async () => {
   const attempt = (client, address) =>
     client.post('/api/auth/login', { email: 'a@test.local', password: 'x' }, address && { 'x-real-ip': address });
@@ -1573,11 +2059,119 @@ test('Rate limit', 'the address in the configured header is what is counted, and
 });
 
 // ---------------------------------------------------------------------------
+// Email through Resend, and the page behind the link of a password reset
+// ---------------------------------------------------------------------------
+/** A server of its own with a Resend key, and a stand-in for Resend that records what it is asked to send. */
+async function withResend(run) {
+  const resend = await startFakeResend();
+  const server = await startServer({
+    port: CONFIG.port + 1,
+    env: {
+      RESEND_API_KEY: 're_test_key_123',
+      RESEND_API_URL: resend.apiUrl,
+      EMAIL_FROM_NAME: 're:string',
+      EMAIL_FROM_ADDRESS: 'noreply@mail.test',
+      APP_URL: 'https://api.app.test',
+    },
+  });
+  try {
+    await run({ server, resend });
+  } finally {
+    await server.stop();
+    await resend.stop();
+  }
+}
+/** The email goes out after the answer, so a test waits for it. */
+async function until(condition, what) {
+  for (let i = 0; i < 50; i++) {
+    if (condition()) return;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error(`Timed out waiting for ${what}`);
+}
+
+test('Email', 'a password reset is sent through Resend, and its link leads back into the app', () =>
+  withResend(async ({ server, resend }) => {
+    const { client, email } = await register({ server });
+    assertStatus(await client.post('/api/auth/forgot-password', { email }), 200);
+    await until(() => resend.sent.length === 1, 'the email');
+
+    const [mail] = resend.sent;
+    assertEq([mail.method, mail.url, mail.authorization], ['POST', '/emails', 'Bearer re_test_key_123'], 'the request');
+    assertEq(mail.body.from, '"re:string" <noreply@mail.test>', 'from');
+    assertEq(mail.body.to, [email], 'to');
+    assertTrue(mail.body.subject.includes('Відновлення пароля'), 'subject');
+    const link = mail.body.text.match(/https:\/\/api\.app\.test\/reset-password\?token=([\w-]+)/);
+    assertTrue(link, 'the text has a link to the page, on the address of the app');
+    assertTrue(mail.body.html.includes(link[0]), 'and so has the html');
+
+    // The page hands the token to the app, and the token still does its job.
+    const token = link[1];
+    const page = await new Client(server.base).get(`/reset-password?token=${token}`);
+    assertStatus(page, 200);
+    assertTrue(page.data.includes(`systema://reset-password?token=${token}`), 'the page opens the app with the token');
+    assertStatus(await new Client(server.base).post('/api/auth/reset-password', { token, password: 'a-brand-new-pass-2' }), 200);
+    assertStatus(await new Client(server.base).post('/api/auth/login', { email, password: 'a-brand-new-pass-2' }), 200);
+  }));
+test('Email', 'an address with no account gets nothing', () =>
+  withResend(async ({ server, resend }) => {
+    assertStatus(await new Client(server.base).post('/api/auth/forgot-password', { email: 'nobody@test.local' }), 200);
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    assertEq(resend.sent.length, 0, 'no email was asked for');
+  }));
+test('Email', 'a mail service that refuses does not break the request, and its key is not logged', () =>
+  withResend(async ({ server, resend }) => {
+    resend.answer(403, { name: 'validation_error', message: 'The mail.test domain is not verified' });
+    const { client, email } = await register({ server });
+    assertStatus(await client.post('/api/auth/forgot-password', { email }), 200);
+    await until(() => resend.sent.length === 1, 'the email');
+    await until(() => server.logs().includes('[email] Could not send'), 'the failure in the log');
+    assertTrue(!server.logs().includes('re_test_key_123'), 'the key is nowhere in the log');
+  }));
+test('Email', 'the page behind the reset link opens the app with the token, and nothing else', async (ctx) => {
+  const token = 'Zk3_-aB9xY2mQ7pLwE5rT8uNcV1dHfGjK4sOiUyA6bX';
+  const page = await new Client(ctx.server.base).get(`/reset-password?token=${token}`);
+  assertStatus(page, 200);
+  assertTrue((page.headers.get('content-type') || '').includes('text/html'), 'html');
+  assertEq(page.headers.get('cache-control'), 'no-store', 'not kept');
+  assertTrue(page.data.includes(`systema://reset-password?token=${token}`), 'the link into the app');
+
+  for (const bad of ['', 'short', encodeURIComponent('"><script>alert(1)</script>')]) {
+    const refused = await new Client(ctx.server.base).get(`/reset-password?token=${bad}`);
+    assertStatus(refused, 200);
+    assertTrue(!refused.data.includes('systema://') && !refused.data.includes('<script'), `nothing is opened for "${bad}"`);
+  }
+  assertTrue(!(await new Client(ctx.server.base).get('/reset-password')).data.includes('systema://'), 'no token');
+});
+test('Email', 'the reset page speaks the language of the browser, and the bare domain leads to the website', async (ctx) => {
+  const token = 'Zk3_-aB9xY2mQ7pLwE5rT8uNcV1dHfGjK4sOiUyA6bX';
+  const ask = (language) =>
+    new Client(ctx.server.base).get(`/reset-password?token=${token}`, language ? { 'accept-language': language } : {});
+
+  const ukrainian = await ask('uk-UA,uk;q=0.9,en;q=0.5');
+  assertTrue(ukrainian.data.includes('<html lang="uk">'), 'Ukrainian for a Ukrainian browser');
+  const english = await ask('en-US,en;q=0.9');
+  assertTrue(english.data.includes('<html lang="en">') && english.data.includes('Opening'), 'English for an English browser');
+  assertTrue((await ask('de-DE,de;q=0.9')).data.includes('<html lang="uk">'), 'Ukrainian for any other language');
+  assertTrue((await ask(undefined)).data.includes('<html lang="uk">'), 'and when the browser says nothing');
+  assertTrue((english.headers.get('vary') || '').toLowerCase().includes('accept-language'), 'a cache keeps the languages apart');
+  assertTrue(english.data.includes(`systema://reset-password?token=${token}`), 'the link into the app is the same');
+
+  // Someone who typed the domain of the server into a browser: not followed here, the test only looks where it points.
+  const home = await fetch(`${ctx.server.base}/`, { redirect: 'manual' });
+  assertEq(home.status, 302, 'the domain itself redirects');
+  assertEq(home.headers.get('location'), 'https://tryrestring.com/', 'to the website');
+});
+
+// ---------------------------------------------------------------------------
 async function main() {
   resetDatabase();
   const google = await startFakeGoogle();
-  const server = await startServer({ env: { GOOGLE_CLIENT_IDS: google.clientId, GOOGLE_CERTS_URL: google.certsUrl } });
-  const ctx = { server, anon: new Client(server.base), google };
+  const apple = await startFakeApple();
+  const server = await startServer({
+    env: { GOOGLE_CLIENT_IDS: google.clientId, GOOGLE_CERTS_URL: google.certsUrl, ...apple.env },
+  });
+  const ctx = { server, anon: new Client(server.base), google, apple };
 
   let failed = 0;
   let lastGroup;
@@ -1597,6 +2191,7 @@ async function main() {
 
   await server.stop();
   await google.stop();
+  await apple.stop();
   console.log(`\n${tests.length - failed} passed, ${failed} failed`);
   process.exit(failed ? 1 : 0);
 }

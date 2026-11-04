@@ -11,7 +11,7 @@ conventions of the Restorus backend. Plain JavaScript (ES modules), no build ste
 | Database | PostgreSQL, `drizzle-orm` + `drizzle-kit` (migrations in `drizzle/`), `pg` |
 | Auth | `bcryptjs` for passwords, `jsonwebtoken` for sessions (cookie for browsers, Bearer token for the native app) |
 | Validation | `zod` |
-| Email | `nodemailer` (without SMTP settings, emails are printed to the console) |
+| Email | Resend's HTTP API (`RESEND_API_KEY`) or `nodemailer` over SMTP; with neither, emails are printed to the console |
 | Config | `dotenv`, one place: `src/config.js` |
 
 ## Layout
@@ -27,7 +27,7 @@ backend/
     data/                 the reference catalog: rackets.json, strings.json (names only, no photos)
     middleware/           auth (requireAuth, requireRole), validate, rateLimit, error
     routes/               one file per resource: auth, clients, rackets, strings, reference, services, orders, photos, dashboard, insights
-    utils/                http (HttpError), password, tokens, session, email, emailTemplates, emailFailure, reference (search)
+    utils/                http (HttpError), password, tokens, session, email, emailTemplates, emailFailure, google, apple, reference (search)
     scripts/seed.js
   drizzle/                generated SQL migrations (commit them)
   tests/                  api/ (integration, real server + test database), unit/
@@ -72,9 +72,11 @@ commit it with the schema, then `npm run db:migrate`.
 ## Environment
 
 See `.env.example`; every variable is described there. Required: `DATABASE_URL`, `JWT_SECRET` (32+
-characters). The server refuses to start without them. In production also set `APP_URL` (the app's
-address, used in email links and as the only allowed browser origin). To offer sign-in with Google also set
-`GOOGLE_CLIENT_IDS` (see below).
+characters). The server refuses to start without them. In production also set `APP_URL` (the public address of
+this API, used in email links and as the only allowed browser origin). To send emails set `RESEND_API_KEY` and
+`EMAIL_FROM_ADDRESS` (see `../docs/email.md`). To offer sign-in with Google also set `GOOGLE_CLIENT_IDS`, and with Apple
+`APPLE_CLIENT_IDS` (and, to revoke an account's Apple token when it is deleted, `APPLE_TEAM_ID`, `APPLE_KEY_ID` and
+`APPLE_PRIVATE_KEY`): see below.
 
 ## API
 
@@ -86,10 +88,11 @@ Every error is `{ "error": "message", "code"?: "machine_reason", "fields"?: { "f
 | `POST` | `/api/auth/register` | `{ email, password, full_name? }` → `201 { user, token }`, 409 `email_taken` |
 | `POST` | `/api/auth/login` | `{ email, password }` → `{ user, token }`, 401 `invalid_credentials` |
 | `POST` | `/api/auth/google` | `{ id_token }`, the ID token from Google Sign-In → `{ user, token }` (`201` for a new account); 401 `google_token_invalid`, 403 `google_email_unverified` / `account_inactive`, 409 `google_account_mismatch`, 503 `google_not_configured` / `google_unavailable` |
+| `POST` | `/api/auth/apple` | `{ identity_token, authorization_code?, full_name? }`, from Sign in with Apple → `{ user, token }` (`201` for a new account); 400 `apple_email_missing`, 401 `apple_token_invalid`, 403 `account_inactive`, 409 `apple_account_mismatch` / `email_taken`, 503 `apple_not_configured` / `apple_unavailable` |
 | `POST` | `/api/auth/logout` | clears the cookie |
 | `GET` | `/api/auth/me` | the signed-in user |
 | `PATCH` | `/api/auth/me` | any of `full_name`, `workshop_name`, `currency` (ISO code), `tension_unit` (`kg`/`lbs`), `timezone` (IANA), `language` (`en`/`uk`), `notifications_enabled`, `setup_completed: true` → the user |
-| `POST` | `/api/auth/delete-account` | `{ password }` → `{ ok: true }`; deletes the account and everything it owns (clients, rackets, strings, services, orders, photos) for good. The password is checked when the account has one (`403 invalid_password`), and `/me` says whether it does (`has_password`) |
+| `POST` | `/api/auth/delete-account` | `{ password }` → `{ ok: true }`; deletes the account and everything it owns (clients, rackets, strings, services, orders, photos) for good. The password is checked when the account has one (`403 invalid_password`), and `/me` says whether it does (`has_password`). An account made with Apple has its Apple token revoked first, when the server kept one |
 | `POST` | `/api/auth/forgot-password` | `{ email }` → always `{ ok: true }`; emails a link when the address has an account |
 | `POST` | `/api/auth/reset-password` | `{ token, password }`; the token works once, for 60 minutes |
 
@@ -98,7 +101,7 @@ A password is 8 to 72 bytes, as in the app. Sign-in answers with the cookie `aut
 and sends `Authorization: Bearer <token>`.
 
 Changing a password with a reset link ends every session opened before.
-Register, login, Google sign-in, delete-account, forgot-password and reset-password are limited to 20 attempts per IP and 15 minutes.
+Register, login, Google and Apple sign-in, delete-account, forgot-password and reset-password are limited to 20 attempts per IP and 15 minutes.
 
 ### Sign in with Google
 
@@ -119,6 +122,45 @@ Which account the token belongs to, in this order:
 3. Otherwise a new account, made like one from `/register` but with no password (`users.password_hash` is null).
 
 An inactive account is refused (403) and left as it was.
+
+### Sign in with Apple
+
+The app signs in with Apple on the device and sends what Apple gave it to `POST /api/auth/apple`:
+`{ identity_token, authorization_code?, full_name? }`. `identity_token` is the token (up to 8192 characters);
+`authorization_code` (up to 2048) is the code that came with it, and `full_name` (up to 100, trimmed) is the name, which
+Apple gives only the first time a person authorizes the app. The server checks the token (`src/utils/apple.js`): RS256,
+signed with Apple's published keys (`APPLE_KEYS_URL`), issued by `https://appleid.apple.com` to one of the bundle IDs in
+`APPLE_CLIENT_IDS`, not expired. With no `APPLE_CLIENT_IDS` the endpoint answers 503 `apple_not_configured`; a token that
+fails the check is 401 `apple_token_invalid`, and Apple's keys out of reach is 503 `apple_unavailable`. Then it answers with
+the same `{ user, token }` as a password sign-in (`201` for a new account, `200` otherwise).
+
+Which account the token belongs to, in this order:
+
+1. The one already linked to the Apple user (`users.apple_sub`, Apple's own id; it does not change when the person changes
+   or hides their address). The email of the token is not looked at.
+2. Otherwise, when the token has an email and Apple calls it verified, the account with that email. It is linked now, with
+   the same consequence as for Google: a password on it is removed and every session opened before ends. An address
+   already linked to a *different* Apple user is refused (409 `apple_account_mismatch`). The `full_name` is not used: the
+   account is not new.
+3. Otherwise a new account, made like one from `/register` (default services and starter catalog) but with no password,
+   on the email of the token, which may be the address Apple made up for a person who hides theirs
+   (`…@privaterelay.appleid.com`), and with the `full_name` of the request. An email that Apple does not call verified
+   links nothing: if an account has it, the answer is 409 `email_taken`.
+
+With no usable email in the token and no account linked to its Apple user, the answer is 400 `apple_email_missing` (the
+person can stop using their Apple ID for the app in the Apple ID settings and try again). An inactive account is refused
+(403 `account_inactive`) and left as it was. The email is compared as everywhere else (trimmed, lower case).
+
+**Revoking.** Apple keeps a person linked to the app until it is told otherwise, and expects an app that offers account
+deletion to tell it. For that the server needs a Sign in with Apple key from the Apple Developer account (Keys, with "Sign
+in with Apple" ticked; the `.p8` file): `APPLE_TEAM_ID`, `APPLE_KEY_ID` and `APPLE_PRIVATE_KEY` (the text of the file; `\n`
+for its line breaks when it is on one line). All three or none, and with them `APPLE_CLIENT_IDS`: the server refuses to
+start otherwise. With the key, a sign-in that comes with an `authorization_code` trades it with Apple for a refresh token,
+which is kept in `users.apple_refresh_token` (never sent to the app), and `delete-account` revokes that token before it
+deletes the account. Both calls sign a short-lived ES256 client secret with the key (the team, the key and the first of the
+`APPLE_CLIENT_IDS` in it) and are best effort: whatever goes wrong is logged as `[apple] …` (nothing secret in it) and the
+sign-in or the deletion goes on. `APPLE_AUTH_URL` is the base of Apple's `/token` and `/revoke` endpoints and `APPLE_KEYS_URL`
+is where its keys are; only a test has a reason to change them.
 
 ### Stringing: clients, rackets, strings, services, orders
 
@@ -240,7 +282,7 @@ railway add --service api                           # the server, empty for now
 railway service scale --service api iad=0 eu-west=1
 railway service scale --service Postgres iad=0 eu-west=1
 railway variable set 'DATABASE_URL=${{Postgres.DATABASE_URL}}' --service api --skip-deploys
-railway variable set 'APP_URL=systema://' --service api --skip-deploys
+railway variable set 'APP_URL=https://<the address railway domain gives>' --service api --skip-deploys
 railway variable set PORT=4000 --service api --skip-deploys
 railway variable set CLIENT_IP_HEADER=x-real-ip --service api --skip-deploys
 openssl rand -base64 48 | tr -d '\n' | railway variable set JWT_SECRET --stdin --service api --skip-deploys
@@ -252,7 +294,9 @@ The health check (`/api/health`) is set on the service with the API: `serviceIns
 "/api/health", dockerfilePath: "Dockerfile" })` (`railway api '<mutation>'`). `CLIENT_IP_HEADER=x-real-ip` is needed
 because Railway does not say how many proxies are in front of the server: its edge overwrites `x-real-ip` with the client's
 address, and the limit on login attempts counts by it (see `.env.example`). Without it every request would be counted under
-whatever proxy it came through. Set `SMTP_*` too when emails (a password reset) are to be sent.
+whatever proxy it came through. Railway's Hobby plan blocks outbound SMTP (ports 25, 465, 587), so emails (a password reset)
+go out through Resend's HTTPS API: set `EMAIL_FROM_ADDRESS` and, in the dashboard so that it stays out of the shell history,
+`RESEND_API_KEY`; the steps are in `../docs/email.md`.
 
 With more than one instance, run `node src/db/migrate.js` as a separate step instead of in the start command.
 
@@ -264,10 +308,11 @@ token is kept in the keychain (`expo-secure-store`; `localStorage` on the web bu
 - **Development:** start the backend (`npm run dev`, port 4000) and the app. The app finds the backend by
   itself: the computer that runs Metro, port 4000, so a phone on the same Wi-Fi works with no setting.
 - **Production build:** set `EXPO_PUBLIC_API_URL=https://api.example.com` when building the app.
-- **Password reset links** point to `APP_URL/reset-password?token=...` and open the app's reset screen.
-  For a native build use the app's own scheme as `APP_URL` (`systema://` while developing). Mail clients
-  do not make custom schemes clickable, so for real users set up a universal link (an https address that
-  opens the app), or send people to a web page that opens it.
+- **Password reset links** point to `APP_URL/reset-password?token=...`. Mail clients do not make the app's own
+  scheme (`systema://`) a link, so `APP_URL` is the public https address of this API, which serves a small page
+  at that path (`src/utils/pages.js`): it opens the app's reset screen with the token (`systema://reset-password?token=…`),
+  by itself and with a button. A universal link (an https address of your own domain that iOS opens in the app
+  directly) would skip the page, and is something to add later.
 
 ## Not included
 

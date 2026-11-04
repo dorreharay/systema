@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { Text, View } from 'react-native';
 
 import GoogleIcon from '@/components/icons/google-icon';
 import Shortcut from '@/components/ui/shortcut';
@@ -21,8 +20,8 @@ type GoogleSignInButtonProps = {
   onError: (message: string | undefined) => void;
 };
 
-// "or" and the Google button, below the button that signs in with a password. Shown on the sign-in and the sign-up
-// screen alike: Google makes the account when there is none.
+// The Google button, among the ways in below the button that signs in with a password (see SocialSignIn). Shown on the
+// sign-in and the sign-up screen alike: Google makes the account when there is none.
 export default function GoogleSignInButton({ disabled, onError }: GoogleSignInButtonProps) {
   const { t } = useI18n();
   const { signInWithGoogle } = useAuth();
@@ -48,22 +47,15 @@ export default function GoogleSignInButton({ disabled, onError }: GoogleSignInBu
   };
 
   return (
-    <View className="gap-4">
-      <View className="flex-row items-center gap-3">
-        <View className="h-px flex-1 bg-white/25" />
-        <Text className="text-sm text-white/70">{t('or_divider')}</Text>
-        <View className="h-px flex-1 bg-white/25" />
-      </View>
-      <Shortcut
-        label={t('continue_with_google')}
-        icon={GoogleIcon}
-        color={GOOGLE_FILL}
-        contentColor={GOOGLE_LABEL}
-        className={`border ${GOOGLE_OUTLINE}`}
-        onPress={press}
-        loading={busy}
-        disabled={disabled}
-      />
-    </View>
+    <Shortcut
+      label={t('continue_with_google')}
+      icon={GoogleIcon}
+      color={GOOGLE_FILL}
+      contentColor={GOOGLE_LABEL}
+      className={`border ${GOOGLE_OUTLINE}`}
+      onPress={press}
+      loading={busy}
+      disabled={disabled}
+    />
   );
 }

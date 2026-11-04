@@ -2,7 +2,9 @@ import { useQueryClient } from '@tanstack/react-query';
 import { createContext, use, useEffect, useState, type ReactNode } from 'react';
 
 import { ApiError } from '@/lib/api';
+import { requestAppleCredential } from '@/lib/apple-sign-in';
 import {
+  appleLoginRequest,
   deleteAccountRequest,
   fetchMe,
   forgotPasswordRequest,
@@ -51,6 +53,8 @@ type AuthContextValue = {
   signUp: (email: string, password: string) => Promise<void>;
   /** Opens Google's sign-in and, once the person has chosen an account, signs in with it. Closing the sheet is not an error. */
   signInWithGoogle: () => Promise<void>;
+  /** Opens Apple's sign-in sheet and, once the person has approved, signs in with it. Closing the sheet is not an error. */
+  signInWithApple: () => Promise<void>;
   signOut: () => Promise<void>;
   /**
    * Deletes the account and everything in it for good, then signs out. The password is what the server asks for when the
@@ -195,6 +199,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // The person closed Google's sheet without choosing an account.
       if (idToken) {
         await startSession(await googleLoginRequest(idToken));
+      }
+    },
+    signInWithApple: async () => {
+      const credential = await requestAppleCredential();
+      // The person closed Apple's sheet without approving.
+      if (credential) {
+        await startSession(await appleLoginRequest(credential));
       }
     },
     signOut: async () => {
