@@ -48,9 +48,8 @@ Google), пошта й імʼя.
    Посилання на домашню сторінку й **політику конфіденційності** (потрібна Google для публікації та Apple для
    App Store), домен цих сторінок у *Authorized domains*. Для re:string це `https://tryrestring.com/`, політика
    `https://tryrestring.com/privacy/`, умови `https://tryrestring.com/terms/`, домен `tryrestring.com`. Google відкриває ці
-   сторінки, тож вони мають бути доступні без пароля: зараз сайт закритий паролем, і його знімає видалення змінної
-   `SITE_PASSWORD_HASH` у Railway (див. `site/README.md`). До цього поля з посиланнями можна лишити порожніми й заповнити
-   потім. Google може попросити підтвердити власність домену в Search Console: це TXT-запис у Namecheap.
+   сторінки, тож вони мають бути доступні без пароля: сайт відкритий (пароль знято 5 листопада 2026; закрити знову можна
+   змінною `SITE_PASSWORD_HASH` у Railway, див. `site/README.md`). Google може попросити підтвердити власність домену в Search Console: це TXT-запис у Namecheap.
 2. **Audience**: тип користувачів **External**.
 3. **Data access** (scopes): лишіть лише базові `openid`, `.../auth/userinfo.email`, `.../auth/userinfo.profile`.
    Вони не потребують перевірки Google. **Не додавайте жодних інших**: чутливі scopes вимагають перевірки, а

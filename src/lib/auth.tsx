@@ -64,6 +64,7 @@ type AuthContextValue = {
   /** Saves preferences to the account and returns the user as the server now has them. */
   updateProfile: (patch: ProfilePatch) => Promise<User>;
   requestPasswordReset: (email: string) => Promise<void>;
+  /** Sets the new password with the token of the reset link. A person who is signed in on this device is signed out by it. */
   resetPassword: (token: string, password: string) => Promise<void>;
 };
 
@@ -236,6 +237,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
     resetPassword: async (token, password) => {
       await resetPasswordRequest(token, password);
+      // The server has ended every session opened before now. If someone is signed in here (the link can be asked for in
+      // Settings), this device forgets its session at once and not at the next request answered with 401: they sign in
+      // again with the new password.
+      if (state.status === 'signedIn') {
+        await forgetSession();
+      }
     },
   };
 

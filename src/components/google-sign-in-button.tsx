@@ -1,28 +1,34 @@
 import { useState } from 'react';
+import { ActivityIndicator, Pressable } from 'react-native';
 
 import GoogleIcon from '@/components/icons/google-icon';
-import Shortcut from '@/components/ui/shortcut';
 import { useAuth } from '@/lib/auth';
 import { describeError } from '@/lib/errors';
 import { googleSignInSupported } from '@/lib/google-sign-in';
 import { useI18n } from '@/lib/i18n';
 
 // Google's own colours for its dark button, which is the one made for a dark background like the photo of the sign-in
-// screens: the fill, the outline and the label, with its "G". Its branding guidelines ask for them as they are.
+// screens: the fill and the outline, with its "G" in the middle. Its branding guidelines ask for them as they are.
 const GOOGLE_FILL = '#131314';
 const GOOGLE_OUTLINE = 'border-[#8E918F]';
-const GOOGLE_LABEL = '#E3E3E3';
+const GOOGLE_SPINNER = '#E3E3E3';
+// The "G" is a bit over a third of the side of the button: next to the logo Apple's button draws, which is smaller, a bigger
+// one would look heavier.
+const ICON_RATIO = 0.38;
 
 type GoogleSignInButtonProps = {
+  // The side of the square the button is.
+  size: number;
   // The screen's own button is in the middle of a request.
   disabled?: boolean;
   // Puts a sentence among the screen's messages about the form; `undefined` takes the last one away.
   onError: (message: string | undefined) => void;
 };
 
-// The Google button, among the ways in below the button that signs in with a password (see SocialSignIn). Shown on the
-// sign-in and the sign-up screen alike: Google makes the account when there is none.
-export default function GoogleSignInButton({ disabled, onError }: GoogleSignInButtonProps) {
+// The Google button, with only its "G" (Google's branding guidelines have that button too), among the ways in below the button
+// that signs in with a password (see SocialSignIn). Shown on the sign-in and the sign-up screen alike: Google makes the account
+// when there is none.
+export default function GoogleSignInButton({ size, disabled, onError }: GoogleSignInButtonProps) {
   const { t } = useI18n();
   const { signInWithGoogle } = useAuth();
   const [busy, setBusy] = useState(false);
@@ -46,16 +52,19 @@ export default function GoogleSignInButton({ disabled, onError }: GoogleSignInBu
     setBusy(false);
   };
 
+  const inactive = busy || disabled;
   return (
-    <Shortcut
-      label={t('continue_with_google')}
-      icon={GoogleIcon}
-      color={GOOGLE_FILL}
-      contentColor={GOOGLE_LABEL}
-      className={`border ${GOOGLE_OUTLINE}`}
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={t('continue_with_google')}
+      accessibilityState={{ busy, disabled: !!inactive }}
+      disabled={inactive}
       onPress={press}
-      loading={busy}
-      disabled={disabled}
-    />
+      style={{ width: size, height: size, backgroundColor: GOOGLE_FILL }}
+      className={`items-center justify-center rounded-[18px] border ${GOOGLE_OUTLINE} active:opacity-80 ${
+        inactive ? 'opacity-60' : ''
+      }`}>
+      {busy ? <ActivityIndicator color={GOOGLE_SPINNER} /> : <GoogleIcon size={Math.round(size * ICON_RATIO)} />}
+    </Pressable>
   );
 }

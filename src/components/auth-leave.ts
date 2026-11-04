@@ -29,5 +29,7 @@ export function useAuthRouter() {
     push: (href: Href) => leave(() => router.push(href)),
     replace: (href: Href) => leave(() => router.replace(href)),
     dismissTo: (href: Href) => leave(() => router.dismissTo(href)),
+    // Back to where the person was, or to `fallback` when this screen is the first one (opened by a link).
+    back: (fallback: Href) => leave(() => (router.canGoBack() ? router.back() : router.replace(fallback))),
   };
 }

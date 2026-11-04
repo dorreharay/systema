@@ -67,7 +67,7 @@ type StackNavigation = {
   isFocused(): boolean;
 };
 
-// The photo and the dark bottom of it are drawn by the auth group's layout. The content sits either at the
+// The photo and the dark bottom of it are drawn by the layout of the group (see AuthShell). The content sits either at the
 // bottom of the screen or, when centered, in the middle of it.
 export default function AuthLayout({
   title,

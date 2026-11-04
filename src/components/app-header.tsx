@@ -20,6 +20,8 @@ const TITLE = 're:string';
 let introPlayed = false;
 export const HEADER_HEIGHT = 104;
 const HOME_PATH = '/home';
+// The page of the password reset link stands on the photo of the sign-in screens, whether or not someone is signed in.
+const RESET_PATH = '/reset-password';
 const HEADER_FONT_SIZE = 24;
 // How far above the middle of the header the logo sits once it has docked: beside the back button on the sign-in
 // screens, and higher on the home page of someone who is signed in, where the page starts right under it.
@@ -52,14 +54,17 @@ export default function AppHeader() {
   const [introGone, setIntroGone] = useState(skipIntro);
   const progress = useSharedValue(skipIntro ? 1 : 0);
   const visible = useSharedValue(1);
+  // The sign-in screens, and the page of the reset link even for someone who is signed in, stand on the photo: the logo is
+  // white and beside the back button.
+  const onPhoto = status !== 'signedIn' || pathname === RESET_PATH;
   // Someone signed in sees the logo in the header on the home page only. It can go once the intro is over.
-  const hidden = status === 'signedIn' && introGone && pathname !== HOME_PATH;
+  const hidden = !onPhoto && introGone && pathname !== HOME_PATH;
 
   const introFontSize = Math.min(72, width * 0.14);
   const targetScale = HEADER_FONT_SIZE / introFontSize;
-  const raise = status === 'signedIn' ? LOGO_RAISE_HOME : LOGO_RAISE;
+  const raise = onPhoto ? LOGO_RAISE : LOGO_RAISE_HOME;
   const targetY = insets.top + HEADER_HEIGHT / 2 - raise - height / 2;
-  const headerTextColor = status === 'signedIn' ? HEADER_TEXT_COLOR : INTRO_TEXT_COLOR;
+  const headerTextColor = onPhoto ? INTRO_TEXT_COLOR : HEADER_TEXT_COLOR;
 
   useEffect(() => {
     if (skipIntro) {
@@ -108,7 +113,8 @@ export default function AppHeader() {
     const p = progress.get();
     return {
       opacity: visible.get(),
-      // Turns dark, for someone who is signed in, while the backdrop is still fading: the page under the title is light.
+      // Turns dark, for someone who is signed in and not on the photo, while the backdrop is still fading: the page under the
+      // title is light.
       color: interpolateColor(p, [0.3, 0.65], [INTRO_TEXT_COLOR, headerTextColor]),
       transform: [
         { translateY: interpolate(p, [0, 1], [0, targetY]) },

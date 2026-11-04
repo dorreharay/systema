@@ -83,6 +83,9 @@ function RootNavigator() {
         <Stack.Protected guard={signedIn} redirectTo="/">
           <Stack.Screen name="(app)" />
         </Stack.Protected>
+        {/* The page of the password reset link opens for a signed-in person too (they can ask for the link in Settings),
+            so it is in neither of the groups above. It signs them out once the password is changed. */}
+        <Stack.Screen name="(reset)" />
       </Stack>
     </View>
   );
