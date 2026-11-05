@@ -11,7 +11,16 @@ import Shortcut from '@/components/ui/shortcut';
 import { Text } from '@/components/ui/text';
 import { useToast } from '@/components/ui/toast';
 import { useAuth } from '@/lib/auth';
-import { CURRENCIES, TIME_ZONES, deviceTimeZone, timeZoneLabel } from '@/lib/choices';
+import { CURRENCIES, deviceTimeZone, timeZoneLabel } from '@/lib/choices';
+import {
+  canonicalZone,
+  countryList,
+  countryName,
+  countryOfAccount,
+  countryOfZone,
+  zoneChoices,
+  zoneForCountry,
+} from '@/lib/countries';
 import { describeError, isApiError } from '@/lib/errors';
 import { currencySymbol } from '@/lib/format';
 import { LANGUAGES, useI18n, type Language } from '@/lib/i18n';
@@ -28,6 +37,7 @@ function ChoiceSheet<T extends string>({
   value,
   label,
   onChoose,
+  matchCode = true,
 }: SheetProps & {
   title: string;
   placeholder: string;
@@ -35,12 +45,15 @@ function ChoiceSheet<T extends string>({
   value: T;
   label: (option: T) => string;
   onChoose: (option: T) => void;
+  // Whether what is typed is looked for in the code of an option too (a currency is found by its code); off where the code says
+  // nothing to the person (the two letters of a country would match half of the names).
+  matchCode?: boolean;
 }) {
   const [query, setQuery] = useState('');
   const shown = useMemo(() => {
     const words = query.toLowerCase().split(/\s+/).filter(Boolean);
     return options.filter((option) => {
-      const text = `${option} ${label(option)}`.toLowerCase();
+      const text = `${matchCode ? option : ''} ${label(option)}`.toLowerCase();
       return words.every((word) => text.includes(word));
     });
     // `label` only depends on the language and does not change while the list is open.
@@ -116,17 +129,40 @@ export function LanguageSheet({ visible, onClose }: SheetProps) {
   );
 }
 
-export function TimeZoneSheet({
+/** The countries of the world by name, to choose where the workshop is. */
+export function CountrySheet({
   visible,
   onClose,
   value,
   onChoose,
-}: SheetProps & { value: string; onChoose: (zone: string) => void }) {
+}: SheetProps & { value?: string; onChoose: (country: string) => void }) {
+  const { t, language } = useI18n();
+  const options = useMemo(() => countryList(language), [language]);
+  return (
+    <ChoiceSheet
+      visible={visible}
+      onClose={onClose}
+      title={t('settings_country')}
+      placeholder={t('search')}
+      options={options}
+      value={value ?? ''}
+      label={(code) => countryName(code, language)}
+      onChoose={onChoose}
+      matchCode={false}
+    />
+  );
+}
+
+/** The time zones of one country, for the large ones that have several. */
+export function TimeZoneSheet({
+  visible,
+  onClose,
+  country,
+  value,
+  onChoose,
+}: SheetProps & { country: string; value: string; onChoose: (zone: string) => void }) {
   const { t } = useI18n();
-  const options = useMemo(() => {
-    const device = deviceTimeZone();
-    return TIME_ZONES.includes(device) ? TIME_ZONES : [device, ...TIME_ZONES];
-  }, []);
+  const options = useMemo(() => [...zoneChoices(country)], [country]);
   return (
     <ChoiceSheet
       visible={visible}
@@ -137,6 +173,88 @@ export function TimeZoneSheet({
       value={value}
       label={timeZoneLabel}
       onChoose={onChoose}
+      matchCode={false}
+    />
+  );
+}
+
+/**
+ * Where the workshop is, for a form: the country is chosen, and the time zone comes with it. A country with several time zones
+ * shows a field for them under it, with one of them already set.
+ */
+export function PlaceFields({ zone, onChange }: { zone: string; onChange: (zone: string) => void }) {
+  const { t, language } = useI18n();
+  const [choosing, setChoosing] = useState<'country' | 'zone' | null>(null);
+  const country = countryOfZone(zone);
+  return (
+    <>
+      <PickerField
+        label={t('settings_country')}
+        value={country ? countryName(country, language) : undefined}
+        placeholder={t('country_choose')}
+        onPress={() => setChoosing('country')}
+      />
+      {country && zoneChoices(country).length > 1 ? (
+        <PickerField label={t('field_timezone')} value={timeZoneLabel(zone)} placeholder="" onPress={() => setChoosing('zone')} />
+      ) : null}
+      <CountrySheet
+        visible={choosing === 'country'}
+        onClose={() => setChoosing(null)}
+        value={country}
+        onChoose={(next) => onChange(zoneForCountry(next, zone))}
+      />
+      {country ? (
+        <TimeZoneSheet
+          visible={choosing === 'zone'}
+          onClose={() => setChoosing(null)}
+          country={country}
+          value={zone}
+          onChoose={onChange}
+        />
+      ) : null}
+    </>
+  );
+}
+
+/** The country in Settings: it is saved as it is chosen, as a time zone of that country. */
+export function CountrySettingsSheet({ visible, onClose }: SheetProps) {
+  const { user, updateProfile } = useAuth();
+  const { t } = useI18n();
+  const toast = useToast();
+  return (
+    <CountrySheet
+      visible={visible}
+      onClose={onClose}
+      value={countryOfAccount(user?.timezone)}
+      onChoose={(country) =>
+        updateProfile({ timezone: zoneForCountry(country, user?.timezone) }).then(
+          () => toast.success(t('settings_saved')),
+          (error) => toast.error(describeError(error, t))
+        )
+      }
+    />
+  );
+}
+
+/** The time zone in Settings, for a country that has several. */
+export function TimeZoneSettingsSheet({ visible, onClose }: SheetProps) {
+  const { user, updateProfile } = useAuth();
+  const { t } = useI18n();
+  const toast = useToast();
+  const country = countryOfAccount(user?.timezone);
+  if (!country) return null;
+  return (
+    <TimeZoneSheet
+      visible={visible}
+      onClose={onClose}
+      country={country}
+      value={user?.timezone ?? ''}
+      onChoose={(timezone) =>
+        updateProfile({ timezone }).then(
+          () => toast.success(t('settings_saved')),
+          (error) => toast.error(describeError(error, t))
+        )
+      }
     />
   );
 }
@@ -146,8 +264,7 @@ function ProfileForm({ onClose }: { onClose: () => void }) {
   const { t } = useI18n();
   const toast = useToast();
   const [name, setName] = useState(user?.full_name ?? '');
-  const [zone, setZone] = useState(user?.timezone ?? deviceTimeZone());
-  const [choosingZone, setChoosingZone] = useState(false);
+  const [zone, setZone] = useState(canonicalZone(user?.timezone && user.timezone !== 'UTC' ? user.timezone : deviceTimeZone()));
   const [formError, setFormError] = useState<string>();
   const [saving, setSaving] = useState(false);
 
@@ -176,23 +293,12 @@ function ProfileForm({ onClose }: { onClose: () => void }) {
           returnKeyType="done"
           onSubmitEditing={save}
         />
-        <PickerField
-          label={t('field_timezone')}
-          value={timeZoneLabel(zone)}
-          placeholder=""
-          onPress={() => setChoosingZone(true)}
-        />
+        <PlaceFields zone={zone} onChange={setZone} />
         {formError ? <FormError message={formError} /> : null}
       </View>
       <View className="pt-4">
         <Shortcut compact icon={Check} label={t('save')} color={colors.primary} contentColor={colors.white} onPress={save} loading={saving} />
       </View>
-      <TimeZoneSheet
-        visible={choosingZone}
-        onClose={() => setChoosingZone(false)}
-        value={zone}
-        onChoose={setZone}
-      />
     </>
   );
 }

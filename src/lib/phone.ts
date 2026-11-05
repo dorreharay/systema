@@ -25,3 +25,10 @@ export const whatsappLink = (number: string, text: string) => `https://wa.me/${n
 
 /** Telegram's link to a person by phone number, with the text written in the box (https://core.telegram.org/api/links). */
 export const telegramLink = (number: string, text: string) => `https://t.me/+${number}?text=${encodeURIComponent(text)}`;
+
+/**
+ * Viber's link to the chat with a number. It is not in Viber's documentation (that has the links of bots only), and it takes no
+ * text: the message is put on the clipboard for the person to paste. The plus is written as %2B; where the sources differ on it,
+ * this is the form with the country code in full. Not yet tried on a phone with Viber on it.
+ */
+export const viberLink = (number: string) => `viber://chat?number=%2B${number}`;

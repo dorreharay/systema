@@ -1,7 +1,7 @@
-import { Linking, Platform } from 'react-native';
+import { Linking, Platform, Share } from 'react-native';
 
 import { NATIVE_CLIPBOARD, hasNativeModule } from '@/lib/native-modules';
-import { messengerNumber, telegramLink, whatsappLink } from '@/lib/phone';
+import { messengerNumber, telegramLink, viberLink, whatsappLink } from '@/lib/phone';
 
 /** Opens a link in the app that handles it: the phone, messages, mail or the browser. Returns false when the device cannot. */
 export async function openUrl(url: string) {
@@ -23,8 +23,11 @@ export const textPhone = (phone: string, body?: string) => {
   return openUrl(`sms:${digits(phone)}${body ? `${separator}body=${encodeURIComponent(body)}` : ''}`);
 };
 
-/** What came of opening a chat: `no_country_code` when the number cannot be told to a messenger, `failed` when the device cannot open it. */
-export type ChatResult = 'opened' | 'no_country_code' | 'failed';
+/**
+ * What came of opening a chat: `no_country_code` when the number cannot be told to a messenger, `failed` when the device cannot
+ * open it, `copy_failed` when the text had to go on the clipboard (to be pasted) and could not, so that the chat was not opened.
+ */
+export type ChatResult = 'opened' | 'no_country_code' | 'failed' | 'copy_failed';
 
 async function openChat(phone: string, link: (number: string, text: string) => string, text: string): Promise<ChatResult> {
   const number = messengerNumber(phone);
@@ -37,6 +40,24 @@ export const openWhatsApp = (phone: string, text: string) => openChat(phone, wha
 
 /** The same in Telegram, which finds the person by the number. */
 export const openTelegram = (phone: string, text: string) => openChat(phone, telegramLink, text);
+
+/** Viber takes no text in the link: the text is put on the clipboard first, and the chat with the number is opened to paste it in. */
+export async function openViber(phone: string, text: string): Promise<ChatResult> {
+  const number = messengerNumber(phone);
+  if (!number) return 'no_country_code';
+  if (!(await copyText(text))) return 'copy_failed';
+  return (await openUrl(viberLink(number))) ? 'opened' : 'failed';
+}
+
+/** Offers the text to any app of the phone that takes text (LINE, KakaoTalk, WeChat...): the person picks the app and the customer. */
+export async function shareText(text: string) {
+  try {
+    await Share.share({ message: text });
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export const emailTo = (address: string, subject?: string, body?: string) => {
   const params = [

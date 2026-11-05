@@ -8,6 +8,8 @@ type ShortcutProps = {
   // Without one, the label is all there is: the buttons of the sign-in screens.
   icon?: ComponentType<{ size?: number; color?: string }>;
   label: string;
+  // What a screen reader says, where the label shown is shorter than that (a brand name on its own, say).
+  accessibilityLabel?: string;
   // The colour of the button.
   color: string;
   // The colour of the icon and the label, where they are not to be the app's own.
@@ -18,6 +20,9 @@ type ShortcutProps = {
   className?: string;
   // A smaller button, for what is secondary to the one beside it.
   compact?: boolean;
+  // Lower still than the compact one (44 pt, where that is 52, the least iOS asks of a button to touch), with the corners in
+  // proportion: a stack of secondary buttons, like the ways to send the message that an order is ready.
+  dense?: boolean;
   // 15% lower than the large one (54 pt, where that is 63), with the corners in proportion (15 pt, where those are 18): the
   // buttons of the welcome and sign-in screens.
   slim?: boolean;
@@ -30,6 +35,7 @@ const SIZES = {
   large: { box: 'h-18 gap-3', radius: 'rounded-[18px]', icon: 22, label: 'text-[19px]' },
   slim: { box: 'h-[54px] gap-3', radius: 'rounded-[15px]', icon: 22, label: 'text-[19px]' },
   compact: { box: 'h-[52px] gap-2.5', radius: 'rounded-[18px]', icon: 20, label: 'text-[17px]' },
+  dense: { box: 'h-[44px] gap-2', radius: 'rounded-[15px]', icon: 18, label: 'text-[16px]' },
 } as const;
 
 // A button in the style of the shortcuts of the home screen: a block of colour with rounded corners, an
@@ -37,23 +43,25 @@ const SIZES = {
 export default function Shortcut({
   icon: Icon,
   label,
+  accessibilityLabel,
   color,
   contentColor,
   onPress,
   className = '',
   compact = false,
+  dense = false,
   slim = false,
   loading = false,
   disabled,
 }: ShortcutProps) {
-  const size = SIZES[compact ? 'compact' : slim ? 'slim' : 'large'];
+  const size = SIZES[dense ? 'dense' : compact ? 'compact' : slim ? 'slim' : 'large'];
   const inactive = loading || disabled;
   const ink = contentColor ?? colors.ink;
 
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={label}
+      accessibilityLabel={accessibilityLabel ?? label}
       accessibilityState={{ busy: loading, disabled: !!inactive }}
       disabled={inactive}
       onPress={onPress}

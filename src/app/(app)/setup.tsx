@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { TimeZoneSheet } from '@/components/settings-sheets';
+import { PlaceFields } from '@/components/settings-sheets';
 import { BLOCK, BLOCK_ROOM } from '@/components/ui/card';
 import { Segmented } from '@/components/ui/chips';
 import { colors } from '@/components/ui/colors';
@@ -14,7 +14,8 @@ import { Screen } from '@/components/ui/screen';
 import Shortcut from '@/components/ui/shortcut';
 import { Text } from '@/components/ui/text';
 import { useAuth } from '@/lib/auth';
-import { CURRENCIES, deviceTimeZone, timeZoneLabel } from '@/lib/choices';
+import { CURRENCIES, deviceTimeZone } from '@/lib/choices';
+import { canonicalZone } from '@/lib/countries';
 import { describeError } from '@/lib/errors';
 import { currencySymbol } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
@@ -29,11 +30,11 @@ export default function Setup() {
   const [workshop, setWorkshop] = useState(user?.workshop_name ?? '');
   const [currency, setCurrency] = useState(user?.currency ?? 'USD');
   const [unit, setUnit] = useState<TensionUnit>(user?.tension_unit ?? 'kg');
-  const [zone, setZone] = useState(user?.timezone && user.timezone !== 'UTC' ? user.timezone : deviceTimeZone());
+  const [zone, setZone] = useState(canonicalZone(user?.timezone && user.timezone !== 'UTC' ? user.timezone : deviceTimeZone()));
   const [nameError, setNameError] = useState<string>();
   const [formError, setFormError] = useState<string>();
   const [saving, setSaving] = useState(false);
-  const [choosing, setChoosing] = useState<'currency' | 'zone' | null>(null);
+  const [choosing, setChoosing] = useState<'currency' | null>(null);
   const [currencyQuery, setCurrencyQuery] = useState('');
 
   const save = async () => {
@@ -130,12 +131,7 @@ export default function Setup() {
               />
               <Text className="text-xs text-muted">{t('setup_unit_hint')}</Text>
             </View>
-            <PickerField
-              label={t('field_timezone')}
-              value={timeZoneLabel(zone)}
-              placeholder=""
-              onPress={() => setChoosing('zone')}
-            />
+            <PlaceFields zone={zone} onChange={setZone} />
           </View>
           <Text className="px-1 text-[14.3px] text-muted">{t('setup_hint')}</Text>
           {formError ? <FormError message={formError} /> : null}
@@ -160,12 +156,6 @@ export default function Setup() {
           setCurrency(code);
           setChoosing(null);
         }}
-      />
-      <TimeZoneSheet
-        visible={choosing === 'zone'}
-        onClose={() => setChoosing(null)}
-        value={zone}
-        onChoose={setZone}
       />
     </Screen>
   );

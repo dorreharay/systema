@@ -3,12 +3,14 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { ScrollView, View } from 'react-native';
 
-import { Banknote, Bell, ClipboardList, Eye, Gauge, Languages, LogOut, ShieldCheck, Store, Tags } from '@/components/icons';
+import { Banknote, Bell, ClipboardList, Clock, Eye, Gauge, Globe, Languages, LogOut, ShieldCheck, Store, Tags } from '@/components/icons';
 import {
   AccountSheet,
+  CountrySettingsSheet,
   CurrencySheet,
   LanguageSheet,
   ProfileSheet,
+  TimeZoneSettingsSheet,
   WorkshopSheet,
 } from '@/components/settings-sheets';
 import AppSwitch from '@/components/ui/app-switch';
@@ -19,13 +21,15 @@ import { Screen, ScreenHeader, TAB_HEADER_DROP } from '@/components/ui/screen';
 import { Text } from '@/components/ui/text';
 import { useToast } from '@/components/ui/toast';
 import { useAuth } from '@/lib/auth';
+import { timeZoneLabel } from '@/lib/choices';
+import { countryName, countryOfAccount, zoneChoices } from '@/lib/countries';
 import { describeError } from '@/lib/errors';
 import { LANGUAGES, useI18n } from '@/lib/i18n';
 import { openLegalPage, type LegalPage } from '@/lib/legal';
 import { requestReminderPermission } from '@/lib/reminders';
 import type { TensionUnit } from '@/lib/types';
 
-type OpenSheet = 'profile' | 'workshop' | 'currency' | 'language' | 'account' | null;
+type OpenSheet = 'profile' | 'workshop' | 'currency' | 'country' | 'zone' | 'language' | 'account' | null;
 
 export default function Settings() {
   const { user, signOut, updateProfile } = useAuth();
@@ -39,7 +43,10 @@ export default function Settings() {
 
   if (!user) return null;
 
-  const save = (patch: Parameters<typeof updateProfile>[0]) =>
+  // The country is read from the time zone of the account (an account that has only UTC gets the country of the phone).
+  const country = countryOfAccount(user.timezone);
+
+  const save =(patch: Parameters<typeof updateProfile>[0]) =>
     updateProfile(patch).catch((error) => toast.error(describeError(error, t)));
 
   const changeReminders = async (enabled: boolean) => {
@@ -86,6 +93,15 @@ export default function Settings() {
           />
           <ListRow icon={Tags} label={t('settings_services')} onPress={() => router.push('/settings/services')} />
           <ListRow icon={Banknote} label={t('settings_currency')} value={user.currency} onPress={() => setSheet('currency')} />
+          <ListRow
+            icon={Globe}
+            label={t('settings_country')}
+            value={country ? countryName(country, language) : ''}
+            onPress={() => setSheet('country')}
+          />
+          {country && zoneChoices(country).length > 1 ? (
+            <ListRow icon={Clock} label={t('field_timezone')} value={timeZoneLabel(user.timezone)} onPress={() => setSheet('zone')} />
+          ) : null}
           <ListRow
             icon={Gauge}
             label={t('settings_tension_unit')}
@@ -142,6 +158,8 @@ export default function Settings() {
       <ProfileSheet visible={sheet === 'profile'} onClose={() => setSheet(null)} />
       <WorkshopSheet visible={sheet === 'workshop'} onClose={() => setSheet(null)} />
       <CurrencySheet visible={sheet === 'currency'} onClose={() => setSheet(null)} />
+      <CountrySettingsSheet visible={sheet === 'country'} onClose={() => setSheet(null)} />
+      <TimeZoneSettingsSheet visible={sheet === 'zone'} onClose={() => setSheet(null)} />
       <LanguageSheet visible={sheet === 'language'} onClose={() => setSheet(null)} />
       <AccountSheet visible={sheet === 'account'} onClose={() => setSheet(null)} />
     </Screen>
