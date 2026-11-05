@@ -1,6 +1,7 @@
 import { Linking, Platform } from 'react-native';
 
 import { NATIVE_CLIPBOARD, hasNativeModule } from '@/lib/native-modules';
+import { messengerNumber, telegramLink, whatsappLink } from '@/lib/phone';
 
 /** Opens a link in the app that handles it: the phone, messages, mail or the browser. Returns false when the device cannot. */
 export async function openUrl(url: string) {
@@ -21,6 +22,21 @@ export const textPhone = (phone: string, body?: string) => {
   const separator = Platform.OS === 'ios' ? '&' : '?';
   return openUrl(`sms:${digits(phone)}${body ? `${separator}body=${encodeURIComponent(body)}` : ''}`);
 };
+
+/** What came of opening a chat: `no_country_code` when the number cannot be told to a messenger, `failed` when the device cannot open it. */
+export type ChatResult = 'opened' | 'no_country_code' | 'failed';
+
+async function openChat(phone: string, link: (number: string, text: string) => string, text: string): Promise<ChatResult> {
+  const number = messengerNumber(phone);
+  if (!number) return 'no_country_code';
+  return (await openUrl(link(number, text))) ? 'opened' : 'failed';
+}
+
+/** Opens the chat with the number in WhatsApp (its page where the app is not installed) with the text written: it is only left to send. */
+export const openWhatsApp = (phone: string, text: string) => openChat(phone, whatsappLink, text);
+
+/** The same in Telegram, which finds the person by the number. */
+export const openTelegram = (phone: string, text: string) => openChat(phone, telegramLink, text);
 
 export const emailTo = (address: string, subject?: string, body?: string) => {
   const params = [
