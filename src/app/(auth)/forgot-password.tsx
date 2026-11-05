@@ -3,6 +3,7 @@ import { View } from 'react-native';
 
 import { useAuthRouter } from '@/components/auth-leave';
 import AuthLayout from '@/components/auth-layout';
+import AuthSubmit from '@/components/auth-submit';
 import AuthSwitch from '@/components/auth-switch';
 import FormMessage from '@/components/form-message';
 import TextField from '@/components/text-field';
@@ -66,7 +67,9 @@ function ForgotPasswordForm() {
       />
       {formError ? <FormMessage message={formError} /> : null}
       <View className="pt-4">
-        <Shortcut label={t('send_reset_link')} color={colors.white} contentColor={colors.primary} onPress={submit} loading={submitting} />
+        <AuthSubmit>
+          <Shortcut label={t('send_reset_link')} color={colors.white} contentColor={colors.primary} onPress={submit} loading={submitting} />
+        </AuthSubmit>
       </View>
     </View>
   );

@@ -4,6 +4,7 @@ import { Pressable, Text, View } from 'react-native';
 
 import AuthLayout from '@/components/auth-layout';
 import AuthLink from '@/components/auth-link';
+import AuthSubmit from '@/components/auth-submit';
 import AuthSwitch from '@/components/auth-switch';
 import FormMessage from '@/components/form-message';
 import SocialSignIn from '@/components/social-sign-in';
@@ -115,7 +116,9 @@ export default function Login() {
         </View>
         {formError ? <FormMessage message={formError} /> : null}
         <View className="gap-4 pt-4">
-          <Shortcut label={t('sign_in')} color={colors.white} contentColor={colors.primary} onPress={submit} loading={submitting} />
+          <AuthSubmit>
+            <Shortcut label={t('sign_in')} color={colors.white} contentColor={colors.primary} onPress={submit} loading={submitting} />
+          </AuthSubmit>
           <SocialSignIn disabled={submitting} onError={setFormError} />
         </View>
       </View>

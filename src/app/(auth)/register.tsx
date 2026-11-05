@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { View } from 'react-native';
 
 import AuthLayout from '@/components/auth-layout';
+import AuthSubmit from '@/components/auth-submit';
 import AuthSwitch from '@/components/auth-switch';
 import FormMessage from '@/components/form-message';
 import LegalNote from '@/components/legal-note';
@@ -136,7 +137,9 @@ export default function Register() {
         />
         {formError ? <FormMessage message={formError} /> : null}
         <View className="gap-4 pt-4">
-          <Shortcut label={t('create_account')} color={colors.white} contentColor={colors.primary} onPress={submit} loading={submitting} />
+          <AuthSubmit>
+            <Shortcut label={t('create_account')} color={colors.white} contentColor={colors.primary} onPress={submit} loading={submitting} />
+          </AuthSubmit>
           <SocialSignIn disabled={submitting} onError={setFormError} />
           <LegalNote onError={() => setFormError(t('legal_open_failed'))} />
         </View>

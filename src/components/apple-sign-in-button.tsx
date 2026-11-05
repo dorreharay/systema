@@ -9,8 +9,9 @@ import { useI18n } from '@/lib/i18n';
 type AppleSignInButtonProps = {
   // The library, which is there only once Apple has said this device can sign in.
   library: AppleLibrary;
-  // The side of the square the button is.
+  // The side of the square the button is, and the radius of its corners.
   size: number;
+  radius: number;
   // The screen's own button is in the middle of a request.
   disabled?: boolean;
   // Puts a sentence among the screen's messages about the form; `undefined` takes the last one away.
@@ -19,7 +20,7 @@ type AppleSignInButtonProps = {
 
 // Apple's own button, as its guidelines ask: the system draws it. Square, it has room for the logo and not for the label, so
 // the system draws the logo alone (white on the dark photo of the sign-in screens), with the corners of the buttons around it.
-export default function AppleSignInButton({ library, size, disabled, onError }: AppleSignInButtonProps) {
+export default function AppleSignInButton({ library, size, radius, disabled, onError }: AppleSignInButtonProps) {
   const { signInWithApple } = useAuth();
   const { t } = useI18n();
   const [busy, setBusy] = useState(false);
@@ -45,7 +46,7 @@ export default function AppleSignInButton({ library, size, disabled, onError }: 
       <library.AppleAuthenticationButton
         buttonType={library.AppleAuthenticationButtonType.CONTINUE}
         buttonStyle={library.AppleAuthenticationButtonStyle.WHITE}
-        cornerRadius={18}
+        cornerRadius={radius}
         style={{ width: size, height: size }}
         onPress={press}
       />

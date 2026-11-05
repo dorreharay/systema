@@ -4,6 +4,7 @@ import { Pressable, Text, View } from 'react-native';
 
 import AuthLayout from '@/components/auth-layout';
 import { useAuthRouter } from '@/components/auth-leave';
+import AuthSubmit from '@/components/auth-submit';
 import AuthSwitch from '@/components/auth-switch';
 import FormMessage from '@/components/form-message';
 import TextField, { type TextFieldRef } from '@/components/text-field';
@@ -100,7 +101,9 @@ function ResetPasswordForm() {
       />
       {formError ? <FormMessage message={formError} /> : null}
       <View className="pt-4">
-        <Shortcut label={t('change_password')} color={colors.white} contentColor={colors.primary} onPress={submit} loading={submitting} />
+        <AuthSubmit>
+          <Shortcut label={t('change_password')} color={colors.white} contentColor={colors.primary} onPress={submit} loading={submitting} />
+        </AuthSubmit>
       </View>
     </View>
   );

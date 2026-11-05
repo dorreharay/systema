@@ -17,8 +17,9 @@ const GOOGLE_SPINNER = '#E3E3E3';
 const ICON_RATIO = 0.38;
 
 type GoogleSignInButtonProps = {
-  // The side of the square the button is.
+  // The side of the square the button is, and the radius of its corners.
   size: number;
+  radius: number;
   // The screen's own button is in the middle of a request.
   disabled?: boolean;
   // Puts a sentence among the screen's messages about the form; `undefined` takes the last one away.
@@ -28,7 +29,7 @@ type GoogleSignInButtonProps = {
 // The Google button, with only its "G" (Google's branding guidelines have that button too), among the ways in below the button
 // that signs in with a password (see SocialSignIn). Shown on the sign-in and the sign-up screen alike: Google makes the account
 // when there is none.
-export default function GoogleSignInButton({ size, disabled, onError }: GoogleSignInButtonProps) {
+export default function GoogleSignInButton({ size, radius, disabled, onError }: GoogleSignInButtonProps) {
   const { t } = useI18n();
   const { signInWithGoogle } = useAuth();
   const [busy, setBusy] = useState(false);
@@ -60,8 +61,9 @@ export default function GoogleSignInButton({ size, disabled, onError }: GoogleSi
       accessibilityState={{ busy, disabled: !!inactive }}
       disabled={inactive}
       onPress={press}
-      style={{ width: size, height: size, backgroundColor: GOOGLE_FILL }}
-      className={`items-center justify-center rounded-[18px] border ${GOOGLE_OUTLINE} active:opacity-80 ${
+      // The corners curve the way the system's Apple button beside it has them.
+      style={{ width: size, height: size, borderRadius: radius, borderCurve: 'continuous', backgroundColor: GOOGLE_FILL }}
+      className={`items-center justify-center border ${GOOGLE_OUTLINE} active:opacity-80 ${
         inactive ? 'opacity-60' : ''
       }`}>
       {busy ? <ActivityIndicator color={GOOGLE_SPINNER} /> : <GoogleIcon size={Math.round(size * ICON_RATIO)} />}

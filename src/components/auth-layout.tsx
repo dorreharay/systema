@@ -1,7 +1,7 @@
 import type { Href } from 'expo-router';
 import { useFocusEffect, useNavigation } from 'expo-router';
 import type { ReactNode } from 'react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { LayoutChangeEvent } from 'react-native';
 import { Keyboard, Platform, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 import Animated, {
@@ -17,7 +17,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { scheduleOnRN } from 'react-native-worklets';
 
 import { HEADER_HEIGHT, LOGO_MIDDLE } from '@/components/app-header';
-import { AuthLeaveContext, addCover, coverAll } from '@/components/auth-leave';
+import type { AuthViewRef } from '@/components/auth-leave';
+import { AuthLeaveContext, AuthSubmitContext, addCover, coverAll } from '@/components/auth-leave';
 import AuthLink from '@/components/auth-link';
 import { ArrowLeft } from '@/components/icons';
 import { useI18n } from '@/lib/i18n';
@@ -27,7 +28,7 @@ import { useI18n } from '@/lib/i18n';
 const BACK_STRIP_HEIGHT = 44;
 // How far the content sits above the bottom edge, on top of the safe area.
 const CONTENT_LIFT = 56;
-// Space kept between the primary button and the top of the keyboard.
+// Space kept between the button that sends the form and the top of the keyboard.
 const KEYBOARD_GAP = 16;
 // Distance over which the title fades out before it reaches the logo.
 const TITLE_FADE = 48;
@@ -153,15 +154,19 @@ export default function AuthLayout({
   }));
   const shadeStyle = useAnimatedStyle(() => ({ opacity: shown.get() }));
 
-  // On iOS the centered form is lifted so the primary button sits just above the keyboard.
-  // The lift is animated once per keyboard change, over the keyboard's own duration, so moving
-  // between fields does not make the form jump. It stops below the status bar, and the title
-  // fades out before it reaches the logo.
+  // On iOS the centered form is moved so the button that sends it sits just above the keyboard (up, and a little down on a tall
+  // phone), and the other ways in below that button are behind the keyboard, none of them above it. The move is animated once
+  // per keyboard change, over the keyboard's own duration, so moving between fields does not make the form jump. It stops
+  // below the status bar, and the title fades out before it reaches the logo.
   const liftsForKeyboard = centered && Platform.OS === 'ios';
   const lift = useSharedValue(0);
   const [blockTop, setBlockTop] = useState(0);
   const blockLayout = useRef({ y: 0 });
   const formLayout = useRef({ y: 0, height: 0 });
+  const formRef = useRef<AuthViewRef>(null);
+  // Where the button that sends the form ends, from the top of the form (the button says where it is, see AuthSubmit). Until
+  // it has, the whole form counts.
+  const submitEnd = useRef<number | null>(null);
   const keyboardTop = useRef(height);
 
   const updateLift = useCallback(
@@ -169,12 +174,37 @@ export default function AuthLayout({
       if (!liftsForKeyboard) {
         return;
       }
-      const buttonBottom = blockLayout.current.y + formLayout.current.y + formLayout.current.height;
-      const needed = Math.max(0, buttonBottom + KEYBOARD_GAP - keyboardTop.current);
+      const keptBottom = blockLayout.current.y + formLayout.current.y + (submitEnd.current ?? formLayout.current.height);
+      // With the keyboard down the form is where it is centered.
+      const keyboardUp = keyboardTop.current < height - 1;
+      const needed = keyboardUp ? keptBottom + KEYBOARD_GAP - keyboardTop.current : 0;
       const limit = Math.max(0, blockLayout.current.y - insets.top);
       lift.set(withTiming(Math.min(needed, limit), { duration, easing: LIFT_EASING }));
     },
-    [insets.top, lift, liftsForKeyboard]
+    [height, insets.top, lift, liftsForKeyboard]
+  );
+
+  const submitRegistry = useMemo(
+    () => ({
+      measure: (button: AuthViewRef) => {
+        const form = formRef.current;
+        if (!form) {
+          return;
+        }
+        button.measureLayout(
+          form,
+          (_x, y, _width, buttonHeight) => {
+            submitEnd.current = y + buttonHeight;
+            updateLift(RELAYOUT_DURATION);
+          },
+          () => undefined
+        );
+      },
+      forget: () => {
+        submitEnd.current = null;
+      },
+    }),
+    [updateLift]
   );
 
   useEffect(() => {
@@ -217,7 +247,9 @@ export default function AuthLayout({
         <Text className="text-center text-2xl font-semibold text-white">{title}</Text>
         <Text className="text-center text-base text-white/80">{subtitle}</Text>
       </Animated.View>
-      <View onLayout={handleFormLayout}>{children}</View>
+      <View ref={formRef} onLayout={handleFormLayout}>
+        <AuthSubmitContext value={submitRegistry}>{children}</AuthSubmitContext>
+      </View>
       {footer}
     </Animated.View>
   );
@@ -262,7 +294,7 @@ export default function AuthLayout({
                 accessibilityRole="link"
                 accessibilityLabel={t('back')}
                 hitSlop={8}
-                className="h-11 w-11 items-center justify-center rounded-lg bg-white/10 active:bg-white/20">
+                className="h-11 w-11 items-center justify-center rounded-full bg-white/10 active:bg-white/20">
                 <ArrowLeft size={22} color="#ffffff" />
               </Pressable>
             </AuthLink>
