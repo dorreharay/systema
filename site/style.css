@@ -40,11 +40,11 @@ a:hover { text-decoration-thickness: 2px; }
 .skip:focus { left: 0; }
 
 /* Header: the wordmark and the language switch */
-.top { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding-block: 1rem; }
+.top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem; padding-block: 1rem; }
 .brand { display: inline-flex; color: var(--brand); }
 .logo { display: block; height: 1.5rem; width: auto; }
-.lang { display: flex; gap: .2rem; padding: .2rem; border-radius: 999px; background: var(--surface); font-size: .9rem; font-weight: 600; }
-.lang a { padding: .3rem .8rem; border-radius: 999px; color: var(--muted); text-decoration: none; }
+.lang { display: flex; flex-wrap: wrap; gap: .2rem; padding: .2rem; border-radius: 1.2rem; background: var(--surface); font-size: .9rem; font-weight: 600; }
+.lang a { padding: .3rem .7rem; border-radius: 999px; color: var(--muted); text-decoration: none; }
 .lang a[aria-current] { background: var(--bg); color: var(--ink); box-shadow: 0 0 0 1px var(--line); }
 
 /* Landing hero: dark green like the app's welcome screen */
