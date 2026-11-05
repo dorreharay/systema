@@ -402,12 +402,7 @@ export default function OrderDetails() {
         visible={readyOpen}
         onClose={() => setReadyOpen(false)}
         phone={order.client.phone}
-        message={readyMessage(order, {
-          t,
-          language,
-          currency,
-          workshop: user?.workshop_name ?? null,
-        })}
+        message={readyMessage(order, { t, language, currency })}
       />
       <PhotoViewer id={viewing} onClose={() => setViewing(null)} />
     </Screen>

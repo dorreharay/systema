@@ -60,7 +60,7 @@ export function orderAsText(order: OrderDetail, { t, language, unit, currency, t
 /** A message for the customer when their racket can be picked up. */
 export function readyMessage(
   order: Pick<Order, 'client' | 'racket' | 'total' | 'is_paid'>,
-  { t, language, currency, workshop }: { t: Translate; language: Language; currency: string; workshop: string | null }
+  { t, language, currency }: { t: Translate; language: Language; currency: string }
 ) {
   const name = order.client.name.split(' ')[0];
   const lines = [
@@ -71,6 +71,5 @@ export function readyMessage(
     lines.push(t('ready_message_total', { total: formatMoney(order.total, currency, language) }));
   }
   // Japanese sentences end with 。 and are not separated by a space.
-  const text = lines.join(language === 'ja' ? '' : ' ');
-  return workshop ? `${text} — ${workshop}` : text;
+  return lines.join(language === 'ja' ? '' : ' ');
 }

@@ -9,7 +9,6 @@ export type User = {
   full_name: string | null;
   role: 'user' | 'admin';
   is_active: boolean;
-  workshop_name: string | null;
   currency: string;
   tension_unit: TensionUnit;
   timezone: string;
@@ -29,7 +28,6 @@ export type ProfilePatch = Partial<
   Pick<
     User,
     | 'full_name'
-    | 'workshop_name'
     | 'currency'
     | 'tension_unit'
     | 'timezone'

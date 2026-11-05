@@ -27,7 +27,6 @@ export default function Setup() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [name, setName] = useState(user?.full_name ?? '');
-  const [workshop, setWorkshop] = useState(user?.workshop_name ?? '');
   const [currency, setCurrency] = useState(user?.currency ?? 'USD');
   const [unit, setUnit] = useState<TensionUnit>(user?.tension_unit ?? 'kg');
   const [zone, setZone] = useState(canonicalZone(user?.timezone && user.timezone !== 'UTC' ? user.timezone : deviceTimeZone()));
@@ -49,7 +48,6 @@ export default function Setup() {
       // Once this is saved the app moves on by itself: the setup screen is only for accounts without it.
       await updateProfile({
         full_name: name,
-        workshop_name: workshop,
         currency,
         tension_unit: unit,
         timezone: zone,
@@ -104,13 +102,6 @@ export default function Setup() {
               error={nameError}
               autoCapitalize="words"
               autoComplete="name"
-              returnKeyType="next"
-            />
-            <Input
-              label={`${t('field_workshop_name')} · ${t('optional')}`}
-              value={workshop}
-              onChangeText={setWorkshop}
-              autoCapitalize="words"
               returnKeyType="done"
             />
             <PickerField

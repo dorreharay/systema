@@ -312,58 +312,6 @@ export function ProfileSheet({ visible, onClose }: SheetProps) {
   );
 }
 
-function WorkshopForm({ onClose }: { onClose: () => void }) {
-  const { user, updateProfile } = useAuth();
-  const { t } = useI18n();
-  const toast = useToast();
-  const [name, setName] = useState(user?.workshop_name ?? '');
-  const [formError, setFormError] = useState<string>();
-  const [saving, setSaving] = useState(false);
-
-  const save = async () => {
-    setSaving(true);
-    setFormError(undefined);
-    try {
-      await updateProfile({ workshop_name: name });
-      toast.success(t('settings_saved'));
-      onClose();
-    } catch (error) {
-      setFormError(describeError(error, t));
-      setSaving(false);
-    }
-  };
-
-  return (
-    <>
-      <View className="gap-3 pt-2">
-        <Input
-          label={`${t('field_workshop_name')} · ${t('optional')}`}
-          value={name}
-          onChangeText={setName}
-          autoFocus
-          autoCapitalize="words"
-          returnKeyType="done"
-          onSubmitEditing={save}
-          hint={t('workshop_hint')}
-        />
-        {formError ? <FormError message={formError} /> : null}
-      </View>
-      <View className="pt-4">
-        <Shortcut compact icon={Check} label={t('save')} color={colors.primary} contentColor={colors.white} onPress={save} loading={saving} />
-      </View>
-    </>
-  );
-}
-
-export function WorkshopSheet({ visible, onClose }: SheetProps) {
-  const { t } = useI18n();
-  return (
-    <Sheet visible={visible} onClose={onClose} form title={t('settings_workshop')}>
-      <WorkshopForm onClose={onClose} />
-    </Sheet>
-  );
-}
-
 function DeleteAccountForm() {
   const { user, deleteAccount } = useAuth();
   const { t } = useI18n();

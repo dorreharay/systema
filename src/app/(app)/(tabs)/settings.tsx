@@ -3,7 +3,7 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { ScrollView, View } from 'react-native';
 
-import { Banknote, Bell, ClipboardList, Clock, Eye, Gauge, Globe, Languages, LogOut, ShieldCheck, Store, Tags } from '@/components/icons';
+import { Banknote, Bell, ClipboardList, Clock, Eye, Gauge, Globe, Languages, LogOut, ShieldCheck, Tags } from '@/components/icons';
 import {
   AccountSheet,
   CountrySettingsSheet,
@@ -11,7 +11,6 @@ import {
   LanguageSheet,
   ProfileSheet,
   TimeZoneSettingsSheet,
-  WorkshopSheet,
 } from '@/components/settings-sheets';
 import AppSwitch from '@/components/ui/app-switch';
 import { Segmented } from '@/components/ui/chips';
@@ -29,7 +28,7 @@ import { openLegalPage, type LegalPage } from '@/lib/legal';
 import { requestReminderPermission } from '@/lib/reminders';
 import type { TensionUnit } from '@/lib/types';
 
-type OpenSheet = 'profile' | 'workshop' | 'currency' | 'country' | 'zone' | 'language' | 'account' | null;
+type OpenSheet = 'profile' | 'currency' | 'country' | 'zone' | 'language' | 'account' | null;
 
 export default function Settings() {
   const { user, signOut, updateProfile } = useAuth();
@@ -85,12 +84,6 @@ export default function Settings() {
         onLayout={(event) => setPageHeight(event.nativeEvent.layout.height)}
         onContentSizeChange={(_, height) => setContentHeight(height)}>
         <ListGroup>
-          <ListRow
-            icon={Store}
-            label={t('settings_workshop_row')}
-            value={user.workshop_name ?? ''}
-            onPress={() => setSheet('workshop')}
-          />
           <ListRow icon={Tags} label={t('settings_services')} onPress={() => router.push('/settings/services')} />
           <ListRow icon={Banknote} label={t('settings_currency')} value={user.currency} onPress={() => setSheet('currency')} />
           <ListRow
@@ -156,7 +149,6 @@ export default function Settings() {
       </ScrollView>
 
       <ProfileSheet visible={sheet === 'profile'} onClose={() => setSheet(null)} />
-      <WorkshopSheet visible={sheet === 'workshop'} onClose={() => setSheet(null)} />
       <CurrencySheet visible={sheet === 'currency'} onClose={() => setSheet(null)} />
       <CountrySettingsSheet visible={sheet === 'country'} onClose={() => setSheet(null)} />
       <TimeZoneSettingsSheet visible={sheet === 'zone'} onClose={() => setSheet(null)} />
