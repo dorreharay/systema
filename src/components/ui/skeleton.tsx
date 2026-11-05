@@ -9,6 +9,7 @@ import Animated, {
 import { View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { BLOCK, BLOCK_ROOM, BLOCK_SHAPE } from '@/components/ui/card';
+import { useI18n } from '@/lib/i18n';
 
 // A grey block that pulses where something is still loading.
 export function Skeleton({ className = '', style }: { className?: string; style?: StyleProp<ViewStyle> }) {
@@ -34,8 +35,9 @@ export function BlockSkeleton({ className = '' }: { className?: string }) {
 }
 
 export function OrderCardSkeleton() {
+  const { t } = useI18n();
   return (
-    <View className={`${BLOCK} ${BLOCK_ROOM} gap-3`} accessibilityLabel="Loading">
+    <View className={`${BLOCK} ${BLOCK_ROOM} gap-3`} accessibilityLabel={t('loading')}>
       <View className="flex-row items-center justify-between">
         <Skeleton className="h-5 w-36" />
         <Skeleton className="h-6 w-20 rounded-full" />

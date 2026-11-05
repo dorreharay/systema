@@ -1,0 +1,6 @@
+{
+  "ios": {
+    "NSPhotoLibraryUsageDescription": "re:string korzysta z Twoich zdjęć, aby można było dołączyć do zamówienia zdjęcia rakiety.",
+    "NSCameraUsageDescription": "re:string korzysta z aparatu, aby można było sfotografować rakietę do zamówienia."
+  }
+}

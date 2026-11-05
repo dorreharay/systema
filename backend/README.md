@@ -27,7 +27,8 @@ backend/
     data/                 the reference catalog: rackets.json, strings.json (names only, no photos)
     middleware/           auth (requireAuth, requireRole), validate, rateLimit, error
     routes/               one file per resource: auth, clients, rackets, strings, reference, services, orders, photos, dashboard, insights
-    utils/                http (HttpError), password, tokens, session, email, emailTemplates, emailFailure, google, apple, reference (search)
+    utils/                http (HttpError), password, tokens, session, email, emailTemplates, emailFailure, google, apple, reference (search),
+                          messages/ (what the server writes in the language of the account: the reset email and page, the first services)
     scripts/seed.js
   drizzle/                generated SQL migrations (commit them)
   tests/                  api/ (integration, real server + test database), unit/
@@ -85,15 +86,15 @@ Every error is `{ "error": "message", "code"?: "machine_reason", "fields"?: { "f
 | | | |
 |---|---|---|
 | `GET` | `/api/health` | `{ ok: true }`, no auth |
-| `POST` | `/api/auth/register` | `{ email, password, full_name?, language? }` → `201 { user, token }`, 409 `email_taken`. `language` (`en`/`uk`) is the language the app was in: a new account is made in it (it is `en` without one, and a language the server does not know is ignored); `google` and `apple` take it the same way |
+| `POST` | `/api/auth/register` | `{ email, password, full_name?, language? }` → `201 { user, token }`, 409 `email_taken`. `language` is the language the app was in, one of `en`, `de`, `fr`, `es`, `it`, `pt`, `ja`, `uk`, `pl`: a new account is made in it, and so are its first services (it is `en` without one, and a language the server does not know is ignored); `google` and `apple` take it the same way |
 | `POST` | `/api/auth/login` | `{ email, password }` → `{ user, token }`, 401 `invalid_credentials` |
 | `POST` | `/api/auth/google` | `{ id_token, language? }`, the ID token from Google Sign-In → `{ user, token }` (`201` for a new account); 401 `google_token_invalid`, 403 `google_email_unverified` / `account_inactive`, 409 `google_account_mismatch`, 503 `google_not_configured` / `google_unavailable` |
 | `POST` | `/api/auth/apple` | `{ identity_token, authorization_code?, full_name?, language? }`, from Sign in with Apple → `{ user, token }` (`201` for a new account); 400 `apple_email_missing`, 401 `apple_token_invalid`, 403 `account_inactive`, 409 `apple_account_mismatch` / `email_taken`, 503 `apple_not_configured` / `apple_unavailable` |
 | `POST` | `/api/auth/logout` | clears the cookie |
 | `GET` | `/api/auth/me` | the signed-in user |
-| `PATCH` | `/api/auth/me` | any of `full_name`, `workshop_name`, `currency` (ISO code), `tension_unit` (`kg`/`lbs`), `timezone` (IANA), `language` (`en`/`uk`), `notifications_enabled`, `setup_completed: true` → the user |
+| `PATCH` | `/api/auth/me` | any of `full_name`, `workshop_name`, `currency` (ISO code), `tension_unit` (`kg`/`lbs`), `timezone` (IANA), `language` (one of the nine above), `notifications_enabled`, `setup_completed: true` → the user |
 | `POST` | `/api/auth/delete-account` | `{ password }` → `{ ok: true }`; deletes the account and everything it owns (clients, rackets, strings, services, orders, photos) for good. The password is checked when the account has one (`403 invalid_password`), and `/me` says whether it does (`has_password`). An account made with Apple has its Apple token revoked first, when the server kept one |
-| `POST` | `/api/auth/forgot-password` | `{ email }` → always `{ ok: true }`; emails a link when the address has an account |
+| `POST` | `/api/auth/forgot-password` | `{ email }` → always `{ ok: true }`; emails a link when the address has an account, in the language of the account |
 | `POST` | `/api/auth/reset-password` | `{ token, password }`; the token works once, for 60 minutes |
 
 A password is 8 to 72 bytes, as in the app. Sign-in answers with the cookie `auth_token` and with the
@@ -180,7 +181,7 @@ orders that used it (an old order never loses its history); an order is deleted 
 | `GET` | `/api/reference` | what the reference catalog holds: `updated`, and for `rackets` and `strings` the `count` and the `brands` |
 | `GET` | `/api/reference/rackets` | the rackets that exist, to find one by a part of its name. `?q=`, `?brand=`, `?limit=` (1 to 50, 20 by default), `?offset=` → `{ items, has_more }`, each item `{ id, brand, model }` |
 | `GET` | `/api/reference/strings` | the same for strings, and `?type=`. Each item is `{ id, brand, model, type, gauges }`: `gauges` are the sizes in mm, from the thinnest, empty when they are not known |
-| `GET` `POST` | `/api/services` | what the stringer charges for: `{ name, price?, kind: labor\|extra, active }`. New accounts start with Stringing Labor, Grip Replacement and Overgrip Installation, without prices |
+| `GET` `POST` | `/api/services` | what the stringer charges for: `{ name, price?, kind: labor\|extra, active }`. New accounts start with Stringing Labor, Grip Replacement and Overgrip Installation (named in the language of the account), without prices |
 | `PATCH` | `/api/services/:id` | `active: false` archives a service (it is no longer offered on new orders), `true` brings it back |
 | `GET` `POST` | `/api/orders` | `?status=` (`received`, `in_progress`, `ready`, `completed`, or `active` for the first three), `?q=` (customer, racket, string, `#number`), `?client_id=`, `?racket_id=`, `?limit=&offset=` → `{ items, has_more }`. The queue is by due date, then finished orders, newest first |
 | `GET` `PATCH` `DELETE` | `/api/orders/:id` | `GET` adds `services` and `photos`. `PATCH` takes any field of an order plus `status` and `is_paid`; `services` replaces the whole list |
@@ -311,7 +312,7 @@ token is kept in the keychain (`expo-secure-store`; `localStorage` on the web bu
 - **Password reset links** point to `APP_URL/reset-password?token=...`. Mail clients do not make the app's own
   scheme (`systema://`) a link, so `APP_URL` is the public https address of this API, which serves a small page
   at that path (`src/utils/pages.js`): it opens the app's reset screen with the token (`systema://reset-password?token=…`),
-  by itself and with a button. A universal link (an https address of your own domain that iOS opens in the app
+  by itself and with a button, in the language the browser asks for (any of the app's nine; Ukrainian otherwise). A universal link (an https address of your own domain that iOS opens in the app
   directly) would skip the page, and is something to add later.
 
 ## Not included

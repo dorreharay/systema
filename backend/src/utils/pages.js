@@ -1,31 +1,12 @@
 import { config } from '../config.js';
 import { LOGO_SVG } from './brand.js';
+import { LANGUAGES, fill, messagesFor } from './messages/index.js';
 
 // A token is made of letters, digits, "-" and "_" (see tokens.js). Anything else is not one and is not put into a page.
 const TOKEN = /^[\w-]{16,128}$/;
 
 /** Where a visitor who typed the domain of the server (myrestring.com) is sent: the website. */
 export const SITE_URL = 'https://tryrestring.com/';
-
-// What the pages say, in the two languages of the app.
-const TEXT = {
-  uk: {
-    opening: 'Відкриваємо {name}',
-    explain: 'Зараз відкриється застосунок, де ви зможете задати новий пароль.',
-    open: 'Відкрити {name}',
-    hint: 'Не відкрилося? Переконайтеся, що {name} встановлено на цьому телефоні, і натисніть кнопку. Це посилання треба відкривати саме на телефоні.',
-    brokenTitle: 'Посилання не працює',
-    broken: 'Воно застаріло або вже використане. Запросіть нове в застосунку: «Забули пароль?».',
-  },
-  en: {
-    opening: 'Opening {name}',
-    explain: 'The app will open so you can choose a new password.',
-    open: 'Open {name}',
-    hint: 'Nothing happened? Make sure {name} is installed on this phone, then tap the button. Open this link on your phone.',
-    brokenTitle: 'This link doesn’t work',
-    broken: 'It has expired or was already used. Ask for a new one in the app: “Forgot password?”.',
-  },
-};
 
 const escapeHtml = (text) =>
   text
@@ -51,15 +32,16 @@ p{margin:0 0 24px;color:var(--muted)}
  * The page behind the link in a password reset email. Mail clients do not make the app's own address (`systema://…`) a link,
  * so the email holds an https address, and this page hands the token on to the app: it tries to open it by itself and has a
  * button for when that is not allowed. It has no script, which the server's content security policy would not allow, and it
- * speaks the language of the visitor (`language`: "uk" or "en"; Ukrainian otherwise). A `token` that is not one gets a page
+ * speaks the language of the visitor (`language`, one of the app's; Ukrainian otherwise, see messages/). A `token` that is not one gets a page
  * that says the link does not work, with nothing of what was sent.
  */
 export function resetPasswordPage(token, language = 'uk') {
   const valid = typeof token === 'string' && TOKEN.test(token);
-  const lang = language === 'en' ? 'en' : 'uk';
+  const lang = LANGUAGES.includes(language) ? language : 'uk';
+  const text = messagesFor(lang).page;
   const link = valid ? `${config.appScheme}://reset-password?token=${encodeURIComponent(token)}` : null;
   const name = escapeHtml(config.appName);
-  const say = (key) => TEXT[lang][key].replaceAll('{name}', name);
+  const say = (key) => fill(escapeHtml(text[key]), { name });
 
   const content = valid
     ? `<h1>${say('opening')}</h1>

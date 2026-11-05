@@ -427,8 +427,9 @@ function DebtsSlide({ data }: { data: Insights['receivables'] }) {
 const SKELETON_BARS = [38, 62, 48, 80, 30, 100, 56, 72, 42, 90, 60, 46];
 
 function InsightsSkeleton() {
+  const { t } = useI18n();
   return (
-    <View className={`flex-1 gap-3 ${BLOCK_ROOM}`} accessibilityLabel="Loading">
+    <View className={`flex-1 gap-3 ${BLOCK_ROOM}`} accessibilityLabel={t('loading')}>
       <Skeleton className="h-5 w-36" />
       <Skeleton className="h-8 w-32" />
       <Skeleton className="h-4 w-44" />

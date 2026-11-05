@@ -20,4 +20,10 @@ export default {
     brokenTitle: 'This link doesn’t work',
     broken: 'It has expired or was already used. Ask for a new one in the app: “Forgot password?”.',
   },
+  services: {
+    // What a new account starts with in its list of services (see utils/defaults.js): the stringing itself, and two extras.
+    labor: 'Stringing Labor',
+    grip: 'Grip Replacement',
+    overgrip: 'Overgrip Installation',
+  },
 };

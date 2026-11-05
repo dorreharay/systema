@@ -17,4 +17,9 @@ export default {
     brokenTitle: 'Ce lien ne fonctionne pas',
     broken: 'Il a expiré ou a déjà été utilisé. Demandez-en un nouveau dans l’application : « Mot de passe oublié ? ».',
   },
+  services: {
+    labor: 'Main-d’œuvre de cordage',
+    grip: 'Remplacement du grip',
+    overgrip: 'Pose de surgrip',
+  },
 };

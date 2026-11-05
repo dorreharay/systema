@@ -17,4 +17,9 @@ export default {
     brokenTitle: 'Este enlace no funciona',
     broken: 'Ha caducado o ya se ha usado. Solicita uno nuevo en la aplicación: “¿Olvidaste tu contraseña?”',
   },
+  services: {
+    labor: 'Encordado',
+    grip: 'Cambio de grip',
+    overgrip: 'Colocación de overgrip',
+  },
 };

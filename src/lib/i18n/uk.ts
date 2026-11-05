@@ -19,6 +19,7 @@ export const uk: Record<keyof typeof en, string> & Record<string, string> = {
   optional: "необовʼязково",
   search: "Пошук",
   retry: "Спробувати ще раз",
+  loading: "Завантаження",
   create_new: "Створити",
   more_actions: "Інші дії",
   copied: "Скопійовано",

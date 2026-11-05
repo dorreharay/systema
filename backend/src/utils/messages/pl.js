@@ -17,4 +17,9 @@ export default {
     brokenTitle: 'Ten link nie działa',
     broken: 'Wygasł lub został już użyty. Poproś o nowy w aplikacji: „Nie pamiętasz hasła?”.',
   },
+  services: {
+    labor: 'Naciąganie',
+    grip: 'Wymiana gripu',
+    overgrip: 'Założenie overgripu',
+  },
 };

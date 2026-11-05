@@ -1,0 +1,6 @@
+{
+  "ios": {
+    "NSPhotoLibraryUsageDescription": "re:string utilise vos photos pour que vous puissiez joindre à une commande des images d’une raquette.",
+    "NSCameraUsageDescription": "re:string utilise l’appareil photo pour que vous puissiez photographier une raquette pour une commande."
+  }
+}

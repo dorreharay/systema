@@ -1,0 +1,6 @@
+{
+  "ios": {
+    "NSPhotoLibraryUsageDescription": "re:stringは、ラケットの写真を注文に添付できるように、写真ライブラリを使用します。",
+    "NSCameraUsageDescription": "re:stringは、注文用にラケットを撮影できるように、カメラを使用します。"
+  }
+}

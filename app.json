@@ -12,9 +12,22 @@
       "bundleIdentifier": "com.velar.restring",
       "appleTeamId": "SGMN4DGZ42",
       "usesAppleSignIn": true,
+      "infoPlist": {
+        "CFBundleAllowMixedLocalizations": true
+      },
       "config": {
         "usesNonExemptEncryption": false
       }
+    },
+    "locales": {
+      "de": "./locales/de.json",
+      "fr": "./locales/fr.json",
+      "es": "./locales/es.json",
+      "it": "./locales/it.json",
+      "pt": "./locales/pt.json",
+      "ja": "./locales/ja.json",
+      "uk": "./locales/uk.json",
+      "pl": "./locales/pl.json"
     },
     "backgroundColor": "#0b1210",
     "android": {

@@ -17,4 +17,9 @@ export default {
     brokenTitle: 'Questo link non funziona',
     broken: 'È scaduto o è già stato usato. Richiedine uno nuovo nell’app: “Password dimenticata?”.',
   },
+  services: {
+    labor: 'Incordatura',
+    grip: 'Sostituzione del grip',
+    overgrip: 'Applicazione dell’overgrip',
+  },
 };

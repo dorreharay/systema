@@ -17,6 +17,7 @@ export const en = {
   optional: "optional",
   search: "Search",
   retry: "Try again",
+  loading: "Loading",
   create_new: "Create new",
   more_actions: "More actions",
   copied: "Copied",

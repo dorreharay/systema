@@ -20,8 +20,16 @@
 | Тексти застосунку | `src/lib/i18n/<код>.ts` (ключі як в `en.ts`) |
 | Список мов, правила множини | `src/lib/i18n/index.tsx` (`LANGUAGES`, `pluralCategory`) |
 | Місяці, дні тижня, формат дати й грошей | `src/lib/format.ts` (`LOCALES`, `MONTHS_*`, `WEEKDAYS_SHORT`, `formatDate`) |
-| Лист про скидання пароля і сторінка за його посиланням | `backend/src/utils/messages/<код>.js` |
+| Лист про скидання пароля, сторінка за його посиланням і назви перших послуг нового акаунта | `backend/src/utils/messages/<код>.js` (`email`, `page`, `services`) |
 | Список мов на сервері | `backend/src/utils/messages/index.js` (`LANGUAGES`) |
+| Запити iOS на доступ до фото й камери | `locales/<код>.json` (оголошені в `app.json` → `locales`); англійські тексти лишаються в плагіні `expo-image-picker` |
+
+Лист і сторінка скидання пароля йдуть мовою акаунта (лист) і браузера (сторінка, `Accept-Language`). Три послуги, з яких починається
+новий акаунт (робота з перетяжки, заміна гріпа, овергріп), пишуться один раз, мовою акаунта при створенні: далі це дані самого
+майстра, і вони не змінюються, коли він міняє мову.
+
+Тексти запитів iOS потрапляють у збірку лише через `expo prebuild` (`<код>.lproj/InfoPlist.strings`), тож з'являються з наступною
+нативною збіркою, а не через Metro чи OTA-оновлення. Назва застосунку (`re:string`) не перекладається.
 
 Політика конфіденційності й умови на сайті (`site/`) є лише українською та англійською; посилання на них з інших мов ведуть на
 англійські сторінки.
@@ -32,8 +40,10 @@
 2. Створіть `src/lib/i18n/<код>.ts` за зразком `uk.ts` і `backend/src/utils/messages/<код>.js` за зразком `en.js`.
 3. Допишіть таблиці в `src/lib/format.ts`: `LOCALES`, `MONTHS_SHORT`, `MONTHS_LONG`, `WEEKDAYS_SHORT` (і `formatDate`, якщо мова
    пише дату в іншому порядку).
-4. Додайте код у `LANGUAGES` у `backend/src/utils/messages/index.js` і в `scripts/check-i18n.mjs` (разом з формами множини).
-5. Перевірте: `node scripts/check-i18n.mjs` (усі ключі, `{підстановки}` і форми множини), `npx tsc --noEmit`, `npx expo lint`.
+4. Додайте код у `LANGUAGES` у `backend/src/utils/messages/index.js` і в `scripts/check-i18n.mjs` (разом з формами множини), а
+   `locales/<код>.json` з двома запитами iOS (за зразком `locales/uk.json`) у `locales` в `app.json`.
+5. Перевірте: `node scripts/check-i18n.mjs` (усі ключі, `{підстановки}` і форми множини), `npx tsc --noEmit`, `npx expo lint`,
+   `( cd backend && npm run test:unit && npm run test:api )` (тести бекенду мають свій список мов: його теж доповніть).
 
 Форми множини для чисел (`orders_count_one`, `_few`, `_many`) потрібні лише там, де мова їх має: німецька, іспанська, італійська,
 французька й португальська мають `_one`, японська жодної, українська й польська `_one`, `_few`, `_many`. Просте слово (`orders_count`)

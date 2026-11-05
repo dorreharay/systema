@@ -1,0 +1,6 @@
+{
+  "ios": {
+    "NSPhotoLibraryUsageDescription": "O re:string usa suas fotos para que você possa anexar a um pedido imagens de uma raquete.",
+    "NSCameraUsageDescription": "O re:string usa a câmera para que você possa fotografar uma raquete para um pedido."
+  }
+}

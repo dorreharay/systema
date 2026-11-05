@@ -19,6 +19,7 @@ export const pt: Record<keyof typeof en, string> & Record<string, string> = {
   optional: "opcional",
   search: "Buscar",
   retry: "Tentar novamente",
+  loading: "Carregando",
   create_new: "Criar novo",
   more_actions: "Mais ações",
   copied: "Copiado",

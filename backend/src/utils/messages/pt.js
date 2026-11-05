@@ -17,4 +17,9 @@ export default {
     brokenTitle: 'Este link não funciona',
     broken: 'Ele expirou ou já foi usado. Peça um novo no app: “Esqueceu a senha?”.',
   },
+  services: {
+    labor: 'Encordoamento',
+    grip: 'Troca de grip',
+    overgrip: 'Aplicação de overgrip',
+  },
 };

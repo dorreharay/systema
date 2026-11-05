@@ -10,6 +10,7 @@ import { requireAuth } from '../middleware/auth.js';
 import { authLimiter } from '../middleware/rateLimit.js';
 import { validateBody } from '../middleware/validate.js';
 import { sendEmailsBestEffort } from '../utils/email.js';
+import { LANGUAGES } from '../utils/messages/index.js';
 import { passwordResetEmail } from '../utils/emailTemplates.js';
 import { exchangeAppleAuthorizationCode, revokeAppleToken, verifyAppleIdentityToken } from '../utils/apple.js';
 import { verifyGoogleIdToken } from '../utils/google.js';
@@ -30,8 +31,7 @@ const emailSchema = z.preprocess(
   z.string({ error: 'Email is required' }).max(254).pipe(z.email('Invalid email'))
 );
 
-// The languages of the app. A new account is made in the one the app was in, when it names one of these.
-const LANGUAGES = ['en', 'uk'];
+// A new account is made in the language the app was in, when it names one of the app's (see utils/messages).
 // What the app says about itself when it asks for an account. A language the server does not know is left out, not refused,
 // so that no sign-up fails over it.
 const languageHint = z.string().max(16).optional();
@@ -109,7 +109,7 @@ router.post('/register', authLimiter, validateBody(registerSchema), async (req, 
         .insert(users)
         .values({ email, full_name: full_name || null, password_hash, language: accountLanguage(language) })
         .returning();
-      await createDefaultServices(tx, created.id);
+      await createDefaultServices(tx, created.id, created.language);
       await createStarterCatalog(tx, created.id);
       return created;
     });
@@ -181,7 +181,7 @@ async function accountForGoogle({ sub, email, name }, language) {
       .insert(users)
       .values({ email, full_name: name, google_sub: sub, language: accountLanguage(language) })
       .returning();
-    await createDefaultServices(tx, created.id);
+    await createDefaultServices(tx, created.id, created.language);
     await createStarterCatalog(tx, created.id);
     return created;
   });
@@ -258,7 +258,7 @@ async function accountForApple({ sub, email, emailVerified }, fullName, language
       .insert(users)
       .values({ email, full_name: fullName || null, apple_sub: sub, language: accountLanguage(language) })
       .returning();
-    await createDefaultServices(tx, created.id);
+    await createDefaultServices(tx, created.id, created.language);
     await createStarterCatalog(tx, created.id);
     return created;
   });
@@ -377,6 +377,7 @@ router.post('/forgot-password', authLimiter, validateBody(forgotPasswordSchema),
       name: user.full_name,
       url: `${config.appUrl}/reset-password?token=${token}`,
       minutes: config.resetTokenMinutes,
+      language: user.language,
     });
     // Not awaited: waiting for the mail server would make this answer slower for an address that has
     // an account, and so tell it apart. A failure is logged; saying "could not send" would do the same.

@@ -1,0 +1,6 @@
+{
+  "ios": {
+    "NSPhotoLibraryUsageDescription": "re:string usa le tue foto per permetterti di allegare a un ordine le immagini di una racchetta.",
+    "NSCameraUsageDescription": "re:string usa la fotocamera per permetterti di fotografare una racchetta per un ordine."
+  }
+}

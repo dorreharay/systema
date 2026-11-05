@@ -19,6 +19,20 @@ const password = 'correct-horse-1';
 let counter = 0;
 const newEmail = () => `user${++counter}@test.local`;
 
+/** The languages of the app, each with a word that the subject of its password reset email has (not read from the server's own texts). */
+const RESET_SUBJECT_WORD = {
+  en: 'Password reset',
+  de: 'Passwort',
+  fr: 'mot de passe',
+  es: 'contraseña',
+  it: 'password',
+  pt: 'senha',
+  ja: 'パスワード',
+  uk: 'Відновлення пароля',
+  pl: 'hasła',
+};
+const LANGUAGES = Object.keys(RESET_SUBJECT_WORD);
+
 /** The reset link in the email the server printed for this address. */
 function resetTokenFor(ctx, email) {
   const logs = ctx.server.logs();
@@ -91,12 +105,14 @@ test('Register', 'creates the account, signs in and hides the secrets', async (c
   assertTrue(dbScalar(`SELECT password_hash FROM users WHERE email='mixed.case@test.local'`).startsWith('$2'), 'the password is stored hashed');
 });
 test('Register', 'makes the account in the language the app was in, when it is one the server knows', async (ctx) => {
-  const ukrainian = await register(ctx, newEmail(), { language: 'uk' });
-  assertEq(ukrainian.res.data.user.language, 'uk', 'Ukrainian, as asked');
-  assertEq((await ukrainian.client.get('/api/auth/me')).data.language, 'uk', 'and it is the one the account has');
+  for (const language of LANGUAGES) {
+    const { client, res } = await register(ctx, newEmail(), { language });
+    assertEq(res.data.user.language, language, `${language}, as asked`);
+    assertEq((await client.get('/api/auth/me')).data.language, language, `and it is the one the account has (${language})`);
+  }
   assertEq((await register(ctx)).res.data.user.language, 'en', 'English where none is named');
   // Not a reason to turn a sign-up away: the language is a hint.
-  assertEq((await register(ctx, newEmail(), { language: 'de' })).res.data.user.language, 'en', 'a language the server does not know is ignored');
+  assertEq((await register(ctx, newEmail(), { language: 'xx' })).res.data.user.language, 'en', 'a language the server does not know is ignored');
 });
 test('Register', 'refuses an email that is already taken, whatever its case', async (ctx) => {
   const { email } = await register(ctx);
@@ -265,7 +281,7 @@ test('Google', 'a new account is made in the language the app was in, and a late
   const again = await googleLogin(ctx, user, { language: 'en' });
   assertStatus(again.res, 200);
   assertEq(again.res.data.user.language, 'uk', 'the account keeps its own');
-  assertEq((await googleLogin(ctx, googleUser(), { language: 'de' })).res.data.user.language, 'en', 'a language the server does not know is ignored');
+  assertEq((await googleLogin(ctx, googleUser(), { language: 'xx' })).res.data.user.language, 'en', 'a language the server does not know is ignored');
 });
 test('Google', 'the same Google user gets the same account, whatever address Google now has for them', async (ctx) => {
   const user = googleUser();
@@ -442,7 +458,7 @@ test('Apple', 'a new account is made in the language the app was in, and a later
   const again = await appleLogin(ctx, user, { language: 'en' });
   assertStatus(again.res, 200);
   assertEq(again.res.data.user.language, 'uk', 'the account keeps its own');
-  assertEq((await appleLogin(ctx, appleUser(), { language: 'de' })).res.data.user.language, 'en', 'a language the server does not know is ignored');
+  assertEq((await appleLogin(ctx, appleUser(), { language: 'xx' })).res.data.user.language, 'en', 'a language the server does not know is ignored');
 });
 test('Apple', 'a person who hides their address gets an account on the one Apple made up for the app', async (ctx) => {
   const email = 'x7k2m9q4@privaterelay.appleid.com';
@@ -826,6 +842,25 @@ test('Profile', 'a new account starts with the usual services, without prices', 
   assertEq(data.items.map((s) => s.name), ['Stringing Labor', 'Grip Replacement', 'Overgrip Installation'], 'names');
   assertEq(data.items[0].kind, 'labor', 'the first is the labor');
   assertTrue(data.items.every((s) => s.price === null && s.active), 'no prices, all active');
+});
+test('Profile', 'the usual services of a new account are named in its language', async (ctx) => {
+  const labor = new Set();
+  for (const language of LANGUAGES) {
+    const { client } = await register(ctx, newEmail(), { language });
+    const { data } = await client.get('/api/services');
+    assertEq(data.items.length, 3, `${language}: the three services`);
+    assertEq(data.items[0].kind, 'labor', `${language}: the first is the labor`);
+    assertTrue(data.items.every((s) => s.price === null && s.active), `${language}: no prices, all active`);
+    labor.add(data.items[0].name);
+  }
+  assertEq(labor.size, LANGUAGES.length, 'each language names the labor in its own words');
+
+  const ukrainian = await register(ctx, newEmail(), { language: 'uk' });
+  const names = (await ukrainian.client.get('/api/services')).data.items.map((s) => s.name);
+  assertEq(names.sort(), ['Заміна гріпа', 'Намотування овергріпа', 'Робота з перетяжки'].sort(), 'the Ukrainian names');
+  // A language the server does not know is English, like the account.
+  const unknown = await register(ctx, newEmail(), { language: 'xx' });
+  assertEq((await unknown.client.get('/api/services')).data.items[0].name, 'Stringing Labor', 'English for any other');
 });
 
 // ---------------------------------------------------------------------------
@@ -2128,7 +2163,7 @@ test('Email', 'a password reset is sent through Resend, and its link leads back 
     assertEq([mail.method, mail.url, mail.authorization], ['POST', '/emails', 'Bearer re_test_key_123'], 'the request');
     assertEq(mail.body.from, '"re:string" <noreply@mail.test>', 'from');
     assertEq(mail.body.to, [email], 'to');
-    assertTrue(mail.body.subject.includes('Відновлення пароля'), 'subject');
+    assertTrue(mail.body.subject.includes('Password reset'), 'subject, in English for an account that has no other language');
     const link = mail.body.text.match(/https:\/\/api\.app\.test\/reset-password\?token=([\w-]+)/);
     assertTrue(link, 'the text has a link to the page, on the address of the app');
     assertTrue(mail.body.html.includes(link[0]), 'and so has the html');
@@ -2140,6 +2175,25 @@ test('Email', 'a password reset is sent through Resend, and its link leads back 
     assertTrue(page.data.includes(`systema://reset-password?token=${token}`), 'the page opens the app with the token');
     assertStatus(await new Client(server.base).post('/api/auth/reset-password', { token, password: 'a-brand-new-pass-2' }), 200);
     assertStatus(await new Client(server.base).post('/api/auth/login', { email, password: 'a-brand-new-pass-2' }), 200);
+  }));
+test('Email', 'a password reset email is in the language of the account', () =>
+  withResend(async ({ server, resend }) => {
+    const subjects = new Set();
+    const buttons = new Set();
+    for (const language of LANGUAGES) {
+      const { client, email } = await register({ server }, newEmail(), { language, full_name: 'Ann' });
+      const sentBefore = resend.sent.length;
+      assertStatus(await client.post('/api/auth/forgot-password', { email }), 200);
+      await until(() => resend.sent.length === sentBefore + 1, `the email in ${language}`);
+
+      const { subject, text, html } = resend.sent[sentBefore].body;
+      assertTrue(subject.includes(RESET_SUBJECT_WORD[language]), `${language}: the subject is in the language (${subject})`);
+      assertTrue(text.includes('Ann') && text.includes('/reset-password?token='), `${language}: the greeting names the person, and the link is there`);
+      assertTrue(!/\{\w+\}/.test(subject + text + html), `${language}: every placeholder is filled`);
+      subjects.add(subject);
+      buttons.add(html.match(/<a [^>]*>([^<]*)<\/a>/)[1]);
+    }
+    assertEq([subjects.size, buttons.size], [LANGUAGES.length, LANGUAGES.length], 'and no two languages share their words');
   }));
 test('Email', 'an address with no account gets nothing', () =>
   withResend(async ({ server, resend }) => {
@@ -2180,7 +2234,21 @@ test('Email', 'the reset page speaks the language of the browser, and the bare d
   assertTrue(ukrainian.data.includes('<html lang="uk">'), 'Ukrainian for a Ukrainian browser');
   const english = await ask('en-US,en;q=0.9');
   assertTrue(english.data.includes('<html lang="en">') && english.data.includes('Opening'), 'English for an English browser');
-  assertTrue((await ask('de-DE,de;q=0.9')).data.includes('<html lang="uk">'), 'Ukrainian for any other language');
+  // Every language of the app, asked for the way a phone does it (with a region).
+  const browsers = {
+    en: 'en-US,en;q=0.9', de: 'de-DE,de;q=0.9,en;q=0.5', fr: 'fr-CA,fr;q=0.9', es: 'es-MX,es;q=0.9', it: 'it-IT,it;q=0.9',
+    pt: 'pt-BR,pt;q=0.9', ja: 'ja-JP,ja;q=0.9,en;q=0.5', uk: 'uk-UA,uk;q=0.9', pl: 'pl-PL,pl;q=0.9',
+  };
+  const headings = new Set();
+  for (const [language, header] of Object.entries(browsers)) {
+    const page = (await ask(header)).data;
+    assertTrue(page.includes(`<html lang="${language}">`), `${language} for a browser that asks for it`);
+    assertTrue(!page.includes('{name}') && page.includes(`systema://reset-password?token=${token}`), `${language}: the page is whole`);
+    headings.add(page.match(/<h1>(.*?)<\/h1>/)[1]);
+  }
+  assertEq([Object.keys(browsers), headings.size], [LANGUAGES, LANGUAGES.length], 'every language of the app, each in its own words');
+  assertTrue((await ask('ko-KR,ko;q=0.9')).data.includes('<html lang="uk">'), 'Ukrainian for a language the app does not have');
+  assertTrue((await ask('ko-KR,ko;q=0.9,pl;q=0.5')).data.includes('<html lang="pl">'), 'but the first it has, if the browser also asks for one');
   assertTrue((await ask(undefined)).data.includes('<html lang="uk">'), 'and when the browser says nothing');
   assertTrue((english.headers.get('vary') || '').toLowerCase().includes('accept-language'), 'a cache keeps the languages apart');
   assertTrue(english.data.includes(`systema://reset-password?token=${token}`), 'the link into the app is the same');

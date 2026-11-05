@@ -1,0 +1,6 @@
+{
+  "ios": {
+    "NSPhotoLibraryUsageDescription": "re:string greift auf Ihre Fotos zu, damit Sie einem Auftrag Bilder eines Schlägers hinzufügen können.",
+    "NSCameraUsageDescription": "re:string verwendet die Kamera, damit Sie einen Schläger für einen Auftrag fotografieren können."
+  }
+}

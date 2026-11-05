@@ -3,35 +3,65 @@ import { createContext, use, useEffect, useRef, useState, type ReactNode } from 
 import { useAuth } from '@/lib/auth';
 import { getItem, setItem } from '@/lib/local-storage';
 
+import { de } from './de';
 import { detectLanguage } from './detect';
 import { en } from './en';
+import { es } from './es';
+import { fr } from './fr';
+import { it } from './it';
+import { ja } from './ja';
+import { pl } from './pl';
+import { pt } from './pt';
 import { uk } from './uk';
 
-export type Language = 'en' | 'uk';
+export type Language = 'en' | 'de' | 'fr' | 'es' | 'it' | 'pt' | 'ja' | 'uk' | 'pl';
 export type TKey = keyof typeof en;
 export type TParams = Record<string, string | number>;
 export type Translate = (key: TKey, params?: TParams) => string;
 
+// Each language is named in itself, as a person who does not read the screen will look for it.
 export const LANGUAGES: { code: Language; label: string }[] = [
   { code: 'en', label: 'English' },
+  { code: 'de', label: 'Deutsch' },
+  { code: 'fr', label: 'Français' },
+  { code: 'es', label: 'Español' },
+  { code: 'it', label: 'Italiano' },
+  { code: 'pt', label: 'Português' },
+  { code: 'ja', label: '日本語' },
   { code: 'uk', label: 'Українська' },
+  { code: 'pl', label: 'Polski' },
 ];
 
-const DICTIONARIES: Record<Language, Record<string, string>> = { en, uk };
+const DICTIONARIES: Record<Language, Record<string, string>> = { en, de, fr, es, it, pt, ja, uk, pl };
 const STORAGE_KEY = 'language';
 
-const isLanguage = (value: unknown): value is Language => value === 'en' || value === 'uk';
+const isLanguage = (value: unknown): value is Language => LANGUAGES.some((item) => item.code === value);
 
-/** Which form of a word goes with a number: "1 racket", "2 rackets"; "1 ракетка", "2 ракетки", "5 ракеток". */
+/**
+ * Which form of a word goes with a number: "1 racket", "2 rackets"; "1 ракетка", "2 ракетки", "5 ракеток" (Polish has the same
+ * three forms); French and Portuguese call 0 and 1 singular; Japanese has one form. The forms are the plural categories of the
+ * CLDR; a dictionary has `<key>_<category>` for each it needs, and the plain key for the rest.
+ */
 function pluralCategory(language: Language, count: number) {
-  if (language === 'uk') {
-    const mod10 = count % 10;
-    const mod100 = count % 100;
-    if (mod10 === 1 && mod100 !== 11) return 'one';
-    if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return 'few';
-    return 'many';
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+  switch (language) {
+    case 'uk':
+      if (mod10 === 1 && mod100 !== 11) return 'one';
+      if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return 'few';
+      return 'many';
+    case 'pl':
+      if (count === 1) return 'one';
+      if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return 'few';
+      return 'many';
+    case 'fr':
+    case 'pt':
+      return count === 0 || count === 1 ? 'one' : 'other';
+    case 'ja':
+      return 'other';
+    default:
+      return count === 1 ? 'one' : 'other';
   }
-  return count === 1 ? 'one' : 'other';
 }
 
 /**

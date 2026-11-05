@@ -1,16 +1,19 @@
 import { config } from '../config.js';
 import { catalogStrings, rackets, services } from '../db/schema.js';
+import { messagesFor } from './messages/index.js';
 import { STARTER_RACKETS, STARTER_STRINGS } from './starter.js';
 
 /**
  * What a new stringer starts with: the services nearly everyone charges for, without prices (those
- * are theirs to set in Services & Pricing). `executor` is `db` or a transaction.
+ * are theirs to set in Services & Pricing), named in the language of the account (`language`; English when none, or one the
+ * server does not know). `executor` is `db` or a transaction.
  */
-export function createDefaultServices(executor, userId) {
+export function createDefaultServices(executor, userId, language) {
+  const names = messagesFor(language).services;
   return executor.insert(services).values([
-    { user_id: userId, name: 'Stringing Labor', kind: 'labor' },
-    { user_id: userId, name: 'Grip Replacement' },
-    { user_id: userId, name: 'Overgrip Installation' },
+    { user_id: userId, name: names.labor, kind: 'labor' },
+    { user_id: userId, name: names.grip },
+    { user_id: userId, name: names.overgrip },
   ]);
 }
 
