@@ -3,6 +3,7 @@ import { StatusBar } from 'expo-status-bar';
 
 import DueReminders from '@/components/due-reminders';
 import { colors } from '@/components/ui/colors';
+import KeyboardWarmUp from '@/components/ui/keyboard-warm-up';
 import { useAuth } from '@/lib/auth';
 
 // Everything here needs a signed-in user: the guard is in the root layout. A new account has to finish
@@ -16,6 +17,7 @@ export default function AppLayout() {
       {/* The app is light, and so is the frosted header over it: dark clock and battery. */}
       <StatusBar style="dark" />
       {setupDone ? <DueReminders /> : null}
+      {setupDone ? <KeyboardWarmUp /> : null}
       <Stack
       screenOptions={{
         headerShown: false,

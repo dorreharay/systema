@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { Keyboard, Platform } from 'react-native';
 
 /**
@@ -34,18 +34,33 @@ export function useKeyboardTakesRoom() {
   return useKeyboardHeight(Platform.OS !== 'ios') > 0;
 }
 
+// How tall the keyboard has been the last time it was up, 0 until one has. It is learnt once for the whole app, from the
+// first keyboard that is on the screen, so that a sheet that is opened for the first time already knows it. And it is the
+// keyboard that has come up (`keyboardDidShow`) that counts, not the one that is announced: the warm-up of the keyboard
+// (see KeyboardWarmUp) has one announced that never comes, and a sheet sized for it would be too short.
+let lastHeight = 0;
+const heightListeners = new Set<() => void>();
+
+Keyboard.addListener('keyboardDidShow', (event) => {
+  const next = event.endCoordinates.height;
+  if (next <= 0 || next === lastHeight) return;
+  lastHeight = next;
+  heightListeners.forEach((listener) => listener());
+});
+
+const subscribeToHeight = (listener: () => void) => {
+  heightListeners.add(listener);
+  return () => {
+    heightListeners.delete(listener);
+  };
+};
+const getLastHeight = () => lastHeight;
+
 /**
  * How tall the keyboard was the last time it was up: it stays when the keyboard goes down again. For what
  * is sized to leave room for the keyboard and must not change size as it comes and goes. Until a keyboard
  * has been seen it is `fallback`.
  */
 export function useLastKeyboardHeight(fallback: number) {
-  const current = useKeyboardHeight();
-  const [last, setLast] = useState(0);
-
-  if (current > 0 && current !== last) {
-    setLast(current);
-  }
-
-  return last || fallback;
+  return useSyncExternalStore(subscribeToHeight, getLastHeight) || fallback;
 }

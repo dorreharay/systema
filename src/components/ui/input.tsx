@@ -3,7 +3,7 @@ import { TextInput, View, type TextInputProps } from 'react-native';
 
 import { colors } from '@/components/ui/colors';
 import { FIELD_INPUT_TEXT, FIELD_TEXT_LIFT } from '@/components/ui/field-text';
-import { OPEN_MS, useRevealInSheet } from '@/components/ui/sheet';
+import { useRevealInSheet, useSheetOpened } from '@/components/ui/sheet';
 import { Text } from '@/components/ui/text';
 
 export type InputRef = ComponentRef<typeof TextInput>;
@@ -49,14 +49,15 @@ export function Input({
     }
   };
 
-  // The field that is to have the cursor from the start gets it once the sheet it is in has come up. Asked
-  // for sooner, the keyboard comes while the sheet is still moving, and the scroll view, seeing the field
-  // lower than it will be, scrolls it away.
+  // The field that is to have the cursor from the start gets it once the sheet it is in has come up. Asked for sooner, the
+  // keyboard comes while the sheet is still moving, and the scroll view, seeing the field lower than it will be, scrolls
+  // it away. It is the end of the slide that is waited for, not a time: the first keyboard of the app takes the system a
+  // good part of a second, and a time that was enough for the slide would then fall in the middle of it.
+  const opened = useSheetOpened();
   useEffect(() => {
-    if (!autoFocus) return;
-    const timer = setTimeout(() => inputRef.current?.focus(), OPEN_MS + 60);
-    return () => clearTimeout(timer);
-  }, [autoFocus]);
+    if (!autoFocus || !opened) return;
+    inputRef.current?.focus();
+  }, [autoFocus, opened]);
 
   return (
     <View ref={rootRef} collapsable={false} className={`gap-1.5 ${className}`}>

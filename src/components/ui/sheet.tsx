@@ -56,6 +56,8 @@ type SheetProps = {
 
 export const OPEN_MS = 190;
 export const CLOSE_MS = 130;
+// The longest a sheet waits for its modal to be shown before it slides in.
+const SHOW_WAIT_MS = 600;
 // A sheet comes up fast and settles slowly: it has covered most of its way in the first third of the time, so it is there
 // when it is tapped for, and the end of the move, which is the part that is felt as waiting, is gentle. It goes away the
 // way things go that are not wanted any more: at once.
@@ -106,6 +108,9 @@ function settle() {
   }, SETTLE_MS);
 }
 
+/** Whether a sheet is on the screen (it is, from the moment it is asked for until its modal is gone). */
+export const isSheetOnScreen = () => onScreen > 0;
+
 /** Runs `open` once no sheet is on the screen any more: at once, when none is and the last has been gone for a while. */
 export function afterSheetsClosed(open: () => void) {
   if (onScreen === 0 && !settlePending) {
@@ -155,6 +160,20 @@ type Reveal = (node: ComponentRef<typeof View> | null) => void;
 
 const RevealContext = createContext<Reveal | null>(null);
 
+// Whether the sheet has finished sliding in. A field that is to have the cursor from the start waits for it (see
+// `useSheetOpened`).
+const OpenedContext = createContext(true);
+
+/**
+ * Whether the sheet this is in has come up: it is `false` while it slides in (and while it slides away), `true` once it is
+ * at rest. Outside a sheet it is always `true`. The cursor is put in a field when this turns `true`, not after a guessed
+ * time: the first time a field gets the cursor the system is busy for a good part of a second (it brings up the keyboard
+ * for the first time), and if that lands in the middle of the slide the sheet stands still and then jumps.
+ */
+export function useSheetOpened() {
+  return use(OpenedContext);
+}
+
 /**
  * For a field in a sheet: `reveal(its view)` when it gets the cursor scrolls the sheet so that the whole
  * field is in sight above the keyboard. Nothing, outside a sheet.
@@ -188,6 +207,10 @@ export default function Sheet({
   const [headerHeight, setHeaderHeight] = useState(0);
   const [contentHeight, setContentHeight] = useState(0);
   const [mounted, setMounted] = useState(visible);
+  // The modal has been presented (so its views exist, and are in a window), and the slide is over. Both start over each time
+  // the sheet is mounted.
+  const [presented, setPresented] = useState(false);
+  const [opened, setOpened] = useState(false);
   // The title stays as it was when the sheet is asked to close, as what it shows does.
   const [shownTitle, setShownTitle] = useState(title);
   if (visible && shownTitle !== title) {
@@ -238,25 +261,59 @@ export default function Sheet({
     setTimeout(() => shown.remove(), 1000);
   }, []);
 
+  // On iOS a form is as tall as its content and the keyboard below it, so until the content has been measured the height is
+  // not known: the sheet is not shown, and it does not start to slide, for it would then be in the middle of its way, and
+  // of another size, by the time it is shown. A sheet that has been open before has its measures from then.
+  const ios = Platform.OS === 'ios';
+  const measuring = form && ios && (headerHeight === 0 || contentHeight === 0);
+  // Its views are made and in the window: what the first time takes long (the text fields are made, and the system sets
+  // them up as they get into a window) is behind it. Yoga laying the panel out says nothing about that: it is done before
+  // there is a native view.
+  const ready = presented && !measuring;
+  // The modal is shown within a frame or two: if that does not come, the sheet slides in all the same, and is not left
+  // invisible over the page.
+  useEffect(() => {
+    if (!mounted || presented) return;
+    const timer = setTimeout(() => setPresented(true), SHOW_WAIT_MS);
+    return () => clearTimeout(timer);
+  }, [mounted, presented]);
+
   // It is shown from the first frame it is asked for, and stays until it has slid away.
   if (visible && !mounted) {
     setMounted(true);
   }
+  // It is no longer at rest from the moment it is asked to go.
+  if (!visible && opened) {
+    setOpened(false);
+  }
 
+  const unmount = useCallback(() => {
+    setMounted(false);
+    setPresented(false);
+    setOpened(false);
+  }, []);
+
+  // The slide starts once the sheet is ready, so that the work of showing it for the first time is done before it moves, not
+  // in the middle of it. The sheet that was asked for is invisible until then.
+  const slideIn = visible && ready;
   useEffect(() => {
-    if (visible) {
+    if (slideIn) {
       drag.set(0);
-      progress.set(withTiming(1, { duration: OPEN_MS, easing: OPEN_EASING }));
-    } else {
+      progress.set(
+        withTiming(1, { duration: OPEN_MS, easing: OPEN_EASING }, (finished) => {
+          if (finished) scheduleOnRN(setOpened, true);
+        })
+      );
+    } else if (!visible) {
       // A sheet that was pulled away has already left the screen: there is no slide left to make.
       const gone = drag.get() > 0 && drag.get() >= panelHeight.get();
       progress.set(
         withTiming(0, { duration: gone ? 0 : CLOSE_MS, easing: CLOSE_EASING }, (finished) => {
-          if (finished) scheduleOnRN(setMounted, false);
+          if (finished) scheduleOnRN(unmount);
         })
       );
     }
-  }, [visible, progress, drag, panelHeight]);
+  }, [slideIn, visible, progress, drag, panelHeight, unmount]);
 
   // It is on the screen from the moment it is mounted until its modal is gone.
   useEffect(() => {
@@ -340,9 +397,6 @@ export default function Sheet({
 
   // On iOS the sizes are in points. On Android the window itself shrinks for the keyboard, so a form is only
   // held to nine tenths of it, and its button is above the keyboard by itself.
-  const ios = Platform.OS === 'ios';
-  // Until the content has been measured the height is not known: the sheet is not shown.
-  const measuring = form && ios && (headerHeight === 0 || contentHeight === 0);
   const limit = ios ? Math.min(height * 0.92, height - insets.top - 12) : ('92%' as const);
   // A form on iOS is as tall as the foot of its content and the keyboard below it. Until the content has been
   // measured, it is the most it can be: a smaller panel would make the scroll view scroll to make room for
@@ -389,44 +443,46 @@ export default function Sheet({
   );
 
   return (
-    <Modal transparent visible animationType="none" onRequestClose={onClose}>
+    <Modal transparent visible animationType="none" onRequestClose={onClose} onShow={() => setPresented(true)}>
       {/* What a modal shows has a gesture root of its own: the one of the app is behind it. */}
       <GestureHandlerRootView style={{ flex: 1 }}>
         {/* A question asked from inside the sheet ("Delete this?") is shown inside it: iOS will not show a second
             modal from the app over this one, but it does show one from the modal itself. */}
         <ConfirmProvider>
-          <View className="flex-1 justify-end">
-            {/* Anywhere outside the panel closes it. */}
-            <Animated.View className={`absolute inset-0 ${dark ? 'bg-black/60' : 'bg-black/40'}`} style={backdropStyle}>
-              <Pressable accessibilityLabel={t('close')} className="flex-1" onPress={onClose} />
-            </Animated.View>
-            <Animated.View
-              style={[panelStyle, measuring && { opacity: 0 }]}
-              onLayout={(event) => panelHeight.set(event.nativeEvent.layout.height)}>
-              <View
-                className={`overflow-hidden rounded-t-3xl ${dark ? 'border-t border-white/10 bg-[#15191c]' : 'bg-white'}`}
-                style={size}>
-                <GestureDetector gesture={pull}>
-                  <View onLayout={(event) => setHeaderHeight(Math.round(event.nativeEvent.layout.height))}>
-                    <View className="items-center pt-2.5">
-                      <View className={`h-1 w-10 rounded-full ${dark ? 'bg-white/25' : 'bg-neutral-300'}`} />
-                    </View>
-                    {shownTitle ? (
-                      <View className="flex-row items-center justify-between pb-1 pl-page pr-4 pt-4">
-                        <Text
-                          accessibilityRole="header"
-                          className={`flex-1 text-[24px] font-semibold ${dark ? 'text-white' : ''}`}>
-                          {shownTitle}
-                        </Text>
-                        <IconButton icon={X} label={t('close')} onPress={onClose} round dark={dark} />
+          <OpenedContext value={opened}>
+            <View className="flex-1 justify-end">
+              {/* Anywhere outside the panel closes it. */}
+              <Animated.View className={`absolute inset-0 ${dark ? 'bg-black/60' : 'bg-black/40'}`} style={backdropStyle}>
+                <Pressable accessibilityLabel={t('close')} className="flex-1" onPress={onClose} />
+              </Animated.View>
+              <Animated.View
+                style={[panelStyle, measuring && { opacity: 0 }]}
+                onLayout={(event) => panelHeight.set(event.nativeEvent.layout.height)}>
+                <View
+                  className={`overflow-hidden rounded-t-3xl ${dark ? 'border-t border-white/10 bg-[#15191c]' : 'bg-white'}`}
+                  style={size}>
+                  <GestureDetector gesture={pull}>
+                    <View onLayout={(event) => setHeaderHeight(Math.round(event.nativeEvent.layout.height))}>
+                      <View className="items-center pt-2.5">
+                        <View className={`h-1 w-10 rounded-full ${dark ? 'bg-white/25' : 'bg-neutral-300'}`} />
                       </View>
-                    ) : null}
-                  </View>
-                </GestureDetector>
-                <View className={tall ? 'flex-1' : 'shrink'}>{content}</View>
-              </View>
-            </Animated.View>
-          </View>
+                      {shownTitle ? (
+                        <View className="flex-row items-center justify-between pb-1 pl-page pr-4 pt-4">
+                          <Text
+                            accessibilityRole="header"
+                            className={`flex-1 text-[24px] font-semibold ${dark ? 'text-white' : ''}`}>
+                            {shownTitle}
+                          </Text>
+                          <IconButton icon={X} label={t('close')} onPress={onClose} round dark={dark} />
+                        </View>
+                      ) : null}
+                    </View>
+                  </GestureDetector>
+                  <View className={tall ? 'flex-1' : 'shrink'}>{content}</View>
+                </View>
+              </Animated.View>
+            </View>
+          </OpenedContext>
         </ConfirmProvider>
       </GestureHandlerRootView>
     </Modal>

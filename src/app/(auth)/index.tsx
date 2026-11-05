@@ -10,7 +10,7 @@ import Shortcut from '@/components/ui/shortcut';
 import { LANGUAGES, useI18n } from '@/lib/i18n';
 
 // The first screen when signed out: what the app is for, the two ways in, and the language, chosen in a sheet from a button with
-// no ground of its own (it is the name of the language and an arrow).
+// no ground of its own (it is the name of the language and an arrow), as wide as the two above it, so that all of that width can be tapped.
 export default function Welcome() {
   const { t, language } = useI18n();
   const [languageOpen, setLanguageOpen] = useState(false);
@@ -22,13 +22,12 @@ export default function Welcome() {
       subtitle={t('welcome_subtitle')}
       shade={false}
       footer={
-        <View className="items-center">
+        <View>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={`${t('settings_language')}: ${current}`}
-            hitSlop={8}
             onPress={() => setLanguageOpen(true)}
-            className="min-h-11 flex-row items-center gap-1.5 px-3 active:opacity-70">
+            className="min-h-14 w-full flex-row items-center justify-center gap-1.5 px-3 active:opacity-70">
             <Text className="text-[15.4px] font-medium text-white/90">{current}</Text>
             <ChevronDown size={16} color="rgba(255, 255, 255, 0.7)" />
           </Pressable>
