@@ -19,6 +19,7 @@ import {
   type User,
 } from '@/lib/auth-api';
 import { forgetGoogleAccount, requestGoogleIdToken } from '@/lib/google-sign-in';
+import type { Language } from '@/lib/i18n';
 import { getItem, removeItem, setItem } from '@/lib/local-storage';
 import { clearReminders } from '@/lib/reminders';
 import { clearToken, getToken, saveToken } from '@/lib/token-storage';
@@ -50,11 +51,18 @@ type AuthContextValue = {
   user: User | null;
   token: string | null;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string) => Promise<void>;
-  /** Opens Google's sign-in and, once the person has chosen an account, signs in with it. Closing the sheet is not an error. */
-  signInWithGoogle: () => Promise<void>;
-  /** Opens Apple's sign-in sheet and, once the person has approved, signs in with it. Closing the sheet is not an error. */
-  signInWithApple: () => Promise<void>;
+  /** `language` is the one the app is in: a new account is made in it. */
+  signUp: (email: string, password: string, language?: Language) => Promise<void>;
+  /**
+   * Opens Google's sign-in and, once the person has chosen an account, signs in with it. Closing the sheet is not an error.
+   * `language` is the one the app is in: an account that is made now is made in it.
+   */
+  signInWithGoogle: (language?: Language) => Promise<void>;
+  /**
+   * Opens Apple's sign-in sheet and, once the person has approved, signs in with it. Closing the sheet is not an error.
+   * `language` is the one the app is in: an account that is made now is made in it.
+   */
+  signInWithApple: (language?: Language) => Promise<void>;
   signOut: () => Promise<void>;
   /**
    * Deletes the account and everything in it for good, then signs out. The password is what the server asks for when the
@@ -194,19 +202,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     user: state.status === 'signedIn' ? state.user : null,
     token: state.status === 'signedIn' ? state.token : null,
     signIn: async (email, password) => startSession(await loginRequest(email, password)),
-    signUp: async (email, password) => startSession(await registerRequest(email, password)),
-    signInWithGoogle: async () => {
+    signUp: async (email, password, language) => startSession(await registerRequest(email, password, language)),
+    signInWithGoogle: async (language) => {
       const idToken = await requestGoogleIdToken();
       // The person closed Google's sheet without choosing an account.
       if (idToken) {
-        await startSession(await googleLoginRequest(idToken));
+        await startSession(await googleLoginRequest(idToken, language));
       }
     },
-    signInWithApple: async () => {
+    signInWithApple: async (language) => {
       const credential = await requestAppleCredential();
       // The person closed Apple's sheet without approving.
       if (credential) {
-        await startSession(await appleLoginRequest(credential));
+        await startSession(await appleLoginRequest(credential, language));
       }
     },
     signOut: async () => {

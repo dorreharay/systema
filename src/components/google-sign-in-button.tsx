@@ -30,7 +30,7 @@ type GoogleSignInButtonProps = {
 // that signs in with a password (see SocialSignIn). Shown on the sign-in and the sign-up screen alike: Google makes the account
 // when there is none.
 export default function GoogleSignInButton({ size, radius, disabled, onError }: GoogleSignInButtonProps) {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const { signInWithGoogle } = useAuth();
   const [busy, setBusy] = useState(false);
 
@@ -46,7 +46,7 @@ export default function GoogleSignInButton({ size, radius, disabled, onError }: 
     setBusy(true);
     try {
       // On success the root layout moves a signed-in user to the app: nothing to navigate to here.
-      await signInWithGoogle();
+      await signInWithGoogle(language);
     } catch (error) {
       onError(describeError(error, t));
     }

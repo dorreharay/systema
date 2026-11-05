@@ -43,22 +43,27 @@ export type AuthResponse = { user: User; token: string };
 export const loginRequest = (email: string, password: string) =>
   api<AuthResponse>('/api/auth/login', { method: 'POST', body: { email, password } });
 
-export const registerRequest = (email: string, password: string) =>
-  api<AuthResponse>('/api/auth/register', { method: 'POST', body: { email, password } });
+/** The language the app is in goes along, so that the account is made in it. */
+export const registerRequest = (email: string, password: string, language?: Language) =>
+  api<AuthResponse>('/api/auth/register', { method: 'POST', body: { email, password, language } });
 
-/** Signs in (or up) with the ID token Google gave the app: the server checks it, and finds or makes the account. */
-export const googleLoginRequest = (idToken: string) =>
-  api<AuthResponse>('/api/auth/google', { method: 'POST', body: { id_token: idToken } });
+/**
+ * Signs in (or up) with the ID token Google gave the app: the server checks it, and finds or makes the account (in the language the
+ * app is in, which an account that exists already keeps its own).
+ */
+export const googleLoginRequest = (idToken: string, language?: Language) =>
+  api<AuthResponse>('/api/auth/google', { method: 'POST', body: { id_token: idToken, language } });
 
 /**
  * Signs in (or up) with what Apple gave the app: the server checks the identity token, and finds or makes the account.
  * The name is sent because Apple gives it only the first time; the code lets the server revoke Apple's token on deletion.
  */
-export const appleLoginRequest = (credential: AppleCredential) =>
+export const appleLoginRequest = (credential: AppleCredential, language?: Language) =>
   api<AuthResponse>('/api/auth/apple', {
     method: 'POST',
     body: {
       identity_token: credential.identityToken,
+      language,
       ...(credential.authorizationCode && { authorization_code: credential.authorizationCode }),
       ...(credential.fullName && { full_name: credential.fullName }),
     },

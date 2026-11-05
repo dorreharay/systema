@@ -85,10 +85,10 @@ Every error is `{ "error": "message", "code"?: "machine_reason", "fields"?: { "f
 | | | |
 |---|---|---|
 | `GET` | `/api/health` | `{ ok: true }`, no auth |
-| `POST` | `/api/auth/register` | `{ email, password, full_name? }` → `201 { user, token }`, 409 `email_taken` |
+| `POST` | `/api/auth/register` | `{ email, password, full_name?, language? }` → `201 { user, token }`, 409 `email_taken`. `language` (`en`/`uk`) is the language the app was in: a new account is made in it (it is `en` without one, and a language the server does not know is ignored); `google` and `apple` take it the same way |
 | `POST` | `/api/auth/login` | `{ email, password }` → `{ user, token }`, 401 `invalid_credentials` |
-| `POST` | `/api/auth/google` | `{ id_token }`, the ID token from Google Sign-In → `{ user, token }` (`201` for a new account); 401 `google_token_invalid`, 403 `google_email_unverified` / `account_inactive`, 409 `google_account_mismatch`, 503 `google_not_configured` / `google_unavailable` |
-| `POST` | `/api/auth/apple` | `{ identity_token, authorization_code?, full_name? }`, from Sign in with Apple → `{ user, token }` (`201` for a new account); 400 `apple_email_missing`, 401 `apple_token_invalid`, 403 `account_inactive`, 409 `apple_account_mismatch` / `email_taken`, 503 `apple_not_configured` / `apple_unavailable` |
+| `POST` | `/api/auth/google` | `{ id_token, language? }`, the ID token from Google Sign-In → `{ user, token }` (`201` for a new account); 401 `google_token_invalid`, 403 `google_email_unverified` / `account_inactive`, 409 `google_account_mismatch`, 503 `google_not_configured` / `google_unavailable` |
+| `POST` | `/api/auth/apple` | `{ identity_token, authorization_code?, full_name?, language? }`, from Sign in with Apple → `{ user, token }` (`201` for a new account); 400 `apple_email_missing`, 401 `apple_token_invalid`, 403 `account_inactive`, 409 `apple_account_mismatch` / `email_taken`, 503 `apple_not_configured` / `apple_unavailable` |
 | `POST` | `/api/auth/logout` | clears the cookie |
 | `GET` | `/api/auth/me` | the signed-in user |
 | `PATCH` | `/api/auth/me` | any of `full_name`, `workshop_name`, `currency` (ISO code), `tension_unit` (`kg`/`lbs`), `timezone` (IANA), `language` (`en`/`uk`), `notifications_enabled`, `setup_completed: true` → the user |

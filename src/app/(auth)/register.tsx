@@ -21,7 +21,7 @@ import {
 } from '@/lib/validation';
 
 export default function Register() {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmation, setConfirmation] = useState('');
@@ -73,7 +73,7 @@ export default function Register() {
     setSubmitting(true);
     try {
       // The account is created and signed in at once; the root layout then moves to the app.
-      await signUp(email.trim(), password);
+      await signUp(email.trim(), password, language);
     } catch (error) {
       if (isApiError(error, 'email_taken')) {
         setErrors((current) => ({ ...current, email: describeError(error, t) }));

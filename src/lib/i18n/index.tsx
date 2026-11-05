@@ -1,8 +1,9 @@
-import { createContext, use, useEffect, useState, type ReactNode } from 'react';
+import { createContext, use, useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { useAuth } from '@/lib/auth';
 import { getItem, setItem } from '@/lib/local-storage';
 
+import { detectLanguage } from './detect';
 import { en } from './en';
 import { uk } from './uk';
 
@@ -64,8 +65,9 @@ export function useI18n() {
 }
 
 /**
- * English until told otherwise. Before anyone signs in the language is the one last used on this
- * device; once signed in it is the one saved in the account.
+ * Before anyone signs in the language is the one last used on this device; where none has been chosen yet it is the language
+ * of the phone (English, for a language the app does not have), and it is not kept, so it follows the phone until a choice is
+ * made. Once signed in it is the one saved in the account.
  */
 export function I18nProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
@@ -73,6 +75,8 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   const [loaded, setLoaded] = useState(false);
   const accountLanguage = user?.language;
   const [adopted, setAdopted] = useState<Language | undefined>(undefined);
+  // The language of the phone is only a first guess: it is not taken once the person, or their account, has said which they want.
+  const mayDetect = useRef(true);
 
   // The language saved in the account wins once there is one (signing in, or saving a change).
   if (accountLanguage !== adopted) {
@@ -81,14 +85,22 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   }
 
   useEffect(() => {
-    getItem(STORAGE_KEY).then((saved) => {
-      if (isLanguage(saved)) setLanguageState(saved);
+    getItem(STORAGE_KEY).then(async (saved) => {
+      if (isLanguage(saved)) {
+        setLanguageState(saved);
+      } else {
+        const detected = await detectLanguage(LANGUAGES.map((item) => item.code));
+        if (mayDetect.current) setLanguageState(detected);
+      }
       setLoaded(true);
     });
   }, []);
 
   useEffect(() => {
-    if (isLanguage(accountLanguage)) setItem(STORAGE_KEY, accountLanguage);
+    if (isLanguage(accountLanguage)) {
+      mayDetect.current = false;
+      setItem(STORAGE_KEY, accountLanguage);
+    }
   }, [accountLanguage]);
 
   // The splash screen is still up until this has rendered, so the first frame is in the right language.
@@ -99,6 +111,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   const value: I18nContextValue = {
     language,
     setLanguage: (next) => {
+      mayDetect.current = false;
       setLanguageState(next);
       setItem(STORAGE_KEY, next);
     },

@@ -22,7 +22,7 @@ type AppleSignInButtonProps = {
 // the system draws the logo alone (white on the dark photo of the sign-in screens), with the corners of the buttons around it.
 export default function AppleSignInButton({ library, size, radius, disabled, onError }: AppleSignInButtonProps) {
   const { signInWithApple } = useAuth();
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const [busy, setBusy] = useState(false);
 
   const press = async () => {
@@ -33,7 +33,7 @@ export default function AppleSignInButton({ library, size, radius, disabled, onE
     setBusy(true);
     try {
       // On success the root layout moves a signed-in user to the app: nothing to navigate to here.
-      await signInWithApple();
+      await signInWithApple(language);
     } catch (error) {
       onError(describeError(error, t));
     }

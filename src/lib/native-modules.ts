@@ -13,3 +13,4 @@ export const hasNativeModule = (name: string) => Platform.OS === 'web' || !!requ
 export const NATIVE_NOTIFICATIONS = 'ExpoPushTokenManager';
 export const NATIVE_CLIPBOARD = 'ExpoClipboard';
 export const NATIVE_APPLE_AUTHENTICATION = 'ExpoAppleAuthentication';
+export const NATIVE_LOCALIZATION = 'ExpoLocalization';

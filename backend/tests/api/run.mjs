@@ -90,6 +90,14 @@ test('Register', 'creates the account, signs in and hides the secrets', async (c
   assertTrue(!('reset_token_hash' in res.data.user), 'reset_token_hash is not exposed');
   assertTrue(dbScalar(`SELECT password_hash FROM users WHERE email='mixed.case@test.local'`).startsWith('$2'), 'the password is stored hashed');
 });
+test('Register', 'makes the account in the language the app was in, when it is one the server knows', async (ctx) => {
+  const ukrainian = await register(ctx, newEmail(), { language: 'uk' });
+  assertEq(ukrainian.res.data.user.language, 'uk', 'Ukrainian, as asked');
+  assertEq((await ukrainian.client.get('/api/auth/me')).data.language, 'uk', 'and it is the one the account has');
+  assertEq((await register(ctx)).res.data.user.language, 'en', 'English where none is named');
+  // Not a reason to turn a sign-up away: the language is a hint.
+  assertEq((await register(ctx, newEmail(), { language: 'de' })).res.data.user.language, 'en', 'a language the server does not know is ignored');
+});
 test('Register', 'refuses an email that is already taken, whatever its case', async (ctx) => {
   const { email } = await register(ctx);
   const res = await ctx.anon.post('/api/auth/register', { email: email.toUpperCase(), password });
@@ -227,9 +235,9 @@ const googleUser = (extra = {}) => {
   return { sub: `google-sub-${n}`, email: `google${n}@test.local`, name: 'Gina Google', ...extra };
 };
 /** Signs in with an ID token made from `options` (see idToken in the harness), as a client of its own. */
-async function googleLogin(ctx, options) {
+async function googleLogin(ctx, options, body = {}) {
   const client = new Client(ctx.server.base);
-  const res = await client.post('/api/auth/google', { id_token: await ctx.google.idToken(options) });
+  const res = await client.post('/api/auth/google', { id_token: await ctx.google.idToken(options), ...body });
   return { client, res };
 }
 const googleUserCount = (email) => dbScalar(`SELECT count(*) FROM users WHERE email='${email}'`);
@@ -248,6 +256,16 @@ test('Google', 'a first sign-in makes the account, signs in and keeps the secret
   assertEq(dbScalar(`SELECT password_hash IS NULL FROM users WHERE email='gina.google@test.local'`), 't', 'there is no password');
   assertEq((await client.get('/api/auth/me')).data.email, 'gina.google@test.local', 'the session works');
   assertTrue(Number(dbScalar(`SELECT count(*) FROM services WHERE user_id='${res.data.user.id}'`)) > 0, 'the default services are made');
+});
+test('Google', 'a new account is made in the language the app was in, and a later sign-in does not change it', async (ctx) => {
+  const user = googleUser();
+  const first = await googleLogin(ctx, user, { language: 'uk' });
+  assertStatus(first.res, 201);
+  assertEq(first.res.data.user.language, 'uk', 'the language of the app');
+  const again = await googleLogin(ctx, user, { language: 'en' });
+  assertStatus(again.res, 200);
+  assertEq(again.res.data.user.language, 'uk', 'the account keeps its own');
+  assertEq((await googleLogin(ctx, googleUser(), { language: 'de' })).res.data.user.language, 'en', 'a language the server does not know is ignored');
 });
 test('Google', 'the same Google user gets the same account, whatever address Google now has for them', async (ctx) => {
   const user = googleUser();
@@ -415,6 +433,16 @@ test('Apple', 'a first sign-in makes the account, signs in and keeps the secrets
   assertEq(ctx.apple.asked('token').length, traded, 'and Apple was not asked for one');
   assertEq((await client.get('/api/auth/me')).data.email, 'annie.apple@test.local', 'the session works');
   assertTrue(Number(dbScalar(`SELECT count(*) FROM services WHERE user_id='${res.data.user.id}'`)) > 0, 'the default services are made');
+});
+test('Apple', 'a new account is made in the language the app was in, and a later sign-in does not change it', async (ctx) => {
+  const user = appleUser();
+  const first = await appleLogin(ctx, user, { language: 'uk' });
+  assertStatus(first.res, 201);
+  assertEq(first.res.data.user.language, 'uk', 'the language of the app');
+  const again = await appleLogin(ctx, user, { language: 'en' });
+  assertStatus(again.res, 200);
+  assertEq(again.res.data.user.language, 'uk', 'the account keeps its own');
+  assertEq((await appleLogin(ctx, appleUser(), { language: 'de' })).res.data.user.language, 'en', 'a language the server does not know is ignored');
 });
 test('Apple', 'a person who hides their address gets an account on the one Apple made up for the app', async (ctx) => {
   const email = 'x7k2m9q4@privaterelay.appleid.com';

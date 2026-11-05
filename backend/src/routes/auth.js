@@ -30,10 +30,18 @@ const emailSchema = z.preprocess(
   z.string({ error: 'Email is required' }).max(254).pipe(z.email('Invalid email'))
 );
 
+// The languages of the app. A new account is made in the one the app was in, when it names one of these.
+const LANGUAGES = ['en', 'uk'];
+// What the app says about itself when it asks for an account. A language the server does not know is left out, not refused,
+// so that no sign-up fails over it.
+const languageHint = z.string().max(16).optional();
+const accountLanguage = (value) => (LANGUAGES.includes(value) ? value : undefined);
+
 const registerSchema = z.object({
   email: emailSchema,
   password: newPasswordSchema,
   full_name: z.string().trim().max(100).optional(),
+  language: languageHint,
 });
 const loginSchema = z.object({
   email: emailSchema,
@@ -41,6 +49,7 @@ const loginSchema = z.object({
 });
 const googleSchema = z.object({
   id_token: z.string({ error: 'Google token is required' }).min(1, 'Google token is required').max(8192),
+  language: languageHint,
 });
 const appleSchema = z.object({
   identity_token: z.string({ error: 'Apple token is required' }).min(1, 'Apple token is required').max(8192),
@@ -48,8 +57,8 @@ const appleSchema = z.object({
   authorization_code: z.string().max(2048).optional(),
   // Apple gives the name only the first time a person authorizes the app, and the app passes it on then.
   full_name: z.string().trim().max(100).optional(),
+  language: languageHint,
 });
-const LANGUAGES = ['en', 'uk'];
 const profileSchema = z
   .object({
     full_name: z.string().trim().max(100),
@@ -87,7 +96,7 @@ const emailTaken = () => new HttpError(409, 'An account with this email already 
 
 // POST /api/auth/register
 router.post('/register', authLimiter, validateBody(registerSchema), async (req, res) => {
-  const { email, password, full_name } = req.body;
+  const { email, password, full_name, language } = req.body;
 
   const [existing] = await db.select({ id: users.id }).from(users).where(eq(users.email, email)).limit(1);
   if (existing) throw emailTaken();
@@ -98,7 +107,7 @@ router.post('/register', authLimiter, validateBody(registerSchema), async (req, 
     user = await db.transaction(async (tx) => {
       const [created] = await tx
         .insert(users)
-        .values({ email, full_name: full_name || null, password_hash })
+        .values({ email, full_name: full_name || null, password_hash, language: accountLanguage(language) })
         .returning();
       await createDefaultServices(tx, created.id);
       await createStarterCatalog(tx, created.id);
@@ -139,7 +148,7 @@ router.post('/login', authLimiter, validateBody(loginSchema), async (req, res) =
  * The account a Google sign-in is for: the one already linked to this Google user, else the one with the same email (it
  * is linked now), else a new one.
  */
-async function accountForGoogle({ sub, email, name }) {
+async function accountForGoogle({ sub, email, name }, language) {
   const [linked] = await db.select().from(users).where(eq(users.google_sub, sub)).limit(1);
   if (linked) return { user: linked, created: false };
 
@@ -168,7 +177,10 @@ async function accountForGoogle({ sub, email, name }) {
   }
 
   const user = await db.transaction(async (tx) => {
-    const [created] = await tx.insert(users).values({ email, full_name: name, google_sub: sub }).returning();
+    const [created] = await tx
+      .insert(users)
+      .values({ email, full_name: name, google_sub: sub, language: accountLanguage(language) })
+      .returning();
     await createDefaultServices(tx, created.id);
     await createStarterCatalog(tx, created.id);
     return created;
@@ -185,12 +197,12 @@ router.post('/google', authLimiter, validateBody(googleSchema), async (req, res)
 
   let account;
   try {
-    account = await accountForGoogle(google);
+    account = await accountForGoogle(google, req.body.language);
   } catch (err) {
     // The first sign-in of one person arrived twice at once: the database let one of them make the account, and the
     // other finds it now.
     if (!isUniqueViolation(err)) throw err;
-    account = await accountForGoogle(google);
+    account = await accountForGoogle(google, req.body.language);
   }
 
   // Said after the token is checked, so it only tells that to someone who has this Google account.
@@ -202,9 +214,10 @@ router.post('/google', authLimiter, validateBody(googleSchema), async (req, res)
 
 /**
  * The account an Apple sign-in is for, like accountForGoogle: the one already linked to this Apple user, else the one with
- * the same email (it is linked now), else a new one. `fullName` is what the app passed on, and only a new account takes it.
+ * the same email (it is linked now), else a new one. `fullName` and `language` are what the app passed on, and only a new
+ * account takes them.
  */
-async function accountForApple({ sub, email, emailVerified }, fullName) {
+async function accountForApple({ sub, email, emailVerified }, fullName, language) {
   const [linked] = await db.select().from(users).where(eq(users.apple_sub, sub)).limit(1);
   if (linked) return { user: linked, created: false };
 
@@ -241,7 +254,10 @@ async function accountForApple({ sub, email, emailVerified }, fullName) {
   }
 
   const user = await db.transaction(async (tx) => {
-    const [created] = await tx.insert(users).values({ email, full_name: fullName || null, apple_sub: sub }).returning();
+    const [created] = await tx
+      .insert(users)
+      .values({ email, full_name: fullName || null, apple_sub: sub, language: accountLanguage(language) })
+      .returning();
     await createDefaultServices(tx, created.id);
     await createStarterCatalog(tx, created.id);
     return created;
@@ -265,7 +281,7 @@ async function rememberAppleRefreshToken(userId, authorizationCode) {
 
 // POST /api/auth/apple
 router.post('/apple', authLimiter, validateBody(appleSchema), async (req, res) => {
-  const { identity_token, authorization_code, full_name } = req.body;
+  const { identity_token, authorization_code, full_name, language } = req.body;
   const apple = await verifyAppleIdentityToken(identity_token);
   // An address is usable when a sign-up would take it (and is tidied the same way); a missing or odd one is as good as none.
   const email = emailSchema.safeParse(apple.email);
@@ -273,12 +289,12 @@ router.post('/apple', authLimiter, validateBody(appleSchema), async (req, res) =
 
   let account;
   try {
-    account = await accountForApple(identity, full_name);
+    account = await accountForApple(identity, full_name, language);
   } catch (err) {
     // The first sign-in of one person arrived twice at once: the database let one of them make the account, and the
     // other finds it now.
     if (!isUniqueViolation(err)) throw err;
-    account = await accountForApple(identity, full_name);
+    account = await accountForApple(identity, full_name, language);
   }
 
   // Said after the token is checked, so it only tells that to someone who has this Apple account.
