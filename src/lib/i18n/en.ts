@@ -263,6 +263,7 @@ export const en = {
   order_status_changed: "Status: {status}",
   repeat_order: "Repeat Order",
   contact_customer: "Contact Customer",
+  message_customer: "Message the customer",
   copy_order_details: "Copy Order Details",
   delete_order: "Delete Order",
   order_delete_title: "Delete order {number}?",

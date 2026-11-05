@@ -10,6 +10,7 @@ import {
   ChevronsRight,
   Copy,
   Mail,
+  MessageSquare,
   MoreHorizontal,
   Pencil,
   Phone,
@@ -237,6 +238,10 @@ export default function OrderDetails() {
                   </Text>
                 </View>
               </Pressable>
+              {/* Once the racket is ready: the message for the customer, again (it is also offered when the order is marked ready). */}
+              {order.status === 'ready' ? (
+                <IconButton icon={MessageSquare} label={t('message_customer')} round large onPress={() => setReadyOpen(true)} />
+              ) : null}
               {/* The ground of a large round button is the whole of its touch target: it stands at the edge of the card's content. */}
               {order.client.phone ? <CallButton phone={order.client.phone} round large /> : null}
             </View>

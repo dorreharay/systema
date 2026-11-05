@@ -262,6 +262,7 @@ export const ja: Record<Exclude<keyof typeof en, `${'date_in_days' | 'insights_u
   order_status_changed: "ステータス：{status}",
   repeat_order: "再注文",
   contact_customer: "顧客に連絡",
+  message_customer: "顧客にメッセージを送る",
   copy_order_details: "注文内容をコピー",
   delete_order: "注文を削除",
   order_delete_title: "注文{number}を削除しますか？",

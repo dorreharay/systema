@@ -265,6 +265,7 @@ export const pt: Record<keyof typeof en, string> & Record<string, string> = {
   order_status_changed: "Status: {status}",
   repeat_order: "Repetir pedido",
   contact_customer: "Contatar cliente",
+  message_customer: "Escrever ao cliente",
   copy_order_details: "Copiar dados do pedido",
   delete_order: "Excluir pedido",
   order_delete_title: "Excluir o pedido {number}?",
