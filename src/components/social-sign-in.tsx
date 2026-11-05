@@ -7,10 +7,10 @@ import { googleSignInSupported } from '@/lib/google-sign-in';
 import { useI18n } from '@/lib/i18n';
 
 // The side of the two square buttons, and the radius of their corners. Apple's guidelines have a button with only its logo
-// square, and no smaller than the other ways in: the two are the same size. The radius is a quarter of the side, as on the bars
-// of the screen (18 on 72): the system's Apple button turns into a circle once it is a third of the side.
+// square, and no smaller than the other ways in: the two are the same size. They are as high as the slim buttons above them
+// and have the same corners (15 on 54); the system's Apple button turns into a circle once the radius is a third of its side.
 const BUTTON_SIZE = 54;
-const BUTTON_RADIUS = 14;
+const BUTTON_RADIUS = 15;
 
 type SocialSignInProps = {
   // The screen's own button is in the middle of a request.

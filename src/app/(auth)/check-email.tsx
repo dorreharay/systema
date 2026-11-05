@@ -70,7 +70,7 @@ export default function CheckEmail() {
       centered
       footer={<ResendRow email={email} />}>
       <AuthLink href="/login" dismissTo asChild>
-        <Shortcut label={t('back_to_sign_in')} color={colors.white} contentColor={colors.primary} />
+        <Shortcut slim label={t('back_to_sign_in')} color={colors.white} contentColor={colors.ink} />
       </AuthLink>
     </AuthLayout>
   );

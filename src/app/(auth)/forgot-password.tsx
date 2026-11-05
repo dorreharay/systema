@@ -68,7 +68,7 @@ function ForgotPasswordForm() {
       {formError ? <FormMessage message={formError} /> : null}
       <View className="pt-4">
         <AuthSubmit>
-          <Shortcut label={t('send_reset_link')} color={colors.white} contentColor={colors.primary} onPress={submit} loading={submitting} />
+          <Shortcut slim label={t('send_reset_link')} color={colors.white} contentColor={colors.ink} onPress={submit} loading={submitting} />
         </AuthSubmit>
       </View>
     </View>

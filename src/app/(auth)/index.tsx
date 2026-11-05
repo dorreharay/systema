@@ -35,10 +35,10 @@ export default function Welcome() {
       }>
       <View className="gap-3">
         <AuthLink href="/register" prefetch asChild>
-          <Shortcut label={t('get_started')} color={colors.white} contentColor={colors.primary} />
+          <Shortcut slim label={t('get_started')} color={colors.white} contentColor={colors.ink} />
         </AuthLink>
         <AuthLink href="/login" prefetch asChild>
-          <Shortcut label={t('sign_in')} color="rgba(255, 255, 255, 0.14)" contentColor={colors.white} />
+          <Shortcut slim label={t('sign_in')} color="rgba(255, 255, 255, 0.14)" contentColor={colors.white} />
         </AuthLink>
       </View>
     </AuthLayout>

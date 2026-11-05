@@ -18,14 +18,18 @@ type ShortcutProps = {
   className?: string;
   // A smaller button, for what is secondary to the one beside it.
   compact?: boolean;
+  // 15% lower than the large one (54 pt, where that is 63), with the corners in proportion (15 pt, where those are 18): the
+  // buttons of the welcome and sign-in screens.
+  slim?: boolean;
   // Shows a spinner in place of the icon and ignores presses while a request is in flight.
   loading?: boolean;
   disabled?: boolean;
 };
 
 const SIZES = {
-  large: { box: 'h-18 gap-3', icon: 22, label: 'text-[19px]' },
-  compact: { box: 'h-[52px] gap-2.5', icon: 20, label: 'text-[17px]' },
+  large: { box: 'h-18 gap-3', radius: 'rounded-[18px]', icon: 22, label: 'text-[19px]' },
+  slim: { box: 'h-[54px] gap-3', radius: 'rounded-[15px]', icon: 22, label: 'text-[19px]' },
+  compact: { box: 'h-[52px] gap-2.5', radius: 'rounded-[18px]', icon: 20, label: 'text-[17px]' },
 } as const;
 
 // A button in the style of the shortcuts of the home screen: a block of colour with rounded corners, an
@@ -38,10 +42,11 @@ export default function Shortcut({
   onPress,
   className = '',
   compact = false,
+  slim = false,
   loading = false,
   disabled,
 }: ShortcutProps) {
-  const size = SIZES[compact ? 'compact' : 'large'];
+  const size = SIZES[compact ? 'compact' : slim ? 'slim' : 'large'];
   const inactive = loading || disabled;
   const ink = contentColor ?? colors.ink;
 
@@ -53,7 +58,7 @@ export default function Shortcut({
       disabled={inactive}
       onPress={onPress}
       style={{ backgroundColor: color }}
-      className={`flex-row items-center justify-center rounded-[18px] active:opacity-80 ${size.box} ${
+      className={`flex-row items-center justify-center active:opacity-80 ${size.radius} ${size.box} ${
         inactive ? 'opacity-60' : ''
       } ${className}`}>
       {loading ? <ActivityIndicator color={ink} /> : Icon ? <Icon size={size.icon} color={ink} /> : null}

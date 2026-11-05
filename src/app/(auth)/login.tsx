@@ -117,7 +117,7 @@ export default function Login() {
         {formError ? <FormMessage message={formError} /> : null}
         <View className="gap-4 pt-4">
           <AuthSubmit>
-            <Shortcut label={t('sign_in')} color={colors.white} contentColor={colors.primary} onPress={submit} loading={submitting} />
+            <Shortcut slim label={t('sign_in')} color={colors.white} contentColor={colors.ink} onPress={submit} loading={submitting} />
           </AuthSubmit>
           <SocialSignIn disabled={submitting} onError={setFormError} />
         </View>

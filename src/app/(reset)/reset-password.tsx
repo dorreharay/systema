@@ -102,7 +102,7 @@ function ResetPasswordForm() {
       {formError ? <FormMessage message={formError} /> : null}
       <View className="pt-4">
         <AuthSubmit>
-          <Shortcut label={t('change_password')} color={colors.white} contentColor={colors.primary} onPress={submit} loading={submitting} />
+          <Shortcut slim label={t('change_password')} color={colors.white} contentColor={colors.ink} onPress={submit} loading={submitting} />
         </AuthSubmit>
       </View>
     </View>
