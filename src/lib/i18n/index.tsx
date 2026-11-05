@@ -1,7 +1,7 @@
 import { createContext, use, useEffect, useRef, useState, type ReactNode } from 'react';
 
 import { useAuth } from '@/lib/auth';
-import { getItem, setItem } from '@/lib/local-storage';
+import { getItem, removeItem, setItem } from '@/lib/local-storage';
 
 import { de } from './de';
 import { detectLanguage } from './detect';
@@ -34,6 +34,8 @@ export const LANGUAGES: { code: Language; label: string }[] = [
 
 const DICTIONARIES: Record<Language, Record<string, string>> = { en, de, fr, es, it, pt, ja, uk, pl };
 const STORAGE_KEY = 'language';
+// The language chosen while nobody was signed in, kept until an account has it (see I18nProvider).
+const CHOSEN_KEY = 'language_chosen';
 
 const isLanguage = (value: unknown): value is Language => LANGUAGES.some((item) => item.code === value);
 
@@ -97,26 +99,38 @@ export function useI18n() {
 /**
  * Before anyone signs in the language is the one last used on this device; where none has been chosen yet it is the language
  * of the phone (English, for a language the app does not have), and it is not kept, so it follows the phone until a choice is
- * made. Once signed in it is the one saved in the account.
+ * made. Once signed in it is the one saved in the account, unless the person chose another on the welcome screen: that one is
+ * not given up for the account's, it is saved to the account they sign in to, as if it had been chosen in Settings.
  */
 export function I18nProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
+  const { user, updateProfile } = useAuth();
   const [language, setLanguageState] = useState<Language>('en');
   const [loaded, setLoaded] = useState(false);
+  // The language chosen with nobody signed in. It is kept on the device until an account has it, so that closing the app
+  // before signing in does not lose it.
+  const [chosen, setChosen] = useState<Language | null>(null);
   const accountLanguage = user?.language;
   const [adopted, setAdopted] = useState<Language | undefined>(undefined);
   // The language of the phone is only a first guess: it is not taken once the person, or their account, has said which they want.
   const mayDetect = useRef(true);
 
-  // The language saved in the account wins once there is one (signing in, or saving a change).
-  if (accountLanguage !== adopted) {
+  // The language saved in the account wins once there is one (signing in, or saving a change), except over one chosen on the
+  // welcome screen: that stays, and the effect below gives it to the account.
+  if (loaded && accountLanguage !== adopted) {
     setAdopted(accountLanguage);
-    if (isLanguage(accountLanguage)) setLanguageState(accountLanguage);
+    if (isLanguage(accountLanguage)) {
+      if (!chosen || chosen === accountLanguage) setLanguageState(accountLanguage);
+      // The account has it now.
+      if (chosen === accountLanguage) setChosen(null);
+    }
   }
 
   useEffect(() => {
-    getItem(STORAGE_KEY).then(async (saved) => {
-      if (isLanguage(saved)) {
+    Promise.all([getItem(STORAGE_KEY), getItem(CHOSEN_KEY)]).then(async ([saved, picked]) => {
+      if (isLanguage(picked)) {
+        setChosen(picked);
+        setLanguageState(picked);
+      } else if (isLanguage(saved)) {
         setLanguageState(saved);
       } else {
         const detected = await detectLanguage(LANGUAGES.map((item) => item.code));
@@ -129,9 +143,24 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (isLanguage(accountLanguage)) {
       mayDetect.current = false;
-      setItem(STORAGE_KEY, accountLanguage);
+      // Until the account has the language that was chosen, this device stays in the chosen one.
+      if (!chosen || chosen === accountLanguage) setItem(STORAGE_KEY, accountLanguage);
     }
-  }, [accountLanguage]);
+  }, [accountLanguage, chosen]);
+
+  useEffect(() => {
+    if (!loaded) return;
+    if (chosen) setItem(CHOSEN_KEY, chosen);
+    else removeItem(CHOSEN_KEY);
+  }, [loaded, chosen]);
+
+  // The account signed in to has another language than the one chosen on the welcome screen: it is given that one. When that
+  // cannot be done now (no connection), the choice is kept and it is tried again at the next start.
+  useEffect(() => {
+    if (!loaded || !chosen || !isLanguage(accountLanguage) || accountLanguage === chosen) return;
+    updateProfile({ language: chosen }).catch(() => undefined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded, chosen, accountLanguage]);
 
   // The splash screen is still up until this has rendered, so the first frame is in the right language.
   if (!loaded) {
@@ -144,6 +173,8 @@ export function I18nProvider({ children }: { children: ReactNode }) {
       mayDetect.current = false;
       setLanguageState(next);
       setItem(STORAGE_KEY, next);
+      // With nobody signed in it is the choice the next sign-in keeps; signed in (Settings), the account gets it at once.
+      setChosen(user ? null : next);
     },
     t: (key, params) => translate(language, key, params),
   };
