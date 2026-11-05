@@ -1,4 +1,6 @@
-import { getName, registerLocale } from 'i18n-iso-countries';
+// The browser entry of the library, by its file: the package's `main` is a Node file that requires every language by a computed path,
+// which Metro cannot bundle (the page of the web app answered 500 when it is rendered on the server). The languages are registered below.
+import { getName, registerLocale } from 'i18n-iso-countries/index.js';
 import de from 'i18n-iso-countries/langs/de.json';
 import en from 'i18n-iso-countries/langs/en.json';
 import es from 'i18n-iso-countries/langs/es.json';
