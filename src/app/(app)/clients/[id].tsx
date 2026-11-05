@@ -15,6 +15,7 @@ import Card from '@/components/ui/card';
 import { colors } from '@/components/ui/colors';
 import { useConfirm } from '@/components/ui/confirm';
 import IconButton from '@/components/ui/icon-button';
+import { TwoColumns } from '@/components/ui/page';
 import { DetailHeader, DetailScroll, Screen } from '@/components/ui/screen';
 import Section from '@/components/ui/section';
 import { afterSheetsClosed } from '@/components/ui/sheet';
@@ -83,6 +84,7 @@ export default function ClientDetails() {
   return (
     <Screen
       flush
+      width="medium"
       dock={
         <Shortcut
           icon={PlusIcon}
@@ -104,7 +106,11 @@ export default function ClientDetails() {
           </>
         }
       />
-      <DetailScroll contentContainerClassName="gap-page p-page mt-4 pb-28" showsVerticalScrollIndicator={false}>
+      <DetailScroll contentContainerClassName="gap-page p-page mt-4 pb-28 md:pb-12" showsVerticalScrollIndicator={false}>
+        {/* On a desktop the rackets are in one column, and the history of the orders in the other. */}
+        <TwoColumns
+          first={
+            <>
         {/* The name is the title of the header; what is left of the profile is how to reach the client. The call is
             a button in the header. */}
         {client.email || client.notes ? (
@@ -153,7 +159,10 @@ export default function ClientDetails() {
             </View>
           )}
         </Section>
-
+            </>
+          }
+          second={
+            <>
         <Section
           title={t('section_order_history')}
           actionLabel={!allOrders && client.orders.length > HISTORY_SHOWN ? t('see_all') : undefined}
@@ -170,6 +179,9 @@ export default function ClientDetails() {
             </View>
           )}
         </Section>
+            </>
+          }
+        />
       </DetailScroll>
 
 

@@ -1,6 +1,7 @@
 import { Pressable, View } from 'react-native';
 
 import type { IconComponent } from '@/components/icons';
+import { BUTTON_RADIUS } from '@/components/ui/button-radius';
 import { colors } from '@/components/ui/colors';
 import Sheet, { afterSheetsClosed } from '@/components/ui/sheet';
 import { Text } from '@/components/ui/text';
@@ -38,7 +39,7 @@ export default function ActionSheet({ visible, onClose, title, actions }: Action
           // will not show two modals at once.
           afterSheetsClosed(action.onPress);
         }}
-        className="min-h-14 flex-row items-center gap-3 rounded-lg px-2 active:bg-surface">
+        className={`min-h-14 flex-row items-center gap-3 ${BUTTON_RADIUS.lg} px-2 hover:bg-surface active:bg-surface`}>
         {Icon ? <Icon size={22} color={color} /> : null}
         <Text className={`text-[16.8px] font-medium ${action.destructive ? 'text-danger' : 'text-ink'}`}>
           {action.label}

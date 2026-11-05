@@ -144,7 +144,7 @@ export default function TextField({
             accessibilityRole="button"
             accessibilityLabel={revealed ? t('password_hide') : t('password_show')}
             hitSlop={8}
-            className="absolute bottom-0 right-0 top-0 w-12 items-center justify-center active:opacity-60"
+            className="absolute bottom-0 right-0 top-0 w-12 items-center justify-center hover:opacity-80 active:opacity-60"
             onPress={toggleRevealed}>
             {revealed ? (
               <EyeOff size={20} color="rgba(255, 255, 255, 0.8)" />

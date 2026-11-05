@@ -3,7 +3,7 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { ScrollView, View } from 'react-native';
 
-import { Banknote, Bell, ClipboardList, Clock, Eye, Gauge, Globe, Languages, LogOut, RotateCcw, ShieldCheck, Tags } from '@/components/icons';
+import { Banknote, ClipboardList, Clock, Eye, Gauge, Globe, Languages, LogOut, RotateCcw, ShieldCheck, Tags } from '@/components/icons';
 import {
   AccountSheet,
   CountrySettingsSheet,
@@ -12,10 +12,10 @@ import {
   ProfileSheet,
   TimeZoneSettingsSheet,
 } from '@/components/settings-sheets';
-import AppSwitch from '@/components/ui/app-switch';
 import { Segmented } from '@/components/ui/chips';
 import { useConfirm } from '@/components/ui/confirm';
 import ListRow, { ListGroup } from '@/components/ui/list-row';
+import { PAGE_CONTENT, TwoColumns } from '@/components/ui/page';
 import { Screen, ScreenHeader, TAB_HEADER_DROP } from '@/components/ui/screen';
 import { Text } from '@/components/ui/text';
 import { useToast } from '@/components/ui/toast';
@@ -26,7 +26,6 @@ import { describeError } from '@/lib/errors';
 import { LANGUAGES, useI18n } from '@/lib/i18n';
 import { openLegalPage, type LegalPage } from '@/lib/legal';
 import { useSyncSummary } from '@/lib/offline/react';
-import { requestReminderPermission } from '@/lib/reminders';
 import type { TensionUnit } from '@/lib/types';
 
 type OpenSheet = 'profile' | 'currency' | 'country' | 'zone' | 'language' | 'account' | null;
@@ -50,14 +49,6 @@ export default function Settings() {
   const save =(patch: Parameters<typeof updateProfile>[0]) =>
     updateProfile(patch).catch((error) => toast.error(describeError(error, t)));
 
-  const changeReminders = async (enabled: boolean) => {
-    if (enabled && !(await requestReminderPermission())) {
-      toast.error(t('notifications_denied'));
-      return;
-    }
-    await save({ notifications_enabled: enabled });
-  };
-
   const askSignOut = async () => {
     const ok = await confirm({
       title: t('sign_out_title'),
@@ -74,18 +65,22 @@ export default function Settings() {
   };
 
   return (
-    <Screen>
+    <Screen width="medium">
       <ScreenHeader drop={TAB_HEADER_DROP} title={t('tab_settings')} />
       <ScrollView
         bounces={false}
         overScrollMode="never"
-        contentContainerClassName="gap-page px-page pb-10"
+        contentContainerClassName={`gap-page pb-10 md:pb-12 ${PAGE_CONTENT}`}
         showsVerticalScrollIndicator={false}
         // It stands still when the list fits in the page, and scrolls when it does not (a small screen): the foot of
         // it must be within reach.
         scrollEnabled={contentHeight > pageHeight + 1}
         onLayout={(event) => setPageHeight(event.nativeEvent.layout.height)}
         onContentSizeChange={(_, height) => setContentHeight(height)}>
+        {/* On a desktop the preferences are in one column, and the rest in the other. */}
+        <TwoColumns
+          first={
+            <>
         <ListGroup>
           <ListRow icon={Tags} label={t('settings_services')} onPress={() => router.push('/settings/services')} />
           <ListRow
@@ -127,21 +122,11 @@ export default function Settings() {
             value={LANGUAGES.find((item) => item.code === language)?.label}
             onPress={() => setSheet('language')}
           />
-          <ListRow
-            icon={Bell}
-            label={t('settings_notifications')}
-            trailing={
-              <AppSwitch
-                compact
-                accessibilityLabel={t('settings_notifications')}
-                value={user.notifications_enabled}
-                onValueChange={(enabled) => void changeReminders(enabled)}
-              />
-            }
-          />
         </ListGroup>
-        <Text className="-mt-3 px-1 text-[14.3px] text-muted">{t('settings_notifications_hint')}</Text>
-
+            </>
+          }
+          second={
+            <>
         <ListGroup>
           <ListRow icon={Eye} label={t('settings_privacy_policy')} onPress={() => void openLegal('privacy')} />
           <ListRow icon={ClipboardList} label={t('settings_terms')} onPress={() => void openLegal('terms')} />
@@ -155,6 +140,9 @@ export default function Settings() {
         <Text className="text-center text-[14.3px] text-muted">
           re:string {Constants.expoConfig?.version ?? ''}
         </Text>
+            </>
+          }
+        />
       </ScrollView>
 
       <ProfileSheet visible={sheet === 'profile'} onClose={() => setSheet(null)} />

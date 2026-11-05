@@ -3,6 +3,7 @@ import { Tabs } from 'expo-router';
 import AppTabBar from '@/components/app-tab-bar';
 import { colors } from '@/components/ui/colors';
 import { useI18n } from '@/lib/i18n';
+import { useIsWide } from '@/lib/layout';
 
 // How round the bottom of the page container is, where it meets the navigation.
 const PAGE_RADIUS = 18;
@@ -13,20 +14,24 @@ const PAGE_RADIUS = 18;
 // because those are in the stack above this one.
 export default function TabsLayout() {
   const { t } = useI18n();
+  // A wide screen has the sidebar (see AppShell) in place of the bar, and its pane has the rounded corners.
+  const wide = useIsWide();
 
   return (
     <Tabs
-      tabBar={(props) => <AppTabBar {...props} />}
+      tabBar={(props) => (wide ? null : <AppTabBar {...props} />)}
       screenOptions={{
         headerShown: false,
         // Switching tabs is instant: the pill in the navigation is what moves.
         animation: 'none',
-        sceneStyle: {
-          backgroundColor: colors.surface,
-          borderBottomLeftRadius: PAGE_RADIUS,
-          borderBottomRightRadius: PAGE_RADIUS,
-          overflow: 'hidden',
-        },
+        sceneStyle: wide
+          ? { backgroundColor: colors.surface }
+          : {
+              backgroundColor: colors.surface,
+              borderBottomLeftRadius: PAGE_RADIUS,
+              borderBottomRightRadius: PAGE_RADIUS,
+              overflow: 'hidden',
+            },
       }}>
       <Tabs.Screen name="home" options={{ title: t('tab_home') }} />
       <Tabs.Screen name="orders" options={{ title: t('tab_orders') }} />

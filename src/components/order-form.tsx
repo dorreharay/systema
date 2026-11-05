@@ -16,14 +16,17 @@ import UserIcon from '@/components/icons/user-icon';
 import RacketFormSheet from '@/components/racket-form-sheet';
 import { StockLine } from '@/components/stock';
 import StringFormSheet from '@/components/string-form-sheet';
+import { BUTTON_RADIUS } from '@/components/ui/button-radius';
 import { BLOCK, BLOCK_ROOM } from '@/components/ui/card';
 import { Segmented } from '@/components/ui/chips';
 import { colors } from '@/components/ui/colors';
 import { useConfirm } from '@/components/ui/confirm';
 import { DateSheet, TimeSheet } from '@/components/ui/date-sheets';
+import EnterSubmits from '@/components/ui/enter-submits';
 import { FormError, Input, NumberInput } from '@/components/ui/input';
 import { ServerPhoto } from '@/components/ui/photo';
 import PickerField from '@/components/ui/picker-field';
+import { TwoColumns } from '@/components/ui/page';
 import { DetailHeader, DetailScroll, Screen, useDetailContentTop } from '@/components/ui/screen';
 import SearchPicker, { PickerHeading } from '@/components/ui/search-picker';
 import { afterSheetsClosed } from '@/components/ui/sheet';
@@ -408,6 +411,7 @@ export default function OrderForm({ initial, order }: OrderFormProps) {
   return (
     <Screen
       flush
+      width="medium"
       // Always in reach under the page, like the buttons that add something: it goes while the keyboard is open.
       dock={
         <Shortcut
@@ -426,11 +430,22 @@ export default function OrderForm({ initial, order }: OrderFormProps) {
         title={editing ? t('order_edit_title', { number: orderNumber(order.number) }) : t('new_order_title')}
       />
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1">
+        {/* Enter in a field of one line creates the order, on the web (the dock's button is in the header there). */}
+        <EnterSubmits
+          className="flex-1"
+          onSubmit={() => {
+            if (!submitting) void submit();
+          }}>
         <DetailScroll
           ref={scroll}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
-          contentContainerClassName="gap-4 p-page pb-28">
+          contentContainerClassName="gap-4 p-page pb-28 md:pb-12">
+          {/* On a desktop the customer, the racket and the strings are in one column, the prices, the dates and the notes in the other. */}
+          <TwoColumns
+            className="gap-4"
+            first={
+              <>
           {/* Customer and racket */}
           <FormSection title={t('section_customer_racket')} onLayout={trackSection('customer')}>
             <PickerField
@@ -558,7 +573,7 @@ export default function OrderForm({ initial, order }: OrderFormProps) {
               accessibilityRole="button"
               accessibilityState={{ expanded: advancedOpen }}
               onPress={() => setAdvancedOpen((open) => !open)}
-              className="min-h-12 flex-row items-center justify-between rounded-lg bg-surface px-3.5 active:opacity-70">
+              className={`min-h-12 flex-row items-center justify-between ${BUTTON_RADIUS.lg} bg-surface px-3.5 hover:opacity-80 active:opacity-70`}>
               <Text className="text-base font-medium">{t('advanced_setup')}</Text>
               {advancedOpen ? (
                 <ChevronUp size={20} color={colors.muted} />
@@ -615,6 +630,10 @@ export default function OrderForm({ initial, order }: OrderFormProps) {
             ) : null}
           </FormSection>
 
+              </>
+            }
+            second={
+              <>
           {/* Prices */}
           <FormSection title={t('section_services_pricing')} onLayout={trackSection('pricing')}>
             <NumberInput
@@ -648,8 +667,8 @@ export default function OrderForm({ initial, order }: OrderFormProps) {
                         accessibilityRole="button"
                         accessibilityState={{ selected }}
                         onPress={() => toggleExtra(service.id, service.name, service.price)}
-                        className={`min-h-10 flex-row items-center gap-1.5 rounded-lg border px-4 ${
-                          selected ? 'border-primary bg-primary active:bg-primary' : 'border-line bg-white active:bg-surface'
+                        className={`min-h-10 flex-row items-center gap-1.5 ${BUTTON_RADIUS.lg} border px-4 ${
+                          selected ? 'border-primary bg-primary active:bg-primary' : 'border-line bg-white hover:bg-surface active:bg-surface'
                         }`}>
                         {selected ? null : <Plus size={16} color={colors.ink} />}
                         <Text className={`text-[15px] font-medium ${selected ? 'text-white' : 'text-ink'}`}>
@@ -741,10 +760,13 @@ export default function OrderForm({ initial, order }: OrderFormProps) {
               </View>
             ) : null}
           </FormSection>
+              </>
+            }
+          />
 
           {formError ? <FormError message={formError} /> : null}
         </DetailScroll>
-
+        </EnterSubmits>
       </KeyboardAvoidingView>
 
       <SearchPicker

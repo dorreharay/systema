@@ -136,7 +136,7 @@ export default function SyncScreen() {
   return (
     <Screen flush footer={<View style={{ height: Math.max(insets.bottom, 12) + 24 }} />}>
       <DetailHeader floating title={t('sync_title')} />
-      <DetailScroll contentContainerClassName="gap-page p-page pb-28" showsVerticalScrollIndicator={false}>
+      <DetailScroll contentContainerClassName="gap-page p-page pb-28 md:pb-12" showsVerticalScrollIndicator={false}>
         <Card className="gap-4">
           <View className="flex-row items-center gap-3">
             <View className="size-11 items-center justify-center rounded-full bg-surface">

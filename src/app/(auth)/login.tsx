@@ -109,7 +109,7 @@ export default function Login() {
             <Pressable
               accessibilityRole="link"
               hitSlop={8}
-              className="min-h-10 justify-center active:opacity-70">
+              className="min-h-10 justify-center hover:opacity-80 active:opacity-70">
               <Text className="text-[15.4px] font-medium text-white/80">{t('forgot_password_link')}</Text>
             </Pressable>
           </AuthLink>

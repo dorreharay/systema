@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { View } from 'react-native';
 
 import { Check, KeyRound, Trash2 } from '@/components/icons';
+import EnterSubmits from '@/components/ui/enter-submits';
 import { colors } from '@/components/ui/colors';
 import { FormError, Input } from '@/components/ui/input';
 import PickerField from '@/components/ui/picker-field';
@@ -283,7 +284,11 @@ function ProfileForm({ onClose }: { onClose: () => void }) {
 
   return (
     <>
-      <View className="gap-3 pt-2">
+      <EnterSubmits
+        className="gap-3 pt-2"
+        onSubmit={() => {
+          if (!saving) void save();
+        }}>
         <Input
           label={t('field_full_name')}
           value={name}
@@ -295,7 +300,7 @@ function ProfileForm({ onClose }: { onClose: () => void }) {
         />
         <PlaceFields zone={zone} onChange={setZone} />
         {formError ? <FormError message={formError} /> : null}
-      </View>
+      </EnterSubmits>
       <View className="pt-4">
         <Shortcut compact icon={Check} label={t('save')} color={colors.primary} contentColor={colors.white} onPress={save} loading={saving} />
       </View>
@@ -349,7 +354,11 @@ function DeleteAccountForm() {
 
   return (
     <>
-      <View className="gap-3 pt-2">
+      <EnterSubmits
+        className="gap-3 pt-2"
+        onSubmit={() => {
+          if (!deleting) void remove();
+        }}>
         <Text className="text-[16.5px] text-muted">{t('account_delete_warning')}</Text>
         {needsPassword ? (
           <Input
@@ -369,7 +378,7 @@ function DeleteAccountForm() {
           />
         ) : null}
         {formError ? <FormError message={formError} /> : null}
-      </View>
+      </EnterSubmits>
       <View className="pt-4">
         <Shortcut
           compact

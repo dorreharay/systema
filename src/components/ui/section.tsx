@@ -24,7 +24,7 @@ export default function Section({ title, actionLabel, onAction, children, classN
             accessibilityRole="button"
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 4 }}
             onPress={onAction}
-            className="active:opacity-60">
+            className="hover:opacity-80 active:opacity-60">
             <Text className="text-[15px] font-medium text-primary">{actionLabel}</Text>
           </Pressable>
         ) : null}

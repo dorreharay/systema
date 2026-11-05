@@ -4,6 +4,7 @@ import { View } from 'react-native';
 import { Check } from '@/components/icons';
 import PlusIcon from '@/components/icons/plus-icon';
 import { colors } from '@/components/ui/colors';
+import EnterSubmits from '@/components/ui/enter-submits';
 import { FormError, Input, type InputRef } from '@/components/ui/input';
 import Sheet from '@/components/ui/sheet';
 import Shortcut from '@/components/ui/shortcut';
@@ -81,7 +82,11 @@ function ClientForm({ client, search, onClose, onSaved }: Omit<ClientFormSheetPr
 
   return (
     <>
-      <View className="gap-3 pt-2">
+      <EnterSubmits
+        className="gap-3 pt-2"
+        onSubmit={() => {
+          if (!saving) void save();
+        }}>
         <Input
           label={t('field_name')}
           value={name}
@@ -136,7 +141,7 @@ function ClientForm({ client, search, onClose, onSaved }: Omit<ClientFormSheetPr
           multiline
         />
         {formError ? <FormError message={formError} /> : null}
-      </View>
+      </EnterSubmits>
       <View className="pt-4">
         <Shortcut
           compact

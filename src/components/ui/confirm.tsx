@@ -6,6 +6,7 @@ import { colors } from '@/components/ui/colors';
 import Shortcut from '@/components/ui/shortcut';
 import { Text } from '@/components/ui/text';
 import { useI18n } from '@/lib/i18n';
+import { useIsWide } from '@/lib/layout';
 
 export type ConfirmOptions = {
   title: string;
@@ -31,6 +32,7 @@ export function useConfirm() {
 // One dialog for the whole app. Alert.alert cannot be used: it does nothing on the web.
 export function ConfirmProvider({ children }: { children: ReactNode }) {
   const { t } = useI18n();
+  const wide = useIsWide();
   const [options, setOptions] = useState<ConfirmOptions | null>(null);
   const resolver = useRef<((answer: boolean) => void) | undefined>(undefined);
 
@@ -58,11 +60,17 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
             entering={FadeIn.duration(150)}
             exiting={FadeOut.duration(120)}
             className="flex-1 items-center justify-center bg-black/40 px-6">
-            <Pressable
-              accessibilityLabel={t('close')}
-              className="absolute inset-0"
-              onPress={() => answer(false)}
-            />
+            {wide ? (
+              // A click outside answers "no"; not a control, so that the focus goes to the buttons of the dialog (see Sheet).
+              // (`onClick` is the web's, and not in React Native's own types.)
+              <View className="absolute inset-0" {...({ onClick: () => answer(false) } as object)} />
+            ) : (
+              <Pressable
+                accessibilityLabel={t('close')}
+                className="absolute inset-0"
+                onPress={() => answer(false)}
+              />
+            )}
             <View
               accessibilityViewIsModal
               className="w-full max-w-sm gap-4 rounded-3xl bg-white p-5">

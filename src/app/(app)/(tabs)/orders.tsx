@@ -12,14 +12,18 @@ import {
 
 import { ClipboardList, Plus, Search, X } from '@/components/icons';
 import OrderCard from '@/components/order-card';
+import OrdersTablePage from '@/components/orders-table';
 import { colors } from '@/components/ui/colors';
-import { FIELD_INPUT_TEXT } from '@/components/ui/field-text';
+import { SEARCH_INPUT_TEXT } from '@/components/ui/field-text';
 import IconButton from '@/components/ui/icon-button';
+import { GridItem, PAGE_CONTENT } from '@/components/ui/page';
+import { PAPER_FIELD } from '@/components/ui/paper';
 import { Screen, ScreenHeader, TAB_HEADER_DROP, useDetailContentTop } from '@/components/ui/screen';
 import Shortcut from '@/components/ui/shortcut';
 import { ListSkeleton } from '@/components/ui/skeleton';
 import { EmptyState, ErrorState, NoResults } from '@/components/ui/states';
 import { useI18n } from '@/lib/i18n';
+import { GRID_GAP, useGridColumns, useIsDesktop, useIsWide } from '@/lib/layout';
 import { useOrders } from '@/lib/queries';
 import { usePullRefresh } from '@/lib/use-pull-refresh';
 
@@ -29,7 +33,8 @@ const SEARCH_SLIDE_MS = 200;
 const slideList = () =>
   LayoutAnimation.configureNext(LayoutAnimation.create(SEARCH_SLIDE_MS, 'easeInEaseOut', 'opacity'));
 
-export default function Orders() {
+// The orders as cards: on the phone in a list, on a tablet in a grid.
+function OrdersList() {
   const { t } = useI18n();
   const router = useRouter();
   const [searching, setSearching] = useState(false);
@@ -46,6 +51,10 @@ export default function Orders() {
   const contentTop = useDetailContentTop(TAB_HEADER_DROP);
 
   const pull = usePullRefresh(orders.refetch);
+  // A wide page has the search field in view all the time, and the orders in a grid.
+  const wide = useIsWide();
+  const columns = useGridColumns(380);
+  const searchShown = searching || wide;
 
   const openSearch = () => {
     slideList();
@@ -72,12 +81,12 @@ export default function Orders() {
 
   const listHeader = (
     <View className="pb-3">
-      {searching ? (
+      {searchShown ? (
         <View>
-          <View className="min-h-12 flex-row items-center gap-2 rounded-lg border border-line bg-white mt-6 px-3.5">
+          <View className={`min-h-12 flex-row items-center gap-2 rounded-lg border border-line bg-white px-3.5 md:min-h-11 ${PAPER_FIELD} ${wide ? '' : 'mt-6'}`}>
             <Search size={18} color={colors.muted} />
             <TextInput
-              autoFocus
+              autoFocus={!wide}
               value={text}
               onChangeText={setText}
               placeholder={t('orders_search_placeholder')}
@@ -88,7 +97,7 @@ export default function Orders() {
               returnKeyType="search"
               accessibilityLabel={t('search')}
               textAlignVertical="center"
-              className={`min-w-0 flex-1 font-normal text-ink outline-none ${FIELD_INPUT_TEXT}`}
+              className={`min-w-0 flex-1 font-normal text-ink outline-none ${SEARCH_INPUT_TEXT}`}
             />
           </View>
         </View>
@@ -99,6 +108,9 @@ export default function Orders() {
   return (
     <Screen
       flush
+      width="wide"
+      // The sidebar has the button of the new order: there is none here on a wide page.
+      wideDock={false}
       dock={
         <View className="flex-row w-full gap-1">
           <Shortcut
@@ -117,20 +129,26 @@ export default function Orders() {
         drop={TAB_HEADER_DROP}
         title={t('tab_orders')}
         right={
-          <IconButton
-            icon={searching ? X : Search}
-            label={searching ? t('close_search') : t('search')}
-            onPress={searching ? closeSearch : openSearch}
-          />
+          wide ? null : (
+            <IconButton
+              icon={searching ? X : Search}
+              label={searching ? t('close_search') : t('search')}
+              onPress={searching ? closeSearch : openSearch}
+            />
+          )
         }
       />
 
       <FlatList bounces={false} overScrollMode="never"
+        // The number of columns cannot change under a list: another count is another list.
+        key={`columns-${columns}`}
+        numColumns={columns}
+        columnWrapperStyle={columns > 1 ? { gap: GRID_GAP } : undefined}
         {...underHeader}
         ListHeaderComponent={listHeader}
         data={items}
         keyExtractor={(order) => order.id}
-        contentContainerClassName="gap-3 px-page pb-28"
+        contentContainerClassName={`gap-3 pb-28 md:pb-12 ${PAGE_CONTENT}`}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         refreshControl={
@@ -143,7 +161,11 @@ export default function Orders() {
         onEndReached={() => {
           if (orders.hasNextPage && !orders.isFetchingNextPage) orders.fetchNextPage();
         }}
-        renderItem={({ item }) => <OrderCard order={item} />}
+        renderItem={({ item, index }) => (
+          <GridItem columns={columns} index={index} count={items.length}>
+            <OrderCard order={item} fill={columns > 1} />
+          </GridItem>
+        )}
         ListEmptyComponent={
           orders.isLoading ? (
             <ListSkeleton />
@@ -167,4 +189,10 @@ export default function Orders() {
       />
     </Screen>
   );
+}
+
+export default function Orders() {
+  // A desktop has the orders as a table (docs/desktop-layout.md); a tablet and the phone, as cards.
+  const desktop = useIsDesktop();
+  return desktop ? <OrdersTablePage /> : <OrdersList />;
 }

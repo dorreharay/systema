@@ -3,7 +3,7 @@ import { ActivityIndicator, FlatList, Pressable, TextInput, View, type FlatListI
 
 import { Plus, Search, X } from '@/components/icons';
 import { colors } from '@/components/ui/colors';
-import { FIELD_INPUT_TEXT } from '@/components/ui/field-text';
+import { SEARCH_INPUT_TEXT } from '@/components/ui/field-text';
 import Sheet, { useSheetFoot } from '@/components/ui/sheet';
 import { ErrorState, NoResults } from '@/components/ui/states';
 import { Text } from '@/components/ui/text';
@@ -101,7 +101,7 @@ function PickerBody<T>({
   return (
     <View className="flex-1">
       <View className="px-page pb-3 pt-1">
-        <View className="min-h-12 flex-row items-center gap-2 rounded-lg border border-line bg-surface px-3.5">
+        <View className="min-h-12 flex-row items-center gap-2 rounded-lg border border-line bg-surface px-3.5 md:min-h-11">
           <Search size={18} color={colors.muted} />
           <TextInput
             autoFocus
@@ -115,7 +115,7 @@ function PickerBody<T>({
             returnKeyType="search"
             accessibilityLabel={placeholder}
             textAlignVertical="center"
-            className={`min-w-0 flex-1 font-normal text-ink outline-none ${FIELD_INPUT_TEXT}`}
+            className={`min-w-0 flex-1 font-normal text-ink outline-none ${SEARCH_INPUT_TEXT}`}
           />
           {query ? (
             <Pressable
@@ -133,7 +133,7 @@ function PickerBody<T>({
         <Pressable
           accessibilityRole="button"
           onPress={() => onCreate(trimmed)}
-          className="min-h-14 flex-row items-center gap-3 border-t border-line px-page py-3 active:bg-surface">
+          className="min-h-14 flex-row items-center gap-3 border-t border-line px-page py-3 hover:bg-surface active:bg-surface">
           <View className="size-9 items-center justify-center rounded-full bg-primary-soft">
             <Plus size={18} color={colors.primary} />
           </View>
@@ -187,7 +187,7 @@ function PickerBody<T>({
                 accessibilityState={{ disabled }}
                 disabled={disabled}
                 onPress={() => onSelect(item)}
-                className={`min-h-14 justify-center border-t border-line px-page py-3 active:bg-surface ${
+                className={`min-h-14 justify-center border-t border-line px-page py-3 hover:bg-surface active:bg-surface ${
                   selectedKey === keyOf(item) ? 'bg-primary-soft' : ''
                 } ${disabled ? 'opacity-50' : ''}`}>
                 {renderItem(item)}

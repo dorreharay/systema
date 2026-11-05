@@ -29,6 +29,7 @@ import { colors, statusColors } from '@/components/ui/colors';
 import { useConfirm } from '@/components/ui/confirm';
 import IconButton from '@/components/ui/icon-button';
 import { PhotoViewer, ServerPhoto } from '@/components/ui/photo';
+import { TwoColumns } from '@/components/ui/page';
 import Section from '@/components/ui/section';
 import { DetailHeader, DetailScroll, Screen } from '@/components/ui/screen';
 import Shortcut from '@/components/ui/shortcut';
@@ -49,6 +50,7 @@ import {
   racketName,
 } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
+import { useIsDesktop, useIsWide } from '@/lib/layout';
 import { useMark } from '@/lib/offline/react';
 import { describeStrings, orderAsText, readyMessage } from '@/lib/order-text';
 import { useDeleteOrder, useOrder, useUpdateOrder } from '@/lib/queries';
@@ -91,6 +93,8 @@ export default function OrderDetails() {
   const update = useUpdateOrder();
   const remove = useDeleteOrder();
   const { today, dueText } = useDueText();
+  const desktop = useIsDesktop();
+  const wide = useIsWide();
 
   const [menu, setMenu] = useState(false);
   const [contact, setContact] = useState(false);
@@ -182,9 +186,132 @@ export default function OrderDetails() {
     ...order.services.map((line) => ({ name: line.name, price: line.price })),
   ].filter((line) => line.price !== null);
 
+  // The blocks below the status, as they are on the phone one after the other; a desktop sets them in two columns (see TwoColumns).
+  const racketBlock = (
+    <Section title={t('section_racket_setup')}>
+      <Card className="gap-1.5">
+        <Row label={t('field_racket')}>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push({ pathname: '/rackets/[id]', params: { id: order.racket.id } })}
+            className="hover:opacity-80 active:opacity-60">
+            <Text className="text-right text-[16.5px] font-medium">{racketName(order.racket)}</Text>
+          </Pressable>
+        </Row>
+        <Row label={order.hybrid ? t('field_main_strings') : t('field_strings')}>
+          {order.hybrid ? (order.main_string_name ?? '—') : strungWith}
+        </Row>
+        {order.hybrid ? <Row label={t('field_cross_strings')}>{order.cross_string_name ?? '—'}</Row> : null}
+        <Row label={order.hybrid || order.cross_tension !== null ? t('field_main_tension') : t('field_tension')}>
+          {formatTension(order.main_tension, unit)}
+        </Row>
+        {order.cross_tension !== null && order.cross_tension !== order.main_tension ? (
+          <Row label={t('field_cross_tension')}>{formatTension(order.cross_tension, unit)}</Row>
+        ) : null}
+        {order.knots ? <Row label={t('field_knots')}>{String(order.knots)}</Row> : null}
+        {order.stringing_notes ? (
+          <View className="gap-0.5 pt-1.5">
+            <Text className="text-[14.3px] text-muted">{t('order_stringing_notes')}</Text>
+            <Text className="text-[16.5px]">{order.stringing_notes}</Text>
+          </View>
+        ) : null}
+      </Card>
+    </Section>
+  );
+
+  const datesBlock = (
+    <Section title={t('section_dates')}>
+      <Card className="gap-1.5">
+        <Row label={t('order_received_date')}>
+          {formatTimestamp(`${order.received_date}T12:00:00`, language, 'UTC')}
+        </Row>
+        <Row label={t('order_due_date')}>
+          <Text className={`text-right text-[16.5px] font-medium ${overdue ? 'text-danger' : ''}`}>
+            {order.due_date
+              ? `${dueText(order.due_date)}${order.due_time ? `, ${order.due_time}` : ''}`
+              : t('order_no_due_date')}
+          </Text>
+        </Row>
+        {order.ready_at ? (
+          <Row label={t('status_ready')}>{formatTimestamp(order.ready_at, language, timeZone)}</Row>
+        ) : null}
+        {order.completed_at ? (
+          <Row label={t('status_completed')}>{formatTimestamp(order.completed_at, language, timeZone)}</Row>
+        ) : null}
+      </Card>
+    </Section>
+  );
+
+  const notesBlock =
+    order.notes || order.photos.length > 0 ? (
+      <Section title={t('section_notes_photos')}>
+        <Card className="gap-3">
+          {order.notes ? <Text className="text-[16.5px]">{order.notes}</Text> : null}
+          {order.photos.length > 0 ? (
+            <View className="flex-row flex-wrap gap-2">
+              {order.photos.map((photo) => (
+                <ServerPhoto
+                  key={photo.id}
+                  id={photo.id}
+                  className="w-[31%]"
+                  onPress={() => setViewing(photo.id)}
+                />
+              ))}
+            </View>
+          ) : null}
+        </Card>
+      </Section>
+    ) : null;
+
+  const paymentBlock = (
+    <Section title={t('section_payment')}>
+      <Card className="gap-3">
+        {lines.map((line) => (
+          <Row key={line.name} label={line.name}>
+            {money(line.price)}
+          </Row>
+        ))}
+        <View className="flex-row items-center justify-between border-t border-line pt-3">
+          <Text className="text-base font-medium text-muted">{t('order_total')}</Text>
+          <Text className="text-[26.4px] font-semibold text-primary">{money(order.total)}</Text>
+        </View>
+        <View className="flex-row items-center justify-between">
+          <Text className="text-[16.5px] text-muted">{t('payment_status')}</Text>
+          <Badge
+            label={order.is_paid ? t('payment_paid') : t('payment_unpaid')}
+            tone={order.is_paid ? 'info' : 'warning'}
+          />
+        </View>
+        {order.is_paid ? (
+          <Shortcut
+            compact
+            icon={Undo2}
+            label={t('mark_unpaid')}
+            color={colors.surface}
+            contentColor={colors.ink}
+            onPress={() => setPaid(false)}
+            disabled={update.isPending}
+          />
+        ) : (
+          <Shortcut
+            compact
+            icon={Check}
+            label={t('mark_paid')}
+            color={colors.surface}
+            contentColor={colors.ink}
+            onPress={() => setPaid(true)}
+            loading={update.isPending && update.variables?.is_paid === true}
+          />
+        )}
+      </Card>
+    </Section>
+  );
+
+
   return (
     <Screen
       flush
+      width="medium"
       dock={
         next ? (
           // Two arrows to the right: the order moves on to the next status.
@@ -205,14 +332,18 @@ export default function OrderDetails() {
         title={t('order_title', { number: orderNumber(order.number) })}
         right={
           // A large button (a touch target twice as big, an icon 1.6 times as big), pulled out towards the edge of the screen
-          // so that the dots stay about where they were.
-          <View className="-mr-6">
-            <IconButton large icon={MoreHorizontal} label={t('more_actions')} onPress={() => setMenu(true)} />
-          </View>
+          // so that the dots stay about where they were. (On a wide page it is an ordinary one: nothing is touched there.)
+          wide ? (
+            <IconButton icon={MoreHorizontal} label={t('more_actions')} onPress={() => setMenu(true)} />
+          ) : (
+            <View className="-mr-6">
+              <IconButton large icon={MoreHorizontal} label={t('more_actions')} onPress={() => setMenu(true)} />
+            </View>
+          )
         }
       />
       <DetailScroll
-        contentContainerClassName="gap-4 p-page pb-28"
+        contentContainerClassName="gap-4 p-page pb-28 md:pb-12"
         showsVerticalScrollIndicator={false}>
         {/* Where the order stands and whom it is for: one block. */}
         <Card className="gap-4">
@@ -235,7 +366,7 @@ export default function OrderDetails() {
               <Pressable
                 accessibilityRole="button"
                 onPress={() => router.push({ pathname: '/clients/[id]', params: { id: order.client.id } })}
-                className="flex-1 flex-row items-center gap-3 active:opacity-60">
+                className="flex-1 flex-row items-center gap-3 hover:opacity-80 active:opacity-60">
                 <View className="size-11 items-center justify-center rounded-full bg-primary-soft">
                   <UserIcon size={22} color={colors.primary} />
                 </View>
@@ -268,118 +399,29 @@ export default function OrderDetails() {
           </View>
         </Card>
 
-        <Section title={t('section_racket_setup')}>
-          <Card className="gap-1.5">
-            <Row label={t('field_racket')}>
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => router.push({ pathname: '/rackets/[id]', params: { id: order.racket.id } })}
-                className="active:opacity-60">
-                <Text className="text-right text-[16.5px] font-medium">{racketName(order.racket)}</Text>
-              </Pressable>
-            </Row>
-            <Row label={order.hybrid ? t('field_main_strings') : t('field_strings')}>
-              {order.hybrid ? (order.main_string_name ?? '—') : strungWith}
-            </Row>
-            {order.hybrid ? <Row label={t('field_cross_strings')}>{order.cross_string_name ?? '—'}</Row> : null}
-            <Row label={order.hybrid || order.cross_tension !== null ? t('field_main_tension') : t('field_tension')}>
-              {formatTension(order.main_tension, unit)}
-            </Row>
-            {order.cross_tension !== null && order.cross_tension !== order.main_tension ? (
-              <Row label={t('field_cross_tension')}>{formatTension(order.cross_tension, unit)}</Row>
-            ) : null}
-            {order.knots ? <Row label={t('field_knots')}>{String(order.knots)}</Row> : null}
-            {order.stringing_notes ? (
-              <View className="gap-0.5 pt-1.5">
-                <Text className="text-[14.3px] text-muted">{t('order_stringing_notes')}</Text>
-                <Text className="text-[16.5px]">{order.stringing_notes}</Text>
-              </View>
-            ) : null}
-          </Card>
-        </Section>
-
-        <Section title={t('section_dates')}>
-          <Card className="gap-1.5">
-            <Row label={t('order_received_date')}>
-              {formatTimestamp(`${order.received_date}T12:00:00`, language, 'UTC')}
-            </Row>
-            <Row label={t('order_due_date')}>
-              <Text className={`text-right text-[16.5px] font-medium ${overdue ? 'text-danger' : ''}`}>
-                {order.due_date
-                  ? `${dueText(order.due_date)}${order.due_time ? `, ${order.due_time}` : ''}`
-                  : t('order_no_due_date')}
-              </Text>
-            </Row>
-            {order.ready_at ? (
-              <Row label={t('status_ready')}>{formatTimestamp(order.ready_at, language, timeZone)}</Row>
-            ) : null}
-            {order.completed_at ? (
-              <Row label={t('status_completed')}>{formatTimestamp(order.completed_at, language, timeZone)}</Row>
-            ) : null}
-          </Card>
-        </Section>
-
-        {order.notes || order.photos.length > 0 ? (
-          <Section title={t('section_notes_photos')}>
-            <Card className="gap-3">
-              {order.notes ? <Text className="text-[16.5px]">{order.notes}</Text> : null}
-              {order.photos.length > 0 ? (
-                <View className="flex-row flex-wrap gap-2">
-                  {order.photos.map((photo) => (
-                    <ServerPhoto
-                      key={photo.id}
-                      id={photo.id}
-                      className="w-[31%]"
-                      onPress={() => setViewing(photo.id)}
-                    />
-                  ))}
-                </View>
-              ) : null}
-            </Card>
-          </Section>
-        ) : null}
-
-        <Section title={t('section_payment')}>
-          <Card className="gap-3">
-            {lines.map((line) => (
-              <Row key={line.name} label={line.name}>
-                {money(line.price)}
-              </Row>
-            ))}
-            <View className="flex-row items-center justify-between border-t border-line pt-3">
-              <Text className="text-base font-medium text-muted">{t('order_total')}</Text>
-              <Text className="text-[26.4px] font-semibold text-primary">{money(order.total)}</Text>
-            </View>
-            <View className="flex-row items-center justify-between">
-              <Text className="text-[16.5px] text-muted">{t('payment_status')}</Text>
-              <Badge
-                label={order.is_paid ? t('payment_paid') : t('payment_unpaid')}
-                tone={order.is_paid ? 'info' : 'warning'}
-              />
-            </View>
-            {order.is_paid ? (
-              <Shortcut
-                compact
-                icon={Undo2}
-                label={t('mark_unpaid')}
-                color={colors.surface}
-                contentColor={colors.ink}
-                onPress={() => setPaid(false)}
-                disabled={update.isPending}
-              />
-            ) : (
-              <Shortcut
-                compact
-                icon={Check}
-                label={t('mark_paid')}
-                color={colors.surface}
-                contentColor={colors.ink}
-                onPress={() => setPaid(true)}
-                loading={update.isPending && update.variables?.is_paid === true}
-              />
-            )}
-          </Card>
-        </Section>
+        {desktop ? (
+          <TwoColumns
+            first={
+              <>
+                {racketBlock}
+                {notesBlock}
+              </>
+            }
+            second={
+              <>
+                {datesBlock}
+                {paymentBlock}
+              </>
+            }
+          />
+        ) : (
+          <>
+            {racketBlock}
+            {datesBlock}
+            {notesBlock}
+            {paymentBlock}
+          </>
+        )}
       </DetailScroll>
 
 

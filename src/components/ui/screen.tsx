@@ -8,9 +8,20 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LOGO_FOOT } from '@/components/app-header';
 import { ArrowLeft } from '@/components/icons';
 import SyncPill from '@/components/sync-pill';
+import { BUTTON_RADIUS } from '@/components/ui/button-radius';
 import { colors } from '@/components/ui/colors';
+import {
+  DockProvider,
+  InPageActions,
+  PAGE_COLUMN,
+  PAGE_SIDES,
+  PAGE_WIDTH_CLASS,
+  useDock,
+  type PageWidth,
+} from '@/components/ui/page';
 import { Text } from '@/components/ui/text';
 import { useI18n } from '@/lib/i18n';
+import { useIsWide } from '@/lib/layout';
 import { useKeyboardTakesRoom } from '@/lib/use-keyboard';
 
 const BackBlur = styled(BlurView);
@@ -38,6 +49,11 @@ type ScreenProps = {
   // The page starts at the very top of the screen, under the notch and the app header: it has a header of its own
   // (a floating `DetailHeader`) that reaches the top, and its content goes up under it.
   flush?: boolean;
+  // On a wide page (tablet and desktop, the web) how wide its column is.
+  width?: PageWidth;
+  // On a wide page the `dock` is not at the foot of the page but in its header, as a button the size of the header's. A page whose
+  // dock is not a button (the home page has three) says what goes there instead, or `false` for nothing.
+  wideDock?: ReactNode | false;
 };
 
 /**
@@ -46,11 +62,22 @@ type ScreenProps = {
  * page is rounded by the tabs layout (it stands over the navigation); with a `dock` the page is rounded
  * at the bottom here, as the dock sits under it, on the dark ground of the navigation.
  */
-export function Screen({ children, dock, footer, logo, flush }: ScreenProps) {
+export function Screen({ children, dock, footer, logo, flush, width = 'narrow', wideDock }: ScreenProps) {
   const insets = useSafeAreaInsets();
   // With the keyboard up, the dock and what is under it step aside: on Android they would ride on top of it.
   const keyboardOpen = useKeyboardTakesRoom();
+  const wide = useIsWide();
   const paddingTop = flush ? 0 : insets.top + (logo ? LOGO_ROOM : HEADER_TOP_GAP);
+
+  // A wide page stands in the pane of the shell (see AppShell): there is no notch, no logo and no navigation under it, and the dock
+  // is in the header (`WideHeader`), so only the column is left to make.
+  if (wide) {
+    return (
+      <View className={`flex-1 bg-surface ${PAGE_WIDTH_CLASS[width]}`}>
+        <DockProvider dock={wideDock === undefined ? dock : wideDock}>{children}</DockProvider>
+      </View>
+    );
+  }
 
   if (!dock) {
     return (
@@ -79,6 +106,46 @@ export function Screen({ children, dock, footer, logo, flush }: ScreenProps) {
 // The title of a page: in the header of a tab and in the header of a page that was gone into, the same size.
 const PAGE_TITLE = 'text-[28px] font-semibold';
 
+/**
+ * The header of a wide page (tablet and desktop): in the column of the page, in the flow of it, with the title, the actions of the
+ * page, and the page's main action (what is a large button on the foot of the phone's page) as a button of the header's size at the
+ * end. The back button of a page that was gone into is `lead`. (The sync of the phone and the server is in the sidebar, not here.)
+ */
+function WideHeader({
+  lead,
+  title,
+  subtitle,
+  right,
+}: {
+  lead?: ReactNode;
+  title: string;
+  subtitle?: string;
+  right?: ReactNode;
+}) {
+  const dock = useDock();
+
+  return (
+    <View className={`w-full max-w-[var(--page-max)] flex-row items-center gap-4 self-center pb-6 pt-12 ${PAGE_SIDES}`}>
+      {lead}
+      <View className="min-w-0 flex-1">
+        <Text accessibilityRole="header" className={PAGE_TITLE} numberOfLines={1}>
+          {title}
+        </Text>
+        {subtitle ? (
+          <Text className="text-[14px] text-muted" numberOfLines={1}>
+            {subtitle}
+          </Text>
+        ) : null}
+      </View>
+      {/* (The sync is in the sidebar, which every wide page has: no mark of it here.) */}
+      <View className="flex-row items-center gap-2">
+        {right}
+        {dock ? <InPageActions>{dock}</InPageActions> : null}
+      </View>
+    </View>
+  );
+}
+
 type ScreenHeaderProps = {
   title: string;
   subtitle?: string;
@@ -92,6 +159,12 @@ type ScreenHeaderProps = {
 
 // The title of a main tab, with its actions on the right: the row of a `DetailHeader` without the back button.
 export function ScreenHeader({ title, subtitle, right, floating, drop }: ScreenHeaderProps) {
+  const wide = useIsWide();
+
+  if (wide) {
+    return <WideHeader title={title} subtitle={subtitle} right={right} />;
+  }
+
   const content = (
     <>
       <View className="flex-1">
@@ -154,6 +227,9 @@ const DETAIL_CONTENT_GAP = 0;
 /** How tall a floating `DetailHeader` is, from the top of the screen; the bar reaches the top of the screen. */
 export function useDetailHeaderHeight(drop = 0) {
   const insets = useSafeAreaInsets();
+  const wide = useIsWide();
+  // The header of a wide page is a row in the flow of the page: nothing floats over the list, so it has no room to leave.
+  if (wide) return 0;
   return insets.top + HEADER_TOP_GAP + drop + HEADER_ROW_HEIGHT;
 }
 
@@ -161,13 +237,20 @@ export function useDetailHeaderHeight(drop = 0) {
  * The scroll view of a page with a floating `DetailHeader`: it fills the page to the very top, and its content
  * starts under the header, so that when it is scrolled it goes up behind the header.
  */
-export function DetailScroll({ contentContainerStyle, ...props }: ScrollViewProps & { ref?: Ref<ScrollViewInstance> }) {
+export function DetailScroll({
+  contentContainerStyle,
+  contentContainerClassName = '',
+  ...props
+}: ScrollViewProps & { ref?: Ref<ScrollViewInstance> }) {
   const top = useDetailHeaderHeight();
   return (
     <ScrollView
       bounces={false}
       overScrollMode="never"
       {...props}
+      // On a wide page the content stands in the column of the page, in the middle of the scroll view, so that the scroll bar is at
+      // the edge of the window and not of the column.
+      contentContainerClassName={`${contentContainerClassName} ${PAGE_COLUMN} ${PAGE_SIDES}`}
       contentContainerStyle={[{ paddingTop: top + DETAIL_CONTENT_GAP }, contentContainerStyle]}
     />
   );
@@ -186,13 +269,17 @@ type DetailHeaderProps = {
   // Stays at the top of the page while it is scrolled, on a blurred ground, reaching the very top of the screen. The
   // page then uses `flush`, and its scroll view is a `DetailScroll`. Without it the header is a row at the top.
   floating?: boolean;
+  // A page that the sidebar of a wide screen leads to (the clients, the stock): there it is a place of its own, not a page that was
+  // gone into, so it has no back button. On the phone it has one, as it always had.
+  topLevel?: boolean;
 };
 
 // The bar of a page you went into: a round button to go back, a large title, and actions. The button is
 // frosted: a blur with a grey tint over it, so that it shows on the page without being a block of colour.
-export function DetailHeader({ title, right, onBack, floating }: DetailHeaderProps) {
+export function DetailHeader({ title, right, onBack, floating, topLevel }: DetailHeaderProps) {
   const { t } = useI18n();
   const router = useRouter();
+  const wide = useIsWide();
 
   const goBack = () => {
     if (onBack) {
@@ -204,6 +291,26 @@ export function DetailHeader({ title, right, onBack, floating }: DetailHeaderPro
     }
   };
 
+  if (wide) {
+    return (
+      <WideHeader
+        title={title}
+        right={right}
+        lead={
+          topLevel ? undefined : (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t('back')}
+              onPress={goBack}
+              className={`size-11 items-center justify-center ${BUTTON_RADIUS.full44} bg-white hover:bg-neutral-100 active:opacity-60`}>
+              <ArrowLeft size={22} color={colors.ink} />
+            </Pressable>
+          )
+        }
+      />
+    );
+  }
+
   const content = (
     <>
       <Pressable
@@ -211,7 +318,7 @@ export function DetailHeader({ title, right, onBack, floating }: DetailHeaderPro
         accessibilityLabel={t('back')}
         hitSlop={8}
         onPress={goBack}
-        className="size-11 items-center justify-center overflow-hidden rounded-full active:opacity-60">
+        className="size-11 items-center justify-center overflow-hidden rounded-full hover:opacity-80 active:opacity-60">
         <BackBlur intensity={40} tint="light" className="absolute inset-0" />
         <View className="absolute inset-0 bg-[rgba(60,60,67,0.12)]" />
         <ArrowLeft size={22} color={colors.ink} />

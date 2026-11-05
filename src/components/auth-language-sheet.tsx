@@ -1,6 +1,7 @@
 import { Pressable, View } from 'react-native';
 
 import { Check } from '@/components/icons';
+import { BUTTON_RADIUS } from '@/components/ui/button-radius';
 import { colors } from '@/components/ui/colors';
 import Sheet from '@/components/ui/sheet';
 import { Text } from '@/components/ui/text';
@@ -30,7 +31,7 @@ export default function AuthLanguageSheet({ visible, onClose }: AuthLanguageShee
                 setLanguage(item.code);
                 onClose();
               }}
-              className={`min-h-14 flex-row items-center justify-between rounded-xl px-4 active:bg-white/15 ${
+              className={`min-h-14 flex-row items-center justify-between ${BUTTON_RADIUS.xl} px-4 hover:bg-white/10 active:bg-white/15 ${
                 selected ? 'bg-white/10' : ''
               }`}>
               <Text className="text-[17px] font-medium text-white">{item.label}</Text>

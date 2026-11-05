@@ -23,10 +23,12 @@ import {
 import { BarChart, type ChartBar } from '@/components/ui/bar-chart';
 import { BLOCK_ROOM } from '@/components/ui/card';
 import { colors } from '@/components/ui/colors';
+import { PAPER_CARD } from '@/components/ui/paper';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ErrorState } from '@/components/ui/states';
 import { Text } from '@/components/ui/text';
 import { useAuth } from '@/lib/auth';
+import { useGridColumns, useIsWide } from '@/lib/layout';
 import { MONTHS_LONG, WEEKDAYS_SHORT, formatMoment, formatMoneyWhole, parseIso, weekdayOf } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import { useInsights, useOnline } from '@/lib/queries';
@@ -362,7 +364,7 @@ function ClientList({ title, empty, items, rows, owed }: ClientListProps) {
             key={item.client.id}
             accessibilityRole="button"
             onPress={() => router.push({ pathname: '/clients/[id]', params: { id: item.client.id } })}
-            className="active:opacity-60">
+            className="hover:opacity-80 active:opacity-60">
             <Text className="text-[15.4px] font-medium" numberOfLines={1} maxFontSizeMultiplier={LIST_TEXT_SCALE}>
               {item.client.name}
             </Text>
@@ -430,10 +432,10 @@ const INSIGHTS_LIVE_MS = 10 * 60_000;
 // The heights, as a share of the chart, of the bars that stand in for it while it loads.
 const SKELETON_BARS = [38, 62, 48, 80, 30, 100, 56, 72, 42, 90, 60, 46];
 
-function InsightsSkeleton() {
+function InsightsSkeleton({ className = `flex-1 ${BLOCK_ROOM}` }: { className?: string }) {
   const { t } = useI18n();
   return (
-    <View className={`flex-1 gap-3 ${BLOCK_ROOM}`} accessibilityLabel={t('loading')}>
+    <View className={`gap-3 ${className}`} accessibilityLabel={t('loading')}>
       <Skeleton className="h-5 w-36" />
       <Skeleton className="h-8 w-32" />
       <Skeleton className="h-4 w-44" />
@@ -446,9 +448,38 @@ function InsightsSkeleton() {
   );
 }
 
+// A card of the grid of a wide page: as tall as the charts need, with the room of a card.
+const GRID_CARD = `h-[340px] min-w-0 rounded-[18px] bg-white p-6 ${PAPER_CARD}`;
+
+// How wide a card of the grid is at least, for the three to stand side by side: the figures and the lists need about this much.
+const GRID_CARD_MIN = 300;
+
+/** Whether the three cards fit side by side in the page (on a wide page); if not, one is under the other. */
+function useInRow() {
+  return useGridColumns(GRID_CARD_MIN, 3) >= 3;
+}
+
+/**
+ * The same cards on a wide page: no swiping, all three in view, side by side where they fit and one under the other where they do not
+ * (a tablet, a small desktop window). A card is as tall as the chart in it needs: the charts fill the height they are given.
+ */
+function Grid({ slides }: { slides: Slide[] }) {
+  const row = useInRow();
+
+  return (
+    <View className={`gap-4 ${row ? 'flex-row' : ''}`}>
+      {slides.map((slide) => (
+        <View key={slide.key} className={`${GRID_CARD} ${row ? 'flex-1' : ''}`}>
+          {slide.content}
+        </View>
+      ))}
+    </View>
+  );
+}
+
 /**
  * What the home screen shows above its numbers, in cards you swipe through, one for each: how the month is going, how
- * busy the next week is, and who owes and who pays. The three come from one request.
+ * busy the next week is, and who owes and who pays. The three come from one request. On a wide page they are side by side.
  */
 export default function HomeInsights() {
   const { user } = useAuth();
@@ -459,39 +490,47 @@ export default function HomeInsights() {
   // The charts are the server's: they are as it last drew them, which is not "now" without a connection, or after a while.
   const now = useNow();
   const notLive = !!insights.at && (!online || now - Date.parse(insights.at) > INSIGHTS_LIVE_MS);
+  const wide = useIsWide();
+  const row = useInRow();
+  // The three cards, for the pager of the phone or the grid of a wide page.
+  const slides = (loaded: Insights): Slide[] => [
+    {
+      key: 'month',
+      title: t('insights_month'),
+      content: <MonthSlide data={loaded.revenue} today={loaded.today} />,
+    },
+    {
+      key: 'week',
+      title: t('insights_week'),
+      content: <WeekSlide data={loaded.workload} today={loaded.today} />,
+    },
+    {
+      key: 'debts',
+      title: t('insights_debts'),
+      content: <DebtsSlide data={loaded.receivables} />,
+    },
+  ];
 
   return (
-    <View className="min-h-[280px] flex-1">
+    <View className={wide ? '' : 'min-h-[280px] flex-1'}>
       {data ? (
         <>
-        <Pager
-          slides={[
-            {
-              key: 'month',
-              title: t('insights_month'),
-              content: <MonthSlide data={data.revenue} today={data.today} />,
-            },
-            {
-              key: 'week',
-              title: t('insights_week'),
-              content: <WeekSlide data={data.workload} today={data.today} />,
-            },
-            {
-              key: 'debts',
-              title: t('insights_debts'),
-              content: <DebtsSlide data={data.receivables} />,
-            },
-          ]}
-        />
+        {wide ? <Grid slides={slides(data)} /> : <Pager slides={slides(data)} />}
         {notLive && insights.at ? (
-          <Text className="px-7 pb-2 text-[13.2px] text-muted">
+          <Text className={wide ? 'pt-3 text-[13.2px] text-muted' : 'px-7 pb-2 text-[13.2px] text-muted'}>
             {t('insights_not_live', { time: formatMoment(insights.at, language, user?.timezone) })}
           </Text>
         ) : null}
         </>
       ) : insights.isError ? (
-        <View className="flex-1 justify-center">
+        <View className={wide ? '' : 'flex-1 justify-center'}>
           <ErrorState error={insights.error} onRetry={() => insights.refetch()} />
+        </View>
+      ) : wide ? (
+        <View className={`gap-4 ${row ? 'flex-row' : ''}`}>
+          {[0, 1, 2].slice(0, row ? 3 : 1).map((index) => (
+            <InsightsSkeleton key={index} className={`${GRID_CARD} ${row ? 'flex-1' : ''}`} />
+          ))}
         </View>
       ) : (
         <InsightsSkeleton />

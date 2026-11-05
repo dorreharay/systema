@@ -8,13 +8,16 @@ import PlusIcon from '@/components/icons/plus-icon';
 import SyncPill from '@/components/sync-pill';
 import UserIcon from '@/components/icons/user-icon';
 import { colors } from '@/components/ui/colors';
-import { Screen } from '@/components/ui/screen';
+import { PAGE_CONTENT } from '@/components/ui/page';
+import { PAPER_CARD } from '@/components/ui/paper';
+import { Screen, ScreenHeader } from '@/components/ui/screen';
 import Shortcut from '@/components/ui/shortcut';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ErrorState } from '@/components/ui/states';
 import { Text } from '@/components/ui/text';
 import { useAuth } from '@/lib/auth';
 import { useI18n, type TKey } from '@/lib/i18n';
+import { useIsWide } from '@/lib/layout';
 import { useDashboard } from '@/lib/queries';
 
 /** The hour where the stringer is, so the greeting matches their morning and not the server's. */
@@ -37,17 +40,22 @@ function greetingKey(hour: number): TKey {
   return 'greeting_evening';
 }
 
-type StatProps = { value: number | undefined; failed: boolean; label: string; onPress?: () => void };
+type StatProps = {
+  value: number | undefined;
+  failed: boolean;
+  label: string;
+  onPress?: () => void;
+  // The room of the number, where it is not the one of a third of the row (on a wide page it is a card of its own).
+  className?: string;
+  // Not a button: a number to read (on a wide page, where the pointer would say that it can be pressed).
+  inert?: boolean;
+};
 
 // One third of the row of numbers: each of them presses on its own. The number and its name are in the middle of the
 // third, so that the dividers are the same distance from what stands on both sides of them.
-function Stat({ value, failed, label, onPress }: StatProps) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={`${label}: ${value ?? ''}`}
-      onPress={onPress}
-      className="flex-1 items-center gap-1 px-3 py-3">
+function Stat({ value, failed, label, onPress, className = 'flex-1 px-3 py-3', inert }: StatProps) {
+  const content = (
+    <>
       {value === undefined && !failed ? (
         <Skeleton className="my-1 h-7 w-10" />
       ) : (
@@ -56,6 +64,23 @@ function Stat({ value, failed, label, onPress }: StatProps) {
       <Text className="text-center text-[13.2px] leading-4 text-muted" numberOfLines={2} maxFontSizeMultiplier={1.3}>
         {label}
       </Text>
+    </>
+  );
+
+  if (inert) {
+    return (
+      <View accessible accessibilityLabel={`${label}: ${value ?? ''}`} className={`items-center gap-1 ${className}`}>
+        {content}
+      </View>
+    );
+  }
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${label}: ${value ?? ''}`}
+      onPress={onPress}
+      className={`items-center gap-1 ${className}`}>
+      {content}
     </Pressable>
   );
 }
@@ -78,6 +103,48 @@ export default function Home() {
 
   const firstName = user?.full_name?.trim().split(/\s+/)[0];
   const greeting = t(greetingKey(hourIn(user?.timezone)));
+  const wide = useIsWide();
+
+  // A wide page: the numbers as three cards over the three cards of the insights; the way to the clients, the stock and a new order is
+  // the sidebar's, so there is no dock.
+  if (wide) {
+    const numbers: { value: number | undefined; label: string }[] = [
+      { value: data?.active_orders, label: t('stat_active') },
+      { value: data?.ready_for_pickup, label: t('stat_ready') },
+      { value: data?.completed_this_month, label: t('stat_completed_month') },
+    ];
+
+    return (
+      <Screen width="wide" wideDock={false}>
+        <ScreenHeader title={t('tab_home')} />
+        <ScrollView
+          bounces={false}
+          overScrollMode="never"
+          contentContainerClassName={`${PAGE_CONTENT} gap-4 pb-12`}>
+          {dashboard.isError && !data ? (
+            <ErrorState error={dashboard.error} onRetry={() => dashboard.refetch()} />
+          ) : (
+            <>
+              <View className="flex-row gap-4">
+                {numbers.map((number) => (
+                  <View key={number.label} className={`min-w-0 flex-1 overflow-hidden rounded-[18px] bg-white ${PAPER_CARD}`}>
+                    <Stat
+                      inert
+                      value={number.value}
+                      failed={dashboard.isError}
+                      label={number.label}
+                      className="px-4 py-5"
+                    />
+                  </View>
+                ))}
+              </View>
+              <HomeInsights />
+            </>
+          )}
+        </ScrollView>
+      </Screen>
+    );
+  }
 
   return (
     <Screen

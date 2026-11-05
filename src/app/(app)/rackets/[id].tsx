@@ -14,6 +14,7 @@ import Card from '@/components/ui/card';
 import { colors } from '@/components/ui/colors';
 import { useConfirm } from '@/components/ui/confirm';
 import IconButton from '@/components/ui/icon-button';
+import { TwoColumns } from '@/components/ui/page';
 import Section from '@/components/ui/section';
 import { DetailHeader, DetailScroll, Screen } from '@/components/ui/screen';
 import Shortcut from '@/components/ui/shortcut';
@@ -82,6 +83,7 @@ export default function RacketDetails() {
   return (
     <Screen
       flush
+      width="medium"
       dock={
         racket.last_setup ? (
           <Shortcut
@@ -100,7 +102,11 @@ export default function RacketDetails() {
         title={racketName(racket)}
         right={<IconButton icon={MoreHorizontal} label={t('more_actions')} onPress={() => setMenu(true)} />}
       />
-      <DetailScroll contentContainerClassName="gap-page p-page pb-28" showsVerticalScrollIndicator={false}>
+      <DetailScroll contentContainerClassName="gap-page p-page pb-28 md:pb-12" showsVerticalScrollIndicator={false}>
+        {/* On a desktop the racket and its last setup are in one column, and the history of the stringings in the other. */}
+        <TwoColumns
+          first={
+            <>
         <Card className="gap-3">
           <View className="gap-0.5">
             <Text className="text-[14.3px] text-muted">{racket.brand}</Text>
@@ -110,7 +116,7 @@ export default function RacketDetails() {
             <Pressable
               accessibilityRole="button"
               onPress={() => router.push({ pathname: '/clients/[id]', params: { id: racket.client_id! } })}
-              className="flex-row items-center justify-between active:opacity-60">
+              className="flex-row items-center justify-between hover:opacity-80 active:opacity-60">
               <Text className="text-[16.5px] text-muted">{t('field_owner')}</Text>
               <Text className="text-[16.5px] font-medium text-primary">{racket.client_name}</Text>
             </Pressable>
@@ -158,6 +164,10 @@ export default function RacketDetails() {
           />
         )}
 
+            </>
+          }
+          second={
+            <>
         <Section
           title={t('section_stringing_history')}
           actionLabel={!allOrders && racket.orders.length > HISTORY_SHOWN ? t('see_all') : undefined}
@@ -190,6 +200,9 @@ export default function RacketDetails() {
             </View>
           )}
         </Section>
+            </>
+          }
+        />
       </DetailScroll>
 
 

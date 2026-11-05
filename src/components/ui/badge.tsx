@@ -4,7 +4,8 @@ import { Text } from '@/components/ui/text';
 import { useI18n } from '@/lib/i18n';
 import type { OrderStatus } from '@/lib/types';
 
-const STATUS_STYLES: Record<OrderStatus, { container: string; dot: string; label: string }> = {
+// The colours of an order's status: the badge on a card, and (on a wide screen) the chip and the menu of the table of orders.
+export const STATUS_STYLES: Record<OrderStatus, { container: string; dot: string; label: string }> = {
   received: { container: 'bg-blue-50', dot: 'bg-blue-500', label: 'text-blue-500' },
   in_progress: { container: 'bg-amber-50', dot: 'bg-amber-500', label: 'text-amber-700' },
   ready: { container: 'bg-teal-50', dot: 'bg-teal-500', label: 'text-teal-700' },

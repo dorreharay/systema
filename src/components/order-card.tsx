@@ -41,7 +41,7 @@ export function useDueText() {
 // the right. The last line is the day it is to be handed over (red when it is late), or, once it has been, the day it
 // was; it is left out when there is no such day. A tap opens the order. A card changes only with its order, so a page
 // with many of them (a letter typed in a search, a sheet opened) does not draw them all again.
-const OrderCard = memo(function OrderCard({ order }: { order: Order }) {
+const OrderCard = memo(function OrderCard({ order, fill }: { order: Order; fill?: boolean }) {
   const { user } = useAuth();
   const { t, language } = useI18n();
   const { dateText, today } = useDueText();
@@ -65,7 +65,7 @@ const OrderCard = memo(function OrderCard({ order }: { order: Order }) {
   return (
     <Card
       onPress={() => router.push({ pathname: '/orders/[id]', params: { id: order.id } })}
-      className="gap-1"
+      className={`gap-1 ${fill ? 'flex-1' : ''}`}
       accessibilityLabel={t('order_card_label', { number: order.number ?? '—', client: order.client.name })}>
       <View className="flex-row items-center justify-between gap-3">
         <View className="flex-row items-center gap-2">

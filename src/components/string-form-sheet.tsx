@@ -5,8 +5,10 @@ import { Check, Trash2 } from '@/components/icons';
 import PlusIcon from '@/components/icons/plus-icon';
 import { SUGGESTIONS_SHOWN, SUGGEST_DELAY_MS, Suggestions } from '@/components/reference-suggestions';
 import { StockFields, readStock } from '@/components/stock';
+import { BUTTON_RADIUS } from '@/components/ui/button-radius';
 import { colors } from '@/components/ui/colors';
 import { useConfirm } from '@/components/ui/confirm';
+import EnterSubmits from '@/components/ui/enter-submits';
 import { FormError, Input, NumberInput, type InputRef } from '@/components/ui/input';
 import Sheet from '@/components/ui/sheet';
 import Shortcut from '@/components/ui/shortcut';
@@ -148,7 +150,11 @@ function StringForm({ string, initialModel, onClose, onSaved }: Omit<StringFormS
 
   return (
     <>
-      <View className="gap-3 pt-2">
+      <EnterSubmits
+        className="gap-3 pt-2"
+        onSubmit={() => {
+          if (!saving) void save();
+        }}>
         <Input
           label={t('field_brand')}
           value={brand}
@@ -206,8 +212,8 @@ function StringForm({ string, initialModel, onClose, onSaved }: Omit<StringFormS
                 accessibilityRole="button"
                 accessibilityState={{ selected: type === option }}
                 onPress={() => setType(option)}
-                className={`min-h-10 justify-center rounded-lg border px-4 ${
-                  type === option ? 'border-primary bg-primary active:bg-primary' : 'border-line bg-white active:bg-surface'
+                className={`min-h-10 justify-center ${BUTTON_RADIUS.lg} border px-4 ${
+                  type === option ? 'border-primary bg-primary active:bg-primary' : 'border-line bg-white hover:bg-surface active:bg-surface'
                 }`}>
                 <Text className={`text-[15px] font-medium ${type === option ? 'text-white' : 'text-ink'}`}>
                   {t(`string_type_${option}`)}
@@ -257,8 +263,8 @@ function StringForm({ string, initialModel, onClose, onSaved }: Omit<StringFormS
                     accessibilityRole="button"
                     accessibilityState={{ selected }}
                     onPress={() => setGauge(value)}
-                    className={`min-h-10 justify-center rounded-lg border px-4 ${
-                      selected ? 'border-primary bg-primary active:bg-primary' : 'border-line bg-white active:bg-surface'
+                    className={`min-h-10 justify-center ${BUTTON_RADIUS.lg} border px-4 ${
+                      selected ? 'border-primary bg-primary active:bg-primary' : 'border-line bg-white hover:bg-surface active:bg-surface'
                     }`}>
                     <Text className={`text-[15px] font-medium ${selected ? 'text-white' : 'text-ink'}`}>{option}</Text>
                   </Pressable>
@@ -279,7 +285,7 @@ function StringForm({ string, initialModel, onClose, onSaved }: Omit<StringFormS
           error={errors.stock}
         />
         {formError ? <FormError message={formError} /> : null}
-      </View>
+      </EnterSubmits>
       <View className="gap-2 pt-4">
         <Shortcut
           compact

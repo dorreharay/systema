@@ -88,7 +88,9 @@ export default function StatusSteps({ status }: { status: OrderStatus }) {
             <View key={step} style={{ width: DOT, alignItems: SIDES[align] }}>
               <Text
                 numberOfLines={2}
-                style={{ width: LABEL, textAlign: align }}
+                // `maxWidth` too: on the web a text with `numberOfLines` is at most as wide as its parent, which is a dot, and would be
+                // squeezed into it.
+                style={{ width: LABEL, maxWidth: LABEL, textAlign: align }}
                 className={`text-[14px] ${here ? 'font-semibold text-ink' : done ? 'font-medium text-ink' : 'text-muted'}`}>
                 {t(`status_${step}`)}
               </Text>

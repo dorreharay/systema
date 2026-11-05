@@ -2,6 +2,7 @@ import { useRouter } from 'expo-router';
 import { Pressable, View } from 'react-native';
 
 import { Clock, TriangleAlert, WifiOff } from '@/components/icons';
+import { BUTTON_RADIUS } from '@/components/ui/button-radius';
 import { Text } from '@/components/ui/text';
 import { useI18n } from '@/lib/i18n';
 import { useSyncSummary } from '@/lib/offline/react';
@@ -41,8 +42,8 @@ export default function SyncPill() {
       accessibilityLabel={spoken}
       hitSlop={8}
       onPress={() => router.push('/sync')}
-      className="active:opacity-60">
-      <View className={`h-8 flex-row items-center gap-1.5 rounded-full px-3 ${tone.box}`}>
+      className="hover:opacity-80 active:opacity-60">
+      <View className={`h-8 flex-row items-center gap-1.5 ${BUTTON_RADIUS.full32} px-3 ${tone.box}`}>
         <Icon size={15} color={tone.icon} />
         <Text className={`text-[14px] font-semibold ${tone.ink}`} maxFontSizeMultiplier={1.2}>
           {label}

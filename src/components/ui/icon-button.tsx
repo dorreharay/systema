@@ -1,6 +1,7 @@
 import { Pressable, View } from 'react-native';
 
 import type { IconComponent } from '@/components/icons';
+import { BUTTON_RADIUS } from '@/components/ui/button-radius';
 import { colors } from '@/components/ui/colors';
 
 type IconButtonProps = {
@@ -40,14 +41,14 @@ export default function IconButton({
       disabled={disabled}
       onPress={onPress}
       hitSlop={large && !round ? 16 : 8}
-      className={`${large && !round ? 'size-24' : 'size-12'} items-center justify-center active:opacity-60 ${
-        round ? '' : 'rounded-lg'
+      className={`${large && !round ? 'size-24' : 'size-12'} items-center justify-center hover:opacity-80 active:opacity-60 ${
+        round ? '' : BUTTON_RADIUS.lg
       } ${filled && !round ? 'bg-primary' : ''} ${disabled ? 'opacity-40' : ''}`}>
       {round ? (
         <View
-          className={`${large ? 'size-12' : 'size-9'} items-center justify-center rounded-full ${
-            dark ? 'bg-white/15' : 'bg-[#ECEEF1]'
-          }`}>
+          className={`${large ? 'size-12' : 'size-9'} items-center justify-center ${
+            large ? BUTTON_RADIUS.full48 : BUTTON_RADIUS.full36
+          } ${dark ? 'bg-white/15' : 'bg-[#ECEEF1]'}`}>
           <Icon size={large ? 24 : 18} color={dark ? colors.white : color} />
         </View>
       ) : (

@@ -38,7 +38,7 @@ export default function PickerField({
         onPress={onPress}
         // On iOS the room above and below the text is 9.5 pt and the text is lifted by 2 pt of padding under it (see
         // field-text): that keeps the field as tall as an input.
-        className={`min-h-12 flex-row items-center gap-2 rounded-lg border bg-white px-3.5 py-2.5 ios:py-[9.5px] active:bg-surface ${
+        className={`min-h-12 flex-row items-center gap-2 rounded-lg border bg-white px-3.5 py-2.5 ios:py-[9.5px] hover:bg-surface active:bg-surface ${
           error ? 'border-danger' : 'border-line'
         } ${disabled ? 'opacity-50' : ''}`}>
         {icon}

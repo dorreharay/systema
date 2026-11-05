@@ -1,5 +1,7 @@
 import { Pressable, View } from 'react-native';
 
+import { BUTTON_RADIUS } from '@/components/ui/button-radius';
+import { PAPER_RAISED } from '@/components/ui/paper';
 import { Text } from '@/components/ui/text';
 
 type Option<T extends string> = { value: T; label: string };
@@ -16,7 +18,7 @@ type ChipsProps<T extends string> = {
 export function Segmented<T extends string>({ options, value, onChange, compact }: ChipsProps<T>) {
   return (
     <View
-      className={`flex-row bg-neutral-200 ${compact ? 'rounded-lg p-[3px]' : 'rounded-xl p-1'}`}
+      className={`flex-row bg-neutral-200 ${compact ? BUTTON_RADIUS.lg : BUTTON_RADIUS.xl} ${compact ? 'p-[3px]' : 'p-1'}`}
       accessibilityRole="tablist">
       {options.map((option) => {
         const selected = option.value === value;
@@ -27,8 +29,8 @@ export function Segmented<T extends string>({ options, value, onChange, compact 
             accessibilityState={{ selected }}
             onPress={() => onChange(option.value)}
             className={`flex-1 items-center justify-center ${
-              compact ? 'min-h-[31px] rounded-md px-1.5' : 'min-h-10 rounded-lg px-3'
-            } ${selected ? 'bg-white' : ''}`}>
+              compact ? `min-h-[31px] ${BUTTON_RADIUS.md} px-1.5` : `min-h-10 ${BUTTON_RADIUS.lg} px-3`
+            } ${selected ? `bg-white ${PAPER_RAISED}` : ''}`}>
             <Text
               className={`${compact ? 'text-[13.2px]' : 'text-[15px]'} ${
                 selected ? 'font-semibold text-ink' : 'font-medium text-muted'

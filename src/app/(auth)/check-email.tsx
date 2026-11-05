@@ -45,7 +45,7 @@ function ResendRow({ email }: { email?: string }) {
             accessibilityRole="button"
             hitSlop={8}
             disabled={sending}
-            className="min-h-12 justify-center px-2.5 active:opacity-70"
+            className="min-h-12 justify-center px-2.5 hover:opacity-80 active:opacity-70"
             onPress={resend}>
             <Text className="text-[15.4px] font-medium text-white">
               {sending ? t('resend_sending') : t('resend_action')}

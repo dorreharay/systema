@@ -65,7 +65,7 @@ export default function GoogleSignInButton({ size, radius, disabled, onError }: 
       onPress={press}
       // The corners curve the way the system's Apple button beside it has them.
       style={{ width: size, height: size, borderRadius: radius, borderCurve: 'continuous', backgroundColor: GOOGLE_FILL }}
-      className={`items-center justify-center border ${GOOGLE_OUTLINE} active:opacity-80 ${
+      className={`items-center justify-center border ${GOOGLE_OUTLINE} hover:opacity-90 active:opacity-80 ${
         inactive ? 'opacity-60' : ''
       }`}>
       {busy ? <ActivityIndicator color={GOOGLE_SPINNER} /> : <GoogleIcon size={Math.round(size * ICON_RATIO)} />}

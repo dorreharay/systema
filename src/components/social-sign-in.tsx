@@ -2,9 +2,11 @@ import { Text, View } from 'react-native';
 
 import AppleSignInButton from '@/components/apple-sign-in-button';
 import GoogleSignInButton from '@/components/google-sign-in-button';
+import { WIDE_RADIUS_SCALE } from '@/components/ui/button-radius';
 import { useAppleLibrary } from '@/lib/apple-sign-in';
 import { googleSignInSupported } from '@/lib/google-sign-in';
 import { useI18n } from '@/lib/i18n';
+import { useIsWide } from '@/lib/layout';
 
 // The side of the two square buttons, and the radius of their corners. Apple's guidelines have a button with only its logo
 // square, and no smaller than the other ways in: the two are the same size. They are as high as the slim buttons above them
@@ -27,6 +29,8 @@ type SocialSignInProps = {
 export default function SocialSignIn({ disabled, onError }: SocialSignInProps) {
   const { t } = useI18n();
   const apple = useAppleLibrary();
+  // On a wide screen the corners are 15% less round, like those of the buttons above (see button-radius.ts).
+  const radius = useIsWide() ? BUTTON_RADIUS * WIDE_RADIUS_SCALE : BUTTON_RADIUS;
 
   if (!apple && !googleSignInSupported) {
     return null;
@@ -44,12 +48,12 @@ export default function SocialSignIn({ disabled, onError }: SocialSignInProps) {
           <AppleSignInButton
             library={apple}
             size={BUTTON_SIZE}
-            radius={BUTTON_RADIUS}
+            radius={radius}
             disabled={disabled}
             onError={onError}
           />
         ) : null}
-        <GoogleSignInButton size={BUTTON_SIZE} radius={BUTTON_RADIUS} disabled={disabled} onError={onError} />
+        <GoogleSignInButton size={BUTTON_SIZE} radius={radius} disabled={disabled} onError={onError} />
       </View>
     </View>
   );

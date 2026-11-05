@@ -50,7 +50,7 @@ export function Suggestions({ items, onPick, offline }: SuggestionsProps) {
           accessibilityRole="button"
           accessibilityLabel={item.title}
           onPress={() => onPick(item.key)}
-          className={`min-h-11 flex-row items-center gap-3 px-3.5 py-2 active:bg-surface ${
+          className={`min-h-11 flex-row items-center gap-3 px-3.5 py-2 hover:bg-surface active:bg-surface ${
             index > 0 ? 'border-t border-line' : ''
           }`}>
           <Text numberOfLines={1} className="min-w-0 flex-1 text-base font-medium">

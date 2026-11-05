@@ -42,7 +42,12 @@ export default function ServicesAndPricing() {
   };
 
   const row = (service: Service) => (
-    <Card key={service.id} onPress={() => setEditing(service)} className="flex-row items-center gap-3">
+    <Card
+      key={service.id}
+      nested
+      onPress={() => setEditing(service)}
+      accessibilityLabel={service.name}
+      className="flex-row items-center gap-3">
       <View className="flex-1 gap-1">
         <Text className="text-base font-semibold" numberOfLines={1}>
           {service.name}
@@ -82,7 +87,7 @@ export default function ServicesAndPricing() {
       }
       footer={<View style={{ height: Math.max(insets.bottom, 12) + 24 }} />}>
       <DetailHeader floating title={t('settings_services')} />
-      <DetailScroll contentContainerClassName="gap-page p-page pb-28" showsVerticalScrollIndicator={false}>
+      <DetailScroll contentContainerClassName="gap-page p-page pb-28 md:pb-12" showsVerticalScrollIndicator={false}>
         <Text className="text-[16.5px] text-muted">{t('services_hint')}</Text>
         {services.isLoading ? (
           <ListSkeleton variant="row" />

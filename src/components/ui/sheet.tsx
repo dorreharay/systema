@@ -36,6 +36,7 @@ import { ConfirmProvider } from '@/components/ui/confirm';
 import IconButton from '@/components/ui/icon-button';
 import { Text } from '@/components/ui/text';
 import { useI18n } from '@/lib/i18n';
+import { useIsWide } from '@/lib/layout';
 import { useLastKeyboardHeight } from '@/lib/use-keyboard';
 
 type SheetProps = {
@@ -126,6 +127,17 @@ export function afterSheetsClosed(open: () => void) {
   waiting.push(run);
 }
 
+// On a wide screen (tablet and desktop, the web) a sheet is a dialog in the middle of the page, not a panel that rises from its foot: it
+// is this wide at most (a list that is searched, a little wider), fades in with a short rise, has no grip to pull and no pull to take it
+// away; Esc and a click outside close it as they do anywhere.
+const DIALOG_WIDTH = 560;
+const DIALOG_WIDTH_TALL = 640;
+// How tall a list that is searched is, at most (a share of the window, and this).
+const DIALOG_TALL_MAX = 760;
+// How far a dialog rises as it comes in.
+const DIALOG_RISE = 16;
+const DIALOG_SCALE = 0.98;
+
 // What a form takes of the page, at most.
 const FORM_SHARE = 0.9;
 // What a sheet with a list takes of the page.
@@ -203,6 +215,8 @@ export default function Sheet({
   const { t } = useI18n();
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
+  // A dialog in the middle of the page, on a wide screen; the panel from the foot, anywhere else.
+  const wide = useIsWide();
   const keyboard = useLastKeyboardHeight(height * KEYBOARD_SHARE);
   const [headerHeight, setHeaderHeight] = useState(0);
   const [contentHeight, setContentHeight] = useState(0);
@@ -335,6 +349,8 @@ export default function Sheet({
   const hideKeyboard = () => Keyboard.dismiss();
 
   const pull = usePanGesture({
+    // A dialog is not pulled away: it has its close button, Esc, and a click outside.
+    enabled: !wide,
     // Down only, and mostly down: a tap on the close button, or a touch that goes sideways, is not a pull.
     activeOffsetY: PULL_START,
     failOffsetX: [-24, 24],
@@ -386,10 +402,13 @@ export default function Sheet({
   const backdropStyle = useAnimatedStyle(() => ({
     opacity: progress.get() * (1 - Math.min(1, drag.get() / (Math.max(panelHeight.get(), 1) * 0.8))),
   }));
-  const panelStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: interpolate(progress.get(), [0, 1], [height * 0.4, 0]) + drag.get() }],
-    opacity: interpolate(progress.get(), [0, 0.4, 1], [0, 1, 1]),
-  }));
+  const panelStyle = useAnimatedStyle(() => {
+    const rise = { translateY: interpolate(progress.get(), [0, 1], [wide ? DIALOG_RISE : height * 0.4, 0]) + drag.get() };
+    return {
+      transform: wide ? [rise, { scale: interpolate(progress.get(), [0, 1], [DIALOG_SCALE, 1]) }] : [rise],
+      opacity: interpolate(progress.get(), [0, 0.4, 1], [0, 1, 1]),
+    };
+  });
 
   if (!mounted) {
     return null;
@@ -402,18 +421,23 @@ export default function Sheet({
   // measured, it is the most it can be: a smaller panel would make the scroll view scroll to make room for
   // the keyboard.
   // The room under the content, which the scroll view has as padding: a little, and the foot of the panel.
-  const bottomRoom = CONTENT_FOOT + sheetFoot(insets.bottom);
+  const bottomRoom = wide ? CONTENT_FOOT : CONTENT_FOOT + sheetFoot(insets.bottom);
   const formHeight = measuring
     ? height * FORM_SHARE
     : Math.min(height * FORM_SHARE, headerHeight + contentHeight - bottomRoom + KEYBOARD_GAP + keyboard);
   // A tall sheet leaves enough of the page above it to tap on, to close it: more than the strip of the status bar.
-  const size = tall
-    ? { height: ios ? Math.min(height * TALL_SHARE, height - insets.top - 12) : (`${TALL_SHARE * 100}%` as const) }
-    : !form
-      ? { maxHeight: limit }
-      : ios
-        ? { height: formHeight }
-        : { maxHeight: `${FORM_SHARE * 100}%` as const };
+  // (A dialog's sizes are in points of the window, since the room it stands in is the page, not a panel that has a height of its own.)
+  const size = wide
+    ? tall
+      ? { height: Math.min(height * TALL_SHARE, DIALOG_TALL_MAX) }
+      : { maxHeight: height * FORM_SHARE }
+    : tall
+      ? { height: ios ? Math.min(height * TALL_SHARE, height - insets.top - 12) : (`${TALL_SHARE * 100}%` as const) }
+      : !form
+        ? { maxHeight: limit }
+        : ios
+          ? { height: formHeight }
+          : { maxHeight: `${FORM_SHARE * 100}%` as const };
   const content = scroll ? (
     <ScrollView
       ref={scrollRef}
@@ -443,29 +467,52 @@ export default function Sheet({
   );
 
   return (
-    <Modal transparent visible animationType="none" onRequestClose={onClose} onShow={() => setPresented(true)}>
+    <Modal
+      transparent
+      visible
+      animationType="none"
+      onRequestClose={onClose}
+      onShow={() => setPresented(true)}
+      // What a screen reader says the dialog is (react-native-web gives the modal the role of a dialog).
+      {...(wide ? ({ 'aria-label': shownTitle } as object) : null)}>
       {/* What a modal shows has a gesture root of its own: the one of the app is behind it. */}
       <GestureHandlerRootView style={{ flex: 1 }}>
         {/* A question asked from inside the sheet ("Delete this?") is shown inside it: iOS will not show a second
             modal from the app over this one, but it does show one from the modal itself. */}
         <ConfirmProvider>
           <OpenedContext value={opened}>
-            <View className="flex-1 justify-end">
+            <View className={wide ? 'flex-1 items-center justify-center p-6' : 'flex-1 justify-end'}>
               {/* Anywhere outside the panel closes it. */}
               <Animated.View className={`absolute inset-0 ${dark ? 'bg-black/60' : 'bg-black/40'}`} style={backdropStyle}>
-                <Pressable accessibilityLabel={t('close')} className="flex-1" onPress={onClose} />
+                {wide ? (
+                  // On a wide screen this is for the mouse only, and is not a control: the keyboard has Esc, and what the focus goes to
+                  // when the dialog opens is the first thing in it (a button of the backdrop would be the first thing in the page).
+                  // (`onClick` is the web's, and not in React Native's own types.)
+                  <View className="flex-1" {...({ onClick: onClose } as object)} />
+                ) : (
+                  <Pressable accessibilityLabel={t('close')} className="flex-1" onPress={onClose} />
+                )}
               </Animated.View>
               <Animated.View
-                style={[panelStyle, measuring && { opacity: 0 }]}
+                className={wide ? 'w-full' : undefined}
+                style={[
+                  panelStyle,
+                  wide && { maxWidth: tall ? DIALOG_WIDTH_TALL : DIALOG_WIDTH },
+                  measuring && { opacity: 0 },
+                ]}
                 onLayout={(event) => panelHeight.set(event.nativeEvent.layout.height)}>
                 <View
-                  className={`overflow-hidden rounded-t-3xl ${dark ? 'border-t border-white/10 bg-[#15191c]' : 'bg-white'}`}
+                  className={`overflow-hidden ${wide ? 'rounded-3xl' : 'rounded-t-3xl'} ${
+                    dark ? `${wide ? 'border' : 'border-t'} border-white/10 bg-[#15191c]` : 'bg-white'
+                  }`}
                   style={size}>
                   <GestureDetector gesture={pull}>
                     <View onLayout={(event) => setHeaderHeight(Math.round(event.nativeEvent.layout.height))}>
-                      <View className="items-center pt-2.5">
-                        <View className={`h-1 w-10 rounded-full ${dark ? 'bg-white/25' : 'bg-neutral-300'}`} />
-                      </View>
+                      {wide ? null : (
+                        <View className="items-center pt-2.5">
+                          <View className={`h-1 w-10 rounded-full ${dark ? 'bg-white/25' : 'bg-neutral-300'}`} />
+                        </View>
+                      )}
                       {shownTitle ? (
                         <View className="flex-row items-center justify-between pb-1 pl-page pr-4 pt-4">
                           <Text

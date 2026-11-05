@@ -1,7 +1,9 @@
 import type { ComponentType } from 'react';
 import { ActivityIndicator, Pressable } from 'react-native';
 
+import { BUTTON_RADIUS } from '@/components/ui/button-radius';
 import { colors } from '@/components/ui/colors';
+import { useInPageActions } from '@/components/ui/page';
 import { Text } from '@/components/ui/text';
 
 type ShortcutProps = {
@@ -31,11 +33,12 @@ type ShortcutProps = {
   disabled?: boolean;
 };
 
+// The corners are 18 and 15 px; on a wide screen 15% less round (see button-radius.ts).
 const SIZES = {
-  large: { box: 'h-18 gap-3', radius: 'rounded-[18px]', icon: 22, label: 'text-[19px]' },
-  slim: { box: 'h-[54px] gap-3', radius: 'rounded-[15px]', icon: 22, label: 'text-[19px]' },
-  compact: { box: 'h-[52px] gap-2.5', radius: 'rounded-[18px]', icon: 20, label: 'text-[17px]' },
-  dense: { box: 'h-[44px] gap-2', radius: 'rounded-[15px]', icon: 18, label: 'text-[16px]' },
+  large: { box: 'h-18 gap-3', radius: BUTTON_RADIUS.px18, icon: 22, label: 'text-[19px]' },
+  slim: { box: 'h-[54px] gap-3', radius: BUTTON_RADIUS.px15, icon: 22, label: 'text-[19px]' },
+  compact: { box: 'h-[52px] gap-2.5', radius: BUTTON_RADIUS.px18, icon: 20, label: 'text-[17px]' },
+  dense: { box: 'h-[44px] gap-2', radius: BUTTON_RADIUS.px15, icon: 18, label: 'text-[16px]' },
 } as const;
 
 // A button in the style of the shortcuts of the home screen: a block of colour with rounded corners, an
@@ -54,7 +57,10 @@ export default function Shortcut({
   loading = false,
   disabled,
 }: ShortcutProps) {
-  const size = SIZES[dense ? 'dense' : compact ? 'compact' : slim ? 'slim' : 'large'];
+  // Among the actions in the header of a wide page every button is of the header's height and as wide as its label, whatever it was
+  // made for (the large one at the foot of the phone's page, with its `w-full`).
+  const inHeader = useInPageActions();
+  const size = SIZES[inHeader || dense ? 'dense' : compact ? 'compact' : slim ? 'slim' : 'large'];
   const inactive = loading || disabled;
   const ink = contentColor ?? colors.ink;
 
@@ -66,9 +72,9 @@ export default function Shortcut({
       disabled={inactive}
       onPress={onPress}
       style={{ backgroundColor: color }}
-      className={`flex-row items-center justify-center active:opacity-80 ${size.radius} ${size.box} ${
+      className={`flex-row items-center justify-center hover:opacity-90 active:opacity-80 ${size.radius} ${size.box} ${
         inactive ? 'opacity-60' : ''
-      } ${className}`}>
+      } ${inHeader ? 'px-5' : className}`}>
       {loading ? <ActivityIndicator color={ink} /> : Icon ? <Icon size={size.icon} color={ink} /> : null}
       <Text
         className={`${size.label} font-semibold text-ink`}

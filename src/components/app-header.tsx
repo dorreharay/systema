@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import IntroBackdrop from '@/components/intro-backdrop';
 import { useAuth } from '@/lib/auth';
+import { SIDEBAR_LOGO_SLOT, SIDEBAR_WIDTH, useLayoutMode } from '@/lib/layout';
 
 const TITLE = 're:string';
 // The title is typed out once per launch, signed in or not. If the header is mounted again it is already docked.
@@ -44,7 +45,8 @@ const DOCK_MS = 534;
 // Types the title over a dark photo backdrop, then shrinks it into the page header: white over the
 // photo of the sign-in screens, black on the home page of the app. The header has no colour of its own.
 export default function AppHeader() {
-  const { status } = useAuth();
+  const { status, user } = useAuth();
+  const mode = useLayoutMode();
   const pathname = usePathname();
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -57,14 +59,22 @@ export default function AppHeader() {
   // The sign-in screens, and the page of the reset link even for someone who is signed in, stand on the photo: the logo is
   // white and beside the back button.
   const onPhoto = status !== 'signedIn' || pathname === RESET_PATH;
+  // On a wide screen the app has a sidebar with the wordmark at the top of it (see Sidebar): the logo of the intro docks onto that, and
+  // is not the header of the home page. (Until the setup is done there is no sidebar: it docks as it does on the phone.)
+  const sidebar = mode === 'phone' || onPhoto || !user?.setup_completed ? null : mode;
   // Someone signed in sees the logo in the header on the home page only. It can go once the intro is over.
-  const hidden = !onPhoto && introGone && pathname !== HOME_PATH;
+  const hidden = !onPhoto && introGone && (!!sidebar || pathname !== HOME_PATH);
 
   const introFontSize = Math.min(72, width * 0.14);
   const targetScale = HEADER_FONT_SIZE / introFontSize;
   const raise = onPhoto ? LOGO_RAISE : LOGO_RAISE_HOME;
-  const targetY = insets.top + HEADER_HEIGHT / 2 - raise - height / 2;
-  const headerTextColor = onPhoto ? INTRO_TEXT_COLOR : HEADER_TEXT_COLOR;
+  // The middle of the docked logo, from the middle of the screen, which is where the title starts.
+  const targetX = sidebar ? SIDEBAR_WIDTH[sidebar] / 2 - width / 2 : 0;
+  const targetY = sidebar
+    ? SIDEBAR_LOGO_SLOT.top + SIDEBAR_LOGO_SLOT.height / 2 - height / 2
+    : insets.top + HEADER_HEIGHT / 2 - raise - height / 2;
+  // The sidebar is dark, as the photo is: the logo stays white.
+  const headerTextColor = onPhoto || sidebar ? INTRO_TEXT_COLOR : HEADER_TEXT_COLOR;
 
   useEffect(() => {
     if (skipIntro) {
@@ -117,6 +127,7 @@ export default function AppHeader() {
       // title is light.
       color: interpolateColor(p, [0.3, 0.65], [INTRO_TEXT_COLOR, headerTextColor]),
       transform: [
+        { translateX: interpolate(p, [0, 1], [0, targetX]) },
         { translateY: interpolate(p, [0, 1], [0, targetY]) },
         { scale: interpolate(p, [0, 1], [1, targetScale]) },
       ],

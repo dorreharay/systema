@@ -12,7 +12,9 @@ import { Badge } from '@/components/ui/badge';
 import Card from '@/components/ui/card';
 import { Segmented } from '@/components/ui/chips';
 import { colors } from '@/components/ui/colors';
-import { FIELD_INPUT_TEXT } from '@/components/ui/field-text';
+import { SEARCH_INPUT_TEXT } from '@/components/ui/field-text';
+import { GridItem, PAGE_CONTENT } from '@/components/ui/page';
+import { PAPER_FIELD } from '@/components/ui/paper';
 import { DetailHeader, Screen, useDetailContentTop } from '@/components/ui/screen';
 import Shortcut from '@/components/ui/shortcut';
 import { ListSkeleton } from '@/components/ui/skeleton';
@@ -21,6 +23,7 @@ import { Text } from '@/components/ui/text';
 import { useAuth } from '@/lib/auth';
 import { formatMoney, racketName } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
+import { GRID_GAP, useGridColumns, useIsWide } from '@/lib/layout';
 import { stringLabel } from '@/lib/order-draft';
 import { useRackets, useStrings } from '@/lib/queries';
 import { usePullRefresh } from '@/lib/use-pull-refresh';
@@ -93,14 +96,16 @@ function CatalogSheets({ children }: { children: ReactNode }) {
 }
 
 // A row changes only with its item, so a letter typed in the search does not draw the whole list again.
-const RacketCard = memo(function RacketCard({ racket }: { racket: Racket }) {
+const RacketCard = memo(function RacketCard({ racket, fill }: { racket: Racket; fill?: boolean }) {
   const { t } = useI18n();
   const sheets = useSheets();
 
   return (
     <Card
+      nested
       onPress={() => router.push({ pathname: '/rackets/[id]', params: { id: racket.id } })}
-      className="gap-1.5">
+      accessibilityLabel={racketName(racket)}
+      className={`gap-1.5 ${fill ? 'flex-1' : ''}`}>
       <Text className="text-base font-semibold" numberOfLines={1}>
         {racketName(racket)}
       </Text>
@@ -117,13 +122,17 @@ const RacketCard = memo(function RacketCard({ racket }: { racket: Racket }) {
   );
 });
 
-const StringCard = memo(function StringCard({ string }: { string: CatalogString }) {
+const StringCard = memo(function StringCard({ string, fill }: { string: CatalogString; fill?: boolean }) {
   const { user } = useAuth();
   const { t, language } = useI18n();
   const sheets = useSheets();
 
   return (
-    <Card onPress={() => sheets.editString(string)} className="gap-1.5">
+    <Card
+      nested
+      onPress={() => sheets.editString(string)}
+      accessibilityLabel={stringLabel(string)}
+      className={`gap-1.5 ${fill ? 'flex-1' : ''}`}>
       <View className="flex-row items-center justify-between gap-3">
         <Text className="flex-1 text-base font-semibold" numberOfLines={1}>
           {stringLabel(string)}
@@ -176,20 +185,26 @@ function CatalogPage() {
 
   const racketsTab = tab === 'rackets';
   const contentTop = useDetailContentTop();
+  const wide = useIsWide();
+  const columns = useGridColumns(340);
 
   // The tabs and the search go with the list when it is scrolled; the title stays at the top, and the list goes
   // up behind it.
+  const tabs = (
+    <Segmented
+      options={[
+        { value: 'rackets' as const, label: t('catalog_rackets') },
+        { value: 'strings' as const, label: t('catalog_strings') },
+      ]}
+      value={tab}
+      onChange={changeTab}
+    />
+  );
+  // On a wide page the two tabs and the search are in one row, the tabs as wide as they need to be.
   const listHeader = (
-    <View className="gap-3">
-      <Segmented
-        options={[
-          { value: 'rackets' as const, label: t('catalog_rackets') },
-          { value: 'strings' as const, label: t('catalog_strings') },
-        ]}
-        value={tab}
-        onChange={changeTab}
-      />
-      <View className="min-h-12 flex-row items-center gap-2 rounded-lg border border-line bg-white px-3.5">
+    <View className={wide ? 'flex-row items-center gap-3' : 'gap-3'}>
+      {wide ? <View className="w-[300px]">{tabs}</View> : tabs}
+      <View className={`min-h-12 flex-row items-center gap-2 rounded-lg border border-line bg-white px-3.5 md:min-h-11 ${PAPER_FIELD} ${wide ? 'flex-1' : ''}`}>
         <Search size={18} color={colors.muted} />
         <TextInput
           value={text}
@@ -202,7 +217,7 @@ function CatalogPage() {
           returnKeyType="search"
           accessibilityLabel={t('search')}
           textAlignVertical="center"
-          className={`min-w-0 flex-1 font-normal text-ink outline-none ${FIELD_INPUT_TEXT}`}
+          className={`min-w-0 flex-1 font-normal text-ink outline-none ${SEARCH_INPUT_TEXT}`}
         />
       </View>
     </View>
@@ -211,6 +226,7 @@ function CatalogPage() {
   return (
     <Screen
       flush
+      width="wide"
       dock={
         <Shortcut
           icon={PlusIcon}
@@ -222,17 +238,19 @@ function CatalogPage() {
         />
       }
       footer={<StackNavBar />}>
-      <DetailHeader floating title={t('tab_catalog')} />
+      <DetailHeader floating topLevel title={t('tab_catalog')} />
       {racketsTab ? (
         <FlatList bounces={false} overScrollMode="never"
-          key="rackets"
+          key={`rackets-${columns}`}
+          numColumns={columns}
+          columnWrapperStyle={columns > 1 ? { gap: GRID_GAP } : undefined}
           contentContainerStyle={{ paddingTop: contentTop }}
           ListHeaderComponent={listHeader}
           data={racketList}
           keyExtractor={(racket) => racket.id}
           // The rows are drawn a screenful or two at a time, not all of the catalog at once.
           windowSize={7}
-          contentContainerClassName="gap-3 px-page pb-28"
+          contentContainerClassName={`gap-3 pb-28 md:pb-12 ${PAGE_CONTENT}`}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           refreshControl={
@@ -241,7 +259,11 @@ function CatalogPage() {
               tintColor={colors.primary}
             />
           }
-          renderItem={({ item }) => <RacketCard racket={item} />}
+          renderItem={({ item, index }) => (
+            <GridItem columns={columns} index={index} count={racketList.length}>
+              <RacketCard racket={item} fill={columns > 1} />
+            </GridItem>
+          )}
           ListEmptyComponent={
             rackets.isLoading ? (
               <ListSkeleton variant="row" />
@@ -262,13 +284,15 @@ function CatalogPage() {
         />
       ) : (
         <FlatList bounces={false} overScrollMode="never"
-          key="strings"
+          key={`strings-${columns}`}
+          numColumns={columns}
+          columnWrapperStyle={columns > 1 ? { gap: GRID_GAP } : undefined}
           contentContainerStyle={{ paddingTop: contentTop }}
           ListHeaderComponent={listHeader}
           data={stringList}
           keyExtractor={(string) => string.id}
           windowSize={7}
-          contentContainerClassName="gap-3 px-page pb-28"
+          contentContainerClassName={`gap-3 pb-28 md:pb-12 ${PAGE_CONTENT}`}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
           refreshControl={
@@ -277,7 +301,11 @@ function CatalogPage() {
               tintColor={colors.primary}
             />
           }
-          renderItem={({ item }) => <StringCard string={item} />}
+          renderItem={({ item, index }) => (
+            <GridItem columns={columns} index={index} count={stringList.length}>
+              <StringCard string={item} fill={columns > 1} />
+            </GridItem>
+          )}
           ListEmptyComponent={
             strings.isLoading ? (
               <ListSkeleton variant="row" />

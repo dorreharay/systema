@@ -6,6 +6,7 @@ import PlusIcon from '@/components/icons/plus-icon';
 import { SUGGESTIONS_SHOWN, SUGGEST_DELAY_MS, Suggestions } from '@/components/reference-suggestions';
 import { StockFields, readStock } from '@/components/stock';
 import { colors } from '@/components/ui/colors';
+import EnterSubmits from '@/components/ui/enter-submits';
 import { FormError, Input, type InputRef } from '@/components/ui/input';
 import PickerField from '@/components/ui/picker-field';
 import SearchPicker from '@/components/ui/search-picker';
@@ -134,7 +135,11 @@ function RacketForm({
 
   return (
     <>
-      <View className="gap-3 pt-2">
+      <EnterSubmits
+        className="gap-3 pt-2"
+        onSubmit={() => {
+          if (!saving) void save();
+        }}>
         {forCatalog ? null : (
           <PickerField
             label={t('field_owner')}
@@ -209,7 +214,7 @@ function RacketForm({
           />
         ) : null}
         {formError ? <FormError message={formError} /> : null}
-      </View>
+      </EnterSubmits>
       <View className="pt-4">
         <Shortcut
           compact

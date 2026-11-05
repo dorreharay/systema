@@ -1,6 +1,7 @@
 import { Pressable } from 'react-native';
 
 import type { IconComponent } from '@/components/icons';
+import { BUTTON_RADIUS } from '@/components/ui/button-radius';
 import { colors } from '@/components/ui/colors';
 import { Text } from '@/components/ui/text';
 
@@ -13,7 +14,7 @@ export default function PillButton({ icon: Icon, label, onPress }: PillButtonPro
       accessibilityRole="button"
       accessibilityLabel={label}
       onPress={onPress}
-      className="min-h-11 flex-row items-center gap-1.5 rounded-lg bg-primary px-4 active:opacity-85">
+      className={`min-h-11 flex-row items-center gap-1.5 ${BUTTON_RADIUS.lg} bg-primary px-4 hover:opacity-90 active:opacity-85`}>
       <Icon size={18} color={colors.white} />
       <Text className="text-[15px] font-semibold text-white" numberOfLines={1}>
         {label}

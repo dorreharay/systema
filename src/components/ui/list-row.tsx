@@ -43,7 +43,7 @@ export default function ListRow({ icon: Icon, label, value, onPress, destructive
       accessibilityRole="button"
       accessibilityLabel={value ? `${label}: ${value}` : label}
       onPress={onPress}
-      className={`${classes} active:bg-surface`}>
+      className={`${classes} hover:bg-surface active:bg-surface`}>
       {content}
     </Pressable>
   );

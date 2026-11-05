@@ -103,7 +103,7 @@ export function StockBadge({ kind, item, onPress }: StockBadgeProps) {
       accessibilityLabel={label}
       hitSlop={8}
       onPress={onPress}
-      className="self-start active:opacity-60">
+      className="self-start hover:opacity-80 active:opacity-60">
       {badge}
     </Pressable>
   );

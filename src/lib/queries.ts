@@ -151,6 +151,9 @@ export function useOrders({ status, q = '', clientId }: OrderFilter) {
   };
 }
 
+/** Every order that fits the words typed, in the order of the queue: for a table that shows them all, and counts them. */
+export const useAllOrders = (q = '') => useRead((tables) => selectOrders(tables, { q }), q.trim());
+
 /** The orders that are still to be done, for the reminders on the phone. */
 export const useActiveOrders = () => useRead((tables) => selectOrders(tables, { status: 'active' }), '');
 

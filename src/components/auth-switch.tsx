@@ -21,7 +21,7 @@ export default function AuthSwitch({ question, action, href, replace, dismissTo 
         <Pressable
           accessibilityRole="link"
           hitSlop={8}
-          className="min-h-12 justify-center px-2.5 active:opacity-70">
+          className="min-h-12 justify-center px-2.5 hover:opacity-80 active:opacity-70">
           <Text className="text-[15.4px] font-medium text-white">{action}</Text>
         </Pressable>
       </AuthLink>

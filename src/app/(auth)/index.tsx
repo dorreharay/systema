@@ -27,7 +27,7 @@ export default function Welcome() {
             accessibilityRole="button"
             accessibilityLabel={`${t('settings_language')}: ${current}`}
             onPress={() => setLanguageOpen(true)}
-            className="min-h-14 w-full flex-row items-center justify-center gap-1.5 px-3 active:opacity-70">
+            className="min-h-14 w-full flex-row items-center justify-center gap-1.5 px-3 hover:opacity-80 active:opacity-70">
             <Text className="text-[15.4px] font-medium text-white/90">{current}</Text>
             <ChevronDown size={16} color="rgba(255, 255, 255, 0.7)" />
           </Pressable>

@@ -4,6 +4,7 @@ import { View } from 'react-native';
 import { Check } from '@/components/icons';
 import PlusIcon from '@/components/icons/plus-icon';
 import { colors } from '@/components/ui/colors';
+import EnterSubmits from '@/components/ui/enter-submits';
 import { FormError, Input, NumberInput } from '@/components/ui/input';
 import Sheet from '@/components/ui/sheet';
 import Shortcut from '@/components/ui/shortcut';
@@ -62,7 +63,11 @@ function ServiceForm({ service, onClose }: Omit<ServiceFormSheetProps, 'visible'
 
   return (
     <>
-      <View className="gap-3 pt-2">
+      <EnterSubmits
+        className="gap-3 pt-2"
+        onSubmit={() => {
+          if (!saving) void save();
+        }}>
         <Input
           label={t('field_service_name')}
           value={name}
@@ -96,7 +101,7 @@ function ServiceForm({ service, onClose }: Omit<ServiceFormSheetProps, 'visible'
           onValueChange={setLabor}
         />
         {formError ? <FormError message={formError} /> : null}
-      </View>
+      </EnterSubmits>
       <View className="pt-4">
         <Shortcut
           compact

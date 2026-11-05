@@ -7,6 +7,7 @@ import { PlaceFields } from '@/components/settings-sheets';
 import { BLOCK, BLOCK_ROOM } from '@/components/ui/card';
 import { Segmented } from '@/components/ui/chips';
 import { colors } from '@/components/ui/colors';
+import EnterSubmits from '@/components/ui/enter-submits';
 import { FormError, Input } from '@/components/ui/input';
 import PickerField from '@/components/ui/picker-field';
 import SearchPicker from '@/components/ui/search-picker';
@@ -19,6 +20,7 @@ import { canonicalZone } from '@/lib/countries';
 import { describeError } from '@/lib/errors';
 import { currencySymbol } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
+import { useIsWide } from '@/lib/layout';
 import type { TensionUnit } from '@/lib/types';
 
 export default function Setup() {
@@ -26,6 +28,7 @@ export default function Setup() {
   const { t, language } = useI18n();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const wide = useIsWide();
   const [name, setName] = useState(user?.full_name ?? '');
   const [currency, setCurrency] = useState(user?.currency ?? 'USD');
   const [unit, setUnit] = useState<TensionUnit>(user?.tension_unit ?? 'kg');
@@ -80,10 +83,18 @@ export default function Setup() {
       }
       footer={<View style={{ height: Math.max(insets.bottom, 12) + 24 }} />}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1">
+        {/* Enter in a field of one line continues, on the web. */}
+        <EnterSubmits
+          className="flex-1"
+          onSubmit={() => {
+            if (!saving) void save();
+          }}>
         <ScrollView bounces={false} overScrollMode="never"
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
-          contentContainerClassName="gap-6 px-page pb-8 pt-6">
+          // On a wide screen it is a card in the middle of the page.
+          contentContainerClassName="gap-6 px-page pb-8 pt-6 md:grow md:items-center md:justify-center md:px-8 md:py-12">
+          <View className="w-full gap-6 md:max-w-[520px]">
           <View className="gap-1.5">
             <Text accessibilityRole="header" className="text-[28px] font-semibold">
               {t('setup_title')}
@@ -126,7 +137,13 @@ export default function Setup() {
           </View>
           <Text className="px-1 text-[14.3px] text-muted">{t('setup_hint')}</Text>
           {formError ? <FormError message={formError} /> : null}
+          {/* On the phone the way on is under the page (the dock above); on a wide screen it is under the card. */}
+          {wide ? (
+            <Shortcut label={t('continue')} color={colors.newOrder} contentColor={colors.ink} onPress={save} loading={saving} />
+          ) : null}
+          </View>
         </ScrollView>
+        </EnterSubmits>
       </KeyboardAvoidingView>
 
       <SearchPicker

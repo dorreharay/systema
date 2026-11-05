@@ -30,6 +30,14 @@
   --text-xs: 0.825rem;
   --text-base: 1.1rem;
   --text-lg: 1.2375rem;
+  /* The widths the layout changes at: `md:` is the tablet's, `lg:` the desktop's. They are Tailwind's own and are said here so that
+     they cannot change unnoticed: src/lib/layout-sizes.ts has the same two (node scripts/check-layout.mjs checks they agree). */
+  --breakpoint-md: 48rem;
+  --breakpoint-lg: 64rem;
+  /* From `md:` up every button is 15% less round than on the phone; its corners are written out in src/components/ui/button-radius.ts. */
+  /* From `md:` up a white surface is lifted off the page by a ring and soft shadows, and no button has a gradient: src/components/ui/paper.ts. */
+  /* From `md:` up a page has p-12 round it (48 px at its sides, above its header and under its content) and its widest column has no limit: src/components/ui/page.tsx, screen.tsx. A search field has the text of the page: src/components/ui/field-text.ts. */
+  /* From `md:` up the sign-in screens are drawn at 85% of the phone's sizes (less in a short window, so that none of them scrolls), and the back button of a form hangs above its left edge: src/components/auth-layout.tsx. */
 }
 
 :root {

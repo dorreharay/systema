@@ -22,5 +22,12 @@ export const FIELD_INPUT_TEXT = Platform.select({
   default: 'text-base py-3',
 });
 
+/**
+ * The text of a field for searching: the same, and on a wide screen (`md:`, where a field is not a thing to touch) the size of the text
+ * of the page, 15 px, and the field a little lower, so that a search does not shout over what it searches. (The field it stands in
+ * is `md:min-h-11`.)
+ */
+export const SEARCH_INPUT_TEXT = `${FIELD_INPUT_TEXT} md:text-[15px] md:py-2.5`;
+
 /** For a `Text` that stands in a field (the value of a select, a prefix, a suffix): it is lifted by 1 pt. */
 export const FIELD_TEXT_LIFT = 'ios:pb-[2px]';

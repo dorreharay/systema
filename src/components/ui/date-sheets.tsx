@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 
 import { ChevronLeft, ChevronRight, X } from '@/components/icons';
+import { BUTTON_RADIUS } from '@/components/ui/button-radius';
 import { colors } from '@/components/ui/colors';
 import IconButton from '@/components/ui/icon-button';
 import Sheet from '@/components/ui/sheet';
@@ -87,7 +88,7 @@ function Calendar({
               onPress={() => onPick(iso)}
               className="h-11 w-[14.2857%] items-center justify-center">
               <View
-                className={`size-10 items-center justify-center rounded-lg ${
+                className={`size-10 items-center justify-center ${BUTTON_RADIUS.lg} ${
                   selected ? 'bg-primary' : iso === today ? 'border border-primary' : ''
                 }`}>
                 <Text
@@ -128,8 +129,8 @@ export function DateSheet({ visible, onClose, title, value, today, onChange, cle
               key={preset.label}
               accessibilityRole="button"
               onPress={() => pick(preset.iso)}
-              className={`min-h-10 justify-center rounded-lg border px-4 ${
-                value === preset.iso ? 'border-primary bg-primary active:bg-primary' : 'border-line bg-white active:bg-surface'
+              className={`min-h-10 justify-center ${BUTTON_RADIUS.lg} border px-4 ${
+                value === preset.iso ? 'border-primary bg-primary active:bg-primary' : 'border-line bg-white hover:bg-surface active:bg-surface'
               }`}>
               <Text
                 className={`text-[18px] font-medium ${value === preset.iso ? 'text-white' : 'text-ink'}`}>
@@ -176,8 +177,8 @@ export function TimeSheet({ visible, onClose, value, onChange }: TimeSheetProps)
               key={time}
               accessibilityRole="button"
               onPress={() => pick(time)}
-              className={`min-h-11 min-w-[22%] flex-1 items-center justify-center rounded-lg border ${
-                value === time ? 'border-primary bg-primary active:bg-primary' : 'border-line bg-white active:bg-surface'
+              className={`min-h-11 min-w-[22%] flex-1 items-center justify-center ${BUTTON_RADIUS.lg} border ${
+                value === time ? 'border-primary bg-primary active:bg-primary' : 'border-line bg-white hover:bg-surface active:bg-surface'
               }`}>
               <Text className={`text-[18px] font-medium ${value === time ? 'text-white' : 'text-ink'}`}>
                 {time}

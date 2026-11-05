@@ -2,7 +2,7 @@ import type { Href } from 'expo-router';
 import { useFocusEffect, useNavigation } from 'expo-router';
 import type { ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { LayoutChangeEvent } from 'react-native';
+import type { LayoutChangeEvent, ViewStyle } from 'react-native';
 import { Keyboard, Platform, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 import Animated, {
   Easing,
@@ -21,7 +21,9 @@ import type { AuthViewRef } from '@/components/auth-leave';
 import { AuthLeaveContext, AuthSubmitContext, addCover, coverAll } from '@/components/auth-leave';
 import AuthLink from '@/components/auth-link';
 import { ArrowLeft } from '@/components/icons';
+import { BUTTON_RADIUS } from '@/components/ui/button-radius';
 import { useI18n } from '@/lib/i18n';
+import { useIsWide } from '@/lib/layout';
 
 // Height of the strip the back button sits in at the top left. The strip is centred on the letters of the logo and the
 // button on the strip, so the two are on one line whatever size the button is.
@@ -46,6 +48,23 @@ const ENTER_DURATION = 360;
 const ENTER_RISE = 14;
 const LEAVE_EASING = Easing.inOut(Easing.quad);
 const ENTER_EASING = LIFT_EASING;
+// On a wide screen the screens are drawn smaller than the phone's (fields and buttons of 56 px and text of 17 are too big for a desktop
+// window), and smaller still where the window is short. The share depends on the height of the window alone, so it is the same on every
+// screen (they look alike as the user goes from one to the next), and the tallest of them (registration, 707 px at full size) is on the
+// page whole, without a scroll, on a laptop; on a big monitor it is the largest share, so the screens look the same there. `zoom` is
+// the web's (`wide` is never true on native) and scales the text, the controls and the column alike, so a new field or button on a
+// sign-in screen needs nothing of its own. (The types of React Native have no `zoom`: it is not one of its styles.)
+const WIDE_ZOOM_MAX = 0.85;
+const WIDE_ZOOM_MIN = 0.7;
+// The tallest screen at full size, and room for an error message or a longer translation.
+const FULL_HEIGHT = 760;
+// The room under the content of a wide screen. Over it is the header (HEADER_HEIGHT: the logo, and under it the back button).
+const WIDE_FOOT = 32;
+
+function wideZoom(windowHeight: number, headerSpace: number) {
+  const fit = (windowHeight - headerSpace - WIDE_FOOT) / FULL_HEIGHT;
+  return Math.round(Math.min(WIDE_ZOOM_MAX, Math.max(WIDE_ZOOM_MIN, fit)) * 100) / 100;
+}
 
 type AuthLayoutProps = {
   title: string;
@@ -82,7 +101,10 @@ export default function AuthLayout({
   const { t } = useI18n();
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
+  // From the tablet's width up (the web only) the back button is not in the far corner of the window, see `backButton`.
+  const wide = useIsWide();
   const headerSpace = insets.top + HEADER_HEIGHT;
+  const zoomStyle = wide ? ({ zoom: wideZoom(height, headerSpace) } as unknown as ViewStyle) : undefined;
   const navigation = useNavigation() as unknown as StackNavigation;
 
   // The content starts hidden and comes in once the screen is focused. Screens that are only
@@ -238,11 +260,29 @@ export default function AuthLayout({
     };
   });
 
+  const backButton = backHref ? (
+    <AuthLink href={backHref} dismissTo asChild>
+      <Pressable
+        accessibilityRole="link"
+        accessibilityLabel={t('back')}
+        hitSlop={8}
+        className={`h-11 w-11 items-center justify-center ${BUTTON_RADIUS.full44} bg-white/10 hover:bg-white/20 active:bg-white/20`}>
+        <ArrowLeft size={22} color="#ffffff" />
+      </Pressable>
+    </AuthLink>
+  ) : null;
+
   const content = (
     <Animated.View
       className="w-full max-w-sm gap-6 self-center"
-      style={liftStyle}
+      style={zoomStyle ? [liftStyle, zoomStyle] : liftStyle}
       onLayout={handleBlockLayout}>
+      {wide && backButton ? (
+        // On a wide screen the button is above the left edge of the form, where the eyes and the pointer are, not in the corner of
+        // a window that may be a thousand pixels from it (the phone's place, below). It hangs over the block, so the form stays
+        // where the phone has it, and it is in the room under the logo (HEADER_HEIGHT) even when the page scrolls.
+        <View className="absolute bottom-full left-0 mb-3">{backButton}</View>
+      ) : null}
       <Animated.View className="items-center justify-center gap-2" style={titleStyle}>
         <Text className="text-center text-2xl font-semibold text-white">{title}</Text>
         <Text className="text-center text-base text-white/80">{subtitle}</Text>
@@ -272,7 +312,7 @@ export default function AuthLayout({
             keyboardShouldPersistTaps="handled">
             <View
               className="justify-center px-6"
-              style={{ minHeight: height, paddingTop: headerSpace, paddingBottom: headerSpace }}>
+              style={{ minHeight: height, paddingTop: headerSpace, paddingBottom: wide ? WIDE_FOOT : headerSpace }}>
               {content}
             </View>
           </ScrollView>
@@ -285,19 +325,11 @@ export default function AuthLayout({
             </View>
           </View>
         )}
-        {backHref ? (
+        {backHref && !wide ? (
           <View
             className="absolute left-4 justify-center"
             style={{ top: insets.top + LOGO_MIDDLE - BACK_STRIP_HEIGHT / 2, height: BACK_STRIP_HEIGHT }}>
-            <AuthLink href={backHref} dismissTo asChild>
-              <Pressable
-                accessibilityRole="link"
-                accessibilityLabel={t('back')}
-                hitSlop={8}
-                className="h-11 w-11 items-center justify-center rounded-full bg-white/10 active:bg-white/20">
-                <ArrowLeft size={22} color="#ffffff" />
-              </Pressable>
-            </AuthLink>
+            {backButton}
           </View>
         ) : null}
       </Animated.View>
