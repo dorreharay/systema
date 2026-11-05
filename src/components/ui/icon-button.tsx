@@ -11,6 +11,8 @@ type IconButtonProps = {
   filled?: boolean;
   // The icon on a round, light grey ground: the close button of a sheet, the call button of an order.
   round?: boolean;
+  // On the dark panel of the sign-in screens: the round one has a lighter dark ground and a white icon.
+  dark?: boolean;
   // A button that has to be easy to hit: a touch target twice as big, and an icon 1.6 times as big. A round one is not twice
   // as big: its ground is a third bigger.
   large?: boolean;
@@ -27,6 +29,7 @@ export default function IconButton({
   color = colors.ink,
   filled = false,
   round = false,
+  dark = false,
   large = false,
   disabled,
 }: IconButtonProps) {
@@ -41,8 +44,11 @@ export default function IconButton({
         round ? '' : 'rounded-lg'
       } ${filled && !round ? 'bg-primary' : ''} ${disabled ? 'opacity-40' : ''}`}>
       {round ? (
-        <View className={`${large ? 'size-12' : 'size-9'} items-center justify-center rounded-full bg-[#ECEEF1]`}>
-          <Icon size={large ? 24 : 18} color={color} />
+        <View
+          className={`${large ? 'size-12' : 'size-9'} items-center justify-center rounded-full ${
+            dark ? 'bg-white/15' : 'bg-[#ECEEF1]'
+          }`}>
+          <Icon size={large ? 24 : 18} color={dark ? colors.white : color} />
         </View>
       ) : (
         <Icon size={large ? 35.2 : 22} color={filled ? colors.white : color} />

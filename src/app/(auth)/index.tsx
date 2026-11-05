@@ -1,14 +1,20 @@
+import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
+import AuthLanguageSheet from '@/components/auth-language-sheet';
 import AuthLayout from '@/components/auth-layout';
 import AuthLink from '@/components/auth-link';
+import { ChevronDown } from '@/components/icons';
 import { colors } from '@/components/ui/colors';
 import Shortcut from '@/components/ui/shortcut';
 import { LANGUAGES, useI18n } from '@/lib/i18n';
 
-// The first screen when signed out: what the app is for, and the two ways in.
+// The first screen when signed out: what the app is for, the two ways in, and the language, chosen in a sheet from a button with
+// no ground of its own (it is the name of the language and an arrow).
 export default function Welcome() {
-  const { t, language, setLanguage } = useI18n();
+  const { t, language } = useI18n();
+  const [languageOpen, setLanguageOpen] = useState(false);
+  const current = LANGUAGES.find((item) => item.code === language)?.label ?? language;
 
   return (
     <AuthLayout
@@ -16,21 +22,17 @@ export default function Welcome() {
       subtitle={t('welcome_subtitle')}
       shade={false}
       footer={
-        <View className="flex-row justify-center gap-1" accessibilityRole="radiogroup">
-          {LANGUAGES.map((item) => (
-            <Pressable
-              key={item.code}
-              accessibilityRole="radio"
-              accessibilityState={{ selected: language === item.code }}
-              hitSlop={6}
-              onPress={() => setLanguage(item.code)}
-              className="min-h-11 justify-center px-3 active:opacity-70">
-              <Text
-                className={`text-sm ${language === item.code ? 'font-semibold text-white' : 'font-normal text-white/60'}`}>
-                {item.label}
-              </Text>
-            </Pressable>
-          ))}
+        <View className="items-center">
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`${t('settings_language')}: ${current}`}
+            hitSlop={8}
+            onPress={() => setLanguageOpen(true)}
+            className="min-h-11 flex-row items-center gap-1.5 px-3 active:opacity-70">
+            <Text className="text-[15.4px] font-medium text-white/90">{current}</Text>
+            <ChevronDown size={16} color="rgba(255, 255, 255, 0.7)" />
+          </Pressable>
+          <AuthLanguageSheet visible={languageOpen} onClose={() => setLanguageOpen(false)} />
         </View>
       }>
       <View className="gap-3">

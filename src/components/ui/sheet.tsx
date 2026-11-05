@@ -50,6 +50,8 @@ type SheetProps = {
   tall?: boolean;
   // Wraps the content in a scroll view. Off for a content that is a list itself.
   scroll?: boolean;
+  // The dark panel of the welcome and sign-in screens, as dark as they are, instead of the white one of the app.
+  dark?: boolean;
 };
 
 export const OPEN_MS = 190;
@@ -177,6 +179,7 @@ export default function Sheet({
   form = false,
   tall = false,
   scroll = true,
+  dark = false,
 }: SheetProps) {
   const { t } = useI18n();
   const insets = useSafeAreaInsets();
@@ -394,24 +397,28 @@ export default function Sheet({
         <ConfirmProvider>
           <View className="flex-1 justify-end">
             {/* Anywhere outside the panel closes it. */}
-            <Animated.View className="absolute inset-0 bg-black/40" style={backdropStyle}>
+            <Animated.View className={`absolute inset-0 ${dark ? 'bg-black/60' : 'bg-black/40'}`} style={backdropStyle}>
               <Pressable accessibilityLabel={t('close')} className="flex-1" onPress={onClose} />
             </Animated.View>
             <Animated.View
               style={[panelStyle, measuring && { opacity: 0 }]}
               onLayout={(event) => panelHeight.set(event.nativeEvent.layout.height)}>
-              <View className="overflow-hidden rounded-t-3xl bg-white" style={size}>
+              <View
+                className={`overflow-hidden rounded-t-3xl ${dark ? 'border-t border-white/10 bg-[#15191c]' : 'bg-white'}`}
+                style={size}>
                 <GestureDetector gesture={pull}>
                   <View onLayout={(event) => setHeaderHeight(Math.round(event.nativeEvent.layout.height))}>
                     <View className="items-center pt-2.5">
-                      <View className="h-1 w-10 rounded-full bg-neutral-300" />
+                      <View className={`h-1 w-10 rounded-full ${dark ? 'bg-white/25' : 'bg-neutral-300'}`} />
                     </View>
                     {shownTitle ? (
                       <View className="flex-row items-center justify-between pb-1 pl-page pr-4 pt-4">
-                        <Text accessibilityRole="header" className="flex-1 text-[24px] font-semibold">
+                        <Text
+                          accessibilityRole="header"
+                          className={`flex-1 text-[24px] font-semibold ${dark ? 'text-white' : ''}`}>
                           {shownTitle}
                         </Text>
-                        <IconButton icon={X} label={t('close')} onPress={onClose} round />
+                        <IconButton icon={X} label={t('close')} onPress={onClose} round dark={dark} />
                       </View>
                     ) : null}
                   </View>
