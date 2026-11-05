@@ -13,7 +13,7 @@ import { sendEmailsBestEffort } from '../utils/email.js';
 import { LANGUAGES } from '../utils/messages/index.js';
 import { passwordResetEmail } from '../utils/emailTemplates.js';
 import { exchangeAppleAuthorizationCode, revokeAppleToken, verifyAppleIdentityToken } from '../utils/apple.js';
-import { verifyGoogleIdToken } from '../utils/google.js';
+import { verifyGoogleAccessToken, verifyGoogleIdToken } from '../utils/google.js';
 import { HttpError } from '../utils/http.js';
 import { optionalText } from '../utils/validators.js';
 import { hashPassword, newPasswordSchema, verifyAgainstDecoy, verifyPassword } from '../utils/password.js';
@@ -47,10 +47,20 @@ const loginSchema = z.object({
   email: emailSchema,
   password: z.string({ error: 'Password is required' }).min(1, 'Password is required'),
 });
-const googleSchema = z.object({
-  id_token: z.string({ error: 'Google token is required' }).min(1, 'Google token is required').max(8192),
-  language: languageHint,
-});
+const GOOGLE_TOKEN_REQUIRED = 'Google token is required: send an id_token (the phone) or an access_token (the web build)';
+const googleSchema = z
+  .object({
+    // What the phone's sign-in gets from Google: a signed proof of who signed in.
+    id_token: z.string({ error: GOOGLE_TOKEN_REQUIRED }).min(1, GOOGLE_TOKEN_REQUIRED).max(8192).optional(),
+    // What the web build gets, which the server asks Google about (see utils/google.js).
+    access_token: z.string({ error: GOOGLE_TOKEN_REQUIRED }).min(1, GOOGLE_TOKEN_REQUIRED).max(4096).optional(),
+    language: languageHint,
+  })
+  // One of the two, and not both.
+  .refine(({ id_token, access_token }) => Boolean(id_token) !== Boolean(access_token), {
+    message: GOOGLE_TOKEN_REQUIRED,
+    path: ['id_token'],
+  });
 const appleSchema = z.object({
   identity_token: z.string({ error: 'Apple token is required' }).min(1, 'Apple token is required').max(8192),
   // What the server trades with Apple for a token it can revoke when the account is deleted (see rememberAppleRefreshToken).
@@ -190,7 +200,8 @@ async function accountForGoogle({ sub, email, name }, language) {
 
 // POST /api/auth/google
 router.post('/google', authLimiter, validateBody(googleSchema), async (req, res) => {
-  const google = await verifyGoogleIdToken(req.body.id_token);
+  const { id_token, access_token } = req.body;
+  const google = access_token ? await verifyGoogleAccessToken(access_token) : await verifyGoogleIdToken(id_token);
   if (!google.emailVerified) {
     throw new HttpError(403, 'The email of this Google account is not verified', { code: 'google_email_unverified' });
   }
@@ -267,13 +278,16 @@ async function accountForApple({ sub, email, emailVerified }, fullName, language
 
 /**
  * Trades the authorization code of a sign-in with Apple for a refresh token and keeps it, so that deleting the account can
- * revoke it. Best effort, down to the last line: no key to ask Apple with, a code Apple refuses or a database that does not
- * take the token leave the sign-in as it is.
+ * revoke it. The code is traded as the one the sign-in was made for, the app or the web (`clientId`, the audience of its
+ * identity token), and the token is kept with it: Apple will have it revoked by that one only. Best effort, down to the last
+ * line: no key to ask Apple with, a code Apple refuses or a database that does not take the token leave the sign-in as it is.
  */
-async function rememberAppleRefreshToken(userId, authorizationCode) {
+async function rememberAppleRefreshToken(userId, authorizationCode, clientId) {
   try {
-    const refreshToken = await exchangeAppleAuthorizationCode(authorizationCode);
-    if (refreshToken) await db.update(users).set({ apple_refresh_token: refreshToken }).where(eq(users.id, userId));
+    const refreshToken = await exchangeAppleAuthorizationCode(authorizationCode, { clientId });
+    if (refreshToken) {
+      await db.update(users).set({ apple_refresh_token: refreshToken, apple_client_id: clientId }).where(eq(users.id, userId));
+    }
   } catch (err) {
     console.error('[apple] Could not keep the refresh token:', err.message);
   }
@@ -301,7 +315,7 @@ router.post('/apple', authLimiter, validateBody(appleSchema), async (req, res) =
   if (!account.user.is_active) {
     throw new HttpError(403, 'Account is inactive. Contact support.', { code: 'account_inactive' });
   }
-  if (authorization_code) await rememberAppleRefreshToken(account.user.id, authorization_code);
+  if (authorization_code) await rememberAppleRefreshToken(account.user.id, authorization_code, apple.audience);
   signIn(res, account.user, account.created ? 201 : 200);
 });
 
@@ -345,7 +359,7 @@ router.post('/delete-account', requireAuth, authLimiter, validateBody(deleteAcco
   // it is, a new sign-in with Apple is not a first one: it brings no name for the account made then. Best effort: the
   // account is deleted whatever Apple answers.
   if (req.user.apple_sub && req.user.apple_refresh_token) {
-    await revokeAppleToken(req.user.apple_refresh_token);
+    await revokeAppleToken(req.user.apple_refresh_token, { clientId: req.user.apple_client_id });
   }
 
   // Everything the account owns goes with it: its clients, rackets, strings, services, orders and photos are deleted by

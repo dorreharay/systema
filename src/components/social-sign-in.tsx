@@ -21,8 +21,9 @@ type SocialSignInProps = {
 
 // "or", then Apple and Google side by side, as buttons with only their logo, below the button that signs in with a password.
 // Shown on the sign-in and the sign-up screen alike: Apple and Google make the account when there is none. Apple goes first:
-// its guidelines ask for its button to be as prominent as any other way in. Nothing is drawn where neither can sign in (the
-// web build).
+// its guidelines ask for its button to be as prominent as any other way in. The web build has them too (see google-sign-in.web.ts
+// and the .web files of Apple's), once it knows the Web client ID of Google and the Services ID of Apple; nothing is drawn where
+// neither can sign in.
 export default function SocialSignIn({ disabled, onError }: SocialSignInProps) {
   const { t } = useI18n();
   const apple = useAppleLibrary();

@@ -399,12 +399,167 @@ test('Google', 'an account made with Google has no password until it sets one, a
   assertStatus(await new Client(ctx.server.base).post('/api/auth/login', { email: user.email, password: 'a-brand-new-pass-2' }), 200);
   assertStatus((await googleLogin(ctx, user)).res, 200);
 });
+// The browser's token (Google Identity Services) is made out to the same Web client ID as the app's, so it needs nothing of its
+// own; a web client of its own would be one more ID in the list.
+test('Google', 'a second client ID in the list is an audience too, and one that is not listed is refused', async (ctx) => {
+  const web = 'web-only.apps.googleusercontent.com';
+  const server = await startServer({
+    port: CONFIG.port + 1,
+    env: { ...ctx.google.env, GOOGLE_CLIENT_IDS: `${ctx.google.clientId},${web}` },
+  });
+  try {
+    const post = async (claims) =>
+      new Client(server.base).post('/api/auth/google', { id_token: await ctx.google.idToken(claims) });
+    assertStatus(await post({ ...googleUser(), aud: web }), 201);
+    assertStatus(await post({ ...googleUser(), aud: ctx.google.clientId }), 201);
+    const unlisted = await post({ ...googleUser(), aud: 'ios-only.apps.googleusercontent.com' });
+    assertStatus(unlisted, 401);
+    assertEq(unlisted.data.code, 'google_token_invalid', 'code');
+  } finally {
+    await server.stop();
+  }
+});
+// The web build has a button of its own, so Google's library gives it an access token and not an ID token (a page gets that only
+// through a button Google draws): the server asks Google about the token. Everything else about the sign-in is the same.
+/** Signs in as the web build does, with an access token made from `claims` (see accessToken in the harness), as a client of its own. */
+async function googleWebLogin(ctx, claims, body = {}) {
+  const client = new Client(ctx.server.base);
+  const token = ctx.google.accessToken(claims);
+  const res = await client.post('/api/auth/google', { access_token: token, ...body });
+  return { client, res, token };
+}
+
+test('Google', 'the web: an access token signs in and makes an account like an ID token does', async (ctx) => {
+  const user = googleUser({ email: 'Wanda.Web@Test.Local' });
+  const { client, res, token } = await googleWebLogin(ctx, user, { language: 'pl' });
+  assertStatus(res, 201);
+  assertEq(res.data.user.email, 'wanda.web@test.local', 'the email, in lower case');
+  assertEq(res.data.user.full_name, 'Gina Google', 'the name Google gives');
+  assertEq(res.data.user.language, 'pl', 'the language of the app');
+  assertEq(res.data.user.has_password, false, 'there is no password');
+  assertEq(res.data.user.setup_completed, false, 'the first-run setup is still to do');
+  assertTrue(res.data.token, 'a token is returned, which the web build keeps in localStorage');
+  assertTrue(client.cookies.has('auth_token'), 'the session cookie is set');
+  assertTrue(!('google_sub' in res.data.user) && !('password_hash' in res.data.user), 'the secrets are not exposed');
+  assertEq(dbScalar(`SELECT google_sub FROM users WHERE email='wanda.web@test.local'`), user.sub, 'the Google id is kept');
+  assertEq((await client.get('/api/auth/me')).data.email, 'wanda.web@test.local', 'the session works');
+  assertTrue(Number(dbScalar(`SELECT count(*) FROM services WHERE user_id='${res.data.user.id}'`)) > 0, 'the default services are made');
+
+  // What Google was asked, and how: the token in the body of a form, never in an address, and in no log.
+  const [question] = ctx.google.asked('tokeninfo').filter((request) => request.token === token);
+  assertEq([question.method, question.contentType], ['POST', 'application/x-www-form-urlencoded'], 'as a form');
+  assertTrue(!question.address.includes(token), 'not in the address');
+  const [profile] = ctx.google.asked('userinfo').filter((request) => request.token === token);
+  assertEq(profile.authorization, `Bearer ${token}`, 'and as a bearer for the name');
+  assertTrue(!ctx.server.logs().includes(token), 'nothing secret is printed');
+});
+test('Google', 'the web: the phone and the web are one Google user, and so one account, whichever comes first', async (ctx) => {
+  const fromPhone = googleUser();
+  const first = await googleLogin(ctx, fromPhone);
+  assertStatus(first.res, 201);
+  const web = await googleWebLogin(ctx, fromPhone);
+  assertEq([web.res.status, web.res.data.user.id], [200, first.res.data.user.id], 'the web finds the account the phone made');
+
+  const fromWeb = googleUser();
+  const second = await googleWebLogin(ctx, fromWeb);
+  assertStatus(second.res, 201);
+  const phone = await googleLogin(ctx, fromWeb);
+  assertEq([phone.res.status, phone.res.data.user.id], [200, second.res.data.user.id], 'the phone finds the account the web made');
+  assertEq([googleUserCount(fromPhone.email), googleUserCount(fromWeb.email)], ['1', '1'], 'one account each');
+});
+test('Google', 'the web: an account with the same email is linked, its password removed, and a later sign-in does not change its language', async (ctx) => {
+  const { email, res: registered } = await register(ctx);
+  const { client, res } = await googleWebLogin(ctx, googleUser({ email }), { language: 'de' });
+  assertStatus(res, 200);
+  assertEq(res.data.user.id, registered.data.user.id, 'the account that was there');
+  assertEq(res.data.user.language, 'en', 'it keeps its own language');
+  assertStatus(await new Client(ctx.server.base).post('/api/auth/login', { email, password }), 401);
+  assertStatus(await client.get('/api/auth/me'), 200);
+});
+test('Google', 'the web: refuses a token made for another app, one Google does not know, and one that has run out', async (ctx) => {
+  const refused = async (label, res, user) => {
+    assertEq([res.status, res.data.code], [401, 'google_token_invalid'], label);
+    assertEq(googleUserCount(user.email), '0', `no account (${label})`);
+  };
+  const other = googleUser();
+  await refused('another app', (await googleWebLogin(ctx, { ...other, aud: 'someone-elses-app.apps.googleusercontent.com' })).res, other);
+  const expired = googleUser();
+  await refused('run out', (await googleWebLogin(ctx, { ...expired, expired: true })).res, expired);
+  const unknown = await new Client(ctx.server.base).post('/api/auth/google', { access_token: 'ya29.nobody-gave-this' });
+  assertEq([unknown.status, unknown.data.code], [401, 'google_token_invalid'], 'unknown');
+  const garbage = await new Client(ctx.server.base).post('/api/auth/google', { access_token: 'x' });
+  assertEq([garbage.status, garbage.data.code], [401, 'google_token_invalid'], 'garbage');
+});
+test('Google', 'the web: refuses an address Google has not verified or did not give, and makes no account', async (ctx) => {
+  const unverified = googleUser();
+  const refused = await googleWebLogin(ctx, { ...unverified, email_verified: 'false' });
+  assertEq([refused.res.status, refused.res.data.code], [403, 'google_email_unverified'], 'unverified');
+  assertEq(googleUserCount(unverified.email), '0', 'no account');
+  for (const flag of [false, 'False', 'no']) {
+    const user = googleUser();
+    const res = (await googleWebLogin(ctx, { ...user, email_verified: flag })).res;
+    assertEq([res.status, res.data.code], [403, 'google_email_unverified'], `unverified as ${JSON.stringify(flag)}`);
+  }
+  // A person who did not give the scope for the address: there is nothing to make an account of.
+  const noAddress = googleUser();
+  const missing = await googleWebLogin(ctx, { ...noAddress, email: undefined });
+  assertEq([missing.res.status, missing.res.data.code], [401, 'google_token_invalid'], 'no address');
+});
+test('Google', 'the web: a name Google does not give does not stop the sign-in', async (ctx) => {
+  const cases = [
+    ['userinfo fails', { userinfoStatus: 500 }],
+    ['userinfo refuses', { userinfoStatus: 401 }],
+    ['no name', { name: undefined }],
+    ['a blank name', { name: '   ' }],
+    ['the name of someone else', { userinfoSub: 'someone-else' }],
+  ];
+  for (const [label, claims] of cases) {
+    const { res } = await googleWebLogin(ctx, googleUser(claims));
+    assertEq([res.status, res.data.user.full_name], [201, null], label);
+  }
+  const long = await googleWebLogin(ctx, googleUser({ name: 'n'.repeat(150) }));
+  assertEq(long.res.data.user.full_name.length, 100, 'a name of 100 at most');
+});
+test('Google', 'the web: Google out of reach is a 503 and no fault of the token', async (ctx) => {
+  for (const claims of [{ tokeninfoStatus: 500 }, { tokeninfoStatus: 503 }, { tokeninfoStatus: 429 }]) {
+    const user = googleUser();
+    const { res } = await googleWebLogin(ctx, { ...user, ...claims });
+    assertEq([res.status, res.data.code], [503, 'google_unavailable'], `tokeninfo answers ${claims.tokeninfoStatus}`);
+    assertEq(googleUserCount(user.email), '0', 'no account');
+  }
+  // Nothing listens on port 1, so the connection is refused at once.
+  const server = await startServer({ port: CONFIG.port + 1, env: { ...ctx.google.env, GOOGLE_TOKENINFO_URL: 'http://127.0.0.1:1/tokeninfo' } });
+  try {
+    const user = googleUser();
+    const res = await new Client(server.base).post('/api/auth/google', { access_token: ctx.google.accessToken(user) });
+    assertEq([res.status, res.data.code], [503, 'google_unavailable'], 'not reached');
+    assertEq(googleUserCount(user.email), '0', 'no account');
+    assertTrue(server.logs().includes('[google] Could not check an access token'), 'and it is said in the log');
+  } finally {
+    await server.stop();
+  }
+});
+test('Google', 'a request carries one Google token: an ID token or an access token', async (ctx) => {
+  const missing = await ctx.anon.post('/api/auth/google', {});
+  assertStatus(missing, 400);
+  assertTrue(missing.data.fields.id_token, 'the token is named');
+  const both = await ctx.anon.post('/api/auth/google', { id_token: await ctx.google.idToken(googleUser()), access_token: ctx.google.accessToken(googleUser()) });
+  assertStatus(both, 400);
+  assertTrue(both.data.fields.id_token, 'not both');
+  for (const body of [{ access_token: '' }, { access_token: 42 }, { access_token: 'a'.repeat(4097) }, { id_token: 'a'.repeat(8193) }]) {
+    assertStatus(await ctx.anon.post('/api/auth/google', body), 400);
+  }
+  assertStatus(await new Client(ctx.server.base).post('/api/auth/google', { access_token: ctx.google.accessToken(googleUser()), language: 'xx' }), 201);
+});
+
 test('Google', 'is off while the server has no client IDs', async (ctx) => {
-  const server = await startServer({ port: CONFIG.port + 1, env: { GOOGLE_CLIENT_IDS: '' } });
+  const server = await startServer({ port: CONFIG.port + 1, env: { ...ctx.google.env, GOOGLE_CLIENT_IDS: '' } });
   try {
     const res = await new Client(server.base).post('/api/auth/google', { id_token: await ctx.google.idToken(googleUser()) });
     assertStatus(res, 503);
     assertEq(res.data.code, 'google_not_configured', 'code');
+    const web = await new Client(server.base).post('/api/auth/google', { access_token: ctx.google.accessToken(googleUser()) });
+    assertEq([web.status, web.data.code], [503, 'google_not_configured'], 'for the web as well');
   } finally {
     await server.stop();
   }
@@ -796,6 +951,114 @@ test('Apple', 'a sign-in that is turned away does not trade its code', async (ct
   assertStatus(await new Client(ctx.server.base).post('/api/auth/apple', { identity_token: 'not.a.jwt', ...withCode() }), 401);
 
   assertEq(codes.map((code) => tradedFor(ctx, code).length), [0, 0, 0, 0, 0], 'Apple was never asked');
+});
+
+// The browser signs in with Sign in with Apple JS, which makes the identity token out to the Services ID of the web sign-in and
+// not to the app's bundle ID. Everything else about the sign-in is the same.
+/** Signs in as the browser does: with a token made out to the Services ID. */
+const appleWebLogin = (ctx, claims, body) => appleLogin(ctx, { aud: ctx.apple.webClientId, ...claims }, body);
+const appleClientOf = (email) => dbScalar(`SELECT apple_client_id FROM users WHERE email='${email}'`);
+
+test('Apple', 'the web: a token made out to the Services ID signs in and makes an account like the app\'s', async (ctx) => {
+  const user = appleUser({ email: ' Wendy.Web@Test.Local' });
+  const { client, res } = await appleWebLogin(ctx, user, { full_name: ' Wendy Web ', language: 'pl' });
+  assertStatus(res, 201);
+  assertEq(res.data.user.email, 'wendy.web@test.local', 'the email, tidied');
+  assertEq(res.data.user.full_name, 'Wendy Web', 'the name the page passed on');
+  assertEq(res.data.user.language, 'pl', 'the language of the app');
+  assertEq(res.data.user.has_password, false, 'there is no password');
+  assertEq(res.data.user.setup_completed, false, 'the first-run setup is still to do');
+  assertTrue(res.data.token, 'a token is returned, which the web build keeps in localStorage');
+  assertEq(dbScalar(`SELECT apple_sub FROM users WHERE email='wendy.web@test.local'`), user.sub, 'the Apple id is kept');
+  assertEq((await client.get('/api/auth/me')).data.email, 'wendy.web@test.local', 'the session works');
+  // And the token as a bearer, which is all the browser has once the page is reloaded.
+  const bearer = new Client(ctx.server.base);
+  bearer.token = res.data.token;
+  assertEq((await bearer.get('/api/auth/me')).data.email, 'wendy.web@test.local', 'the bearer token works too');
+});
+test('Apple', 'the web: the app and the web are one Apple user, and so one account, whichever comes first', async (ctx) => {
+  const fromApp = appleUser();
+  const first = await appleLogin(ctx, fromApp);
+  assertStatus(first.res, 201);
+  const web = await appleWebLogin(ctx, fromApp);
+  assertEq([web.res.status, web.res.data.user.id], [200, first.res.data.user.id], 'the web finds the account the app made');
+
+  const fromWeb = appleUser();
+  const second = await appleWebLogin(ctx, fromWeb);
+  assertStatus(second.res, 201);
+  const app = await appleLogin(ctx, fromWeb);
+  assertEq([app.res.status, app.res.data.user.id], [200, second.res.data.user.id], 'the app finds the account the web made');
+  assertEq([appleUserCount(fromApp.email), appleUserCount(fromWeb.email)], ['1', '1'], 'one account each');
+});
+test('Apple', 'the web: an account with the same verified email is linked, its password removed', async (ctx) => {
+  const { email, res: registered } = await register(ctx);
+  const { client, res } = await appleWebLogin(ctx, appleUser({ email }));
+  assertStatus(res, 200);
+  assertEq(res.data.user.id, registered.data.user.id, 'the account that was there');
+  assertEq(res.data.user.has_password, false, 'it has no password now');
+  assertStatus(await new Client(ctx.server.base).post('/api/auth/login', { email, password }), 401);
+  assertStatus(await client.get('/api/auth/me'), 200);
+  // An email Apple does not call verified still links nothing.
+  const other = await register(ctx);
+  const unverified = await appleWebLogin(ctx, appleUser({ email: other.email, email_verified: 'false' }));
+  assertEq([unverified.res.status, unverified.res.data.code], [409, 'email_taken'], 'not linked');
+});
+test('Apple', 'the web: the code is traded as the Services ID, and the token is kept with the client it was made for', async (ctx) => {
+  const user = appleUser();
+  const code = appleCode();
+  const { res } = await appleWebLogin(ctx, user, { authorization_code: code });
+  assertStatus(res, 201);
+  assertEq(refreshTokenOf(user.email), `refresh-${code}`, 'what Apple gave for the code');
+  assertEq(appleClientOf(user.email), ctx.apple.webClientId, 'kept with the Services ID');
+
+  const [request, ...more] = tradedFor(ctx, code);
+  assertEq(more.length, 0, 'once');
+  assertEq(
+    [request.fields.grant_type, request.fields.code, request.fields.client_id],
+    ['authorization_code', code, ctx.apple.webClientId],
+    'as the Services ID'
+  );
+  assertEq(request.secret.valid, true, `with a client secret Apple accepts, naming the Services ID: ${request.secret.reason}`);
+  assertEq(request.secret.claims.sub, ctx.apple.webClientId, 'the client secret speaks for the same one');
+
+  // The app's code is still traded as the app: the two never get mixed up.
+  const app = appleUser();
+  const appCode = appleCode();
+  assertStatus((await appleLogin(ctx, app, { authorization_code: appCode })).res, 201);
+  assertEq(tradedFor(ctx, appCode)[0].fields.client_id, ctx.apple.clientId, 'as the app');
+  assertEq(appleClientOf(app.email), ctx.apple.clientId, 'kept with the app');
+
+  // The newest token is the one kept, with its client: a person who signed in on the phone and then in the browser has the
+  // browser's, and the other way round.
+  const newer = appleCode();
+  assertStatus((await appleWebLogin(ctx, app, { authorization_code: newer })).res, 200);
+  assertEq([refreshTokenOf(app.email), appleClientOf(app.email)], [`refresh-${newer}`, ctx.apple.webClientId], 'the web\'s now');
+  const newest = appleCode();
+  assertStatus((await appleLogin(ctx, app, { authorization_code: newest })).res, 200);
+  assertEq([refreshTokenOf(app.email), appleClientOf(app.email)], [`refresh-${newest}`, ctx.apple.clientId], 'and the app\'s again');
+  // A sign-in with no code leaves token and client alone.
+  assertStatus((await appleWebLogin(ctx, app)).res, 200);
+  assertEq([refreshTokenOf(app.email), appleClientOf(app.email)], [`refresh-${newest}`, ctx.apple.clientId], 'untouched');
+});
+test('Apple', 'the web: a Services ID the server does not list is refused, and so is every other client', async (ctx) => {
+  // A server set up for the app only, as the production one is until the web sign-in is switched on.
+  const server = await startServer({ port: CONFIG.port + 1, env: { ...ctx.apple.env, APPLE_CLIENT_IDS: ctx.apple.clientId } });
+  try {
+    const user = appleUser();
+    const refused = await new Client(server.base).post('/api/auth/apple', {
+      identity_token: await ctx.apple.identityToken({ ...user, aud: ctx.apple.webClientId }),
+    });
+    assertStatus(refused, 401);
+    assertEq(refused.data.code, 'apple_token_invalid', 'code');
+    assertEq(appleUserCount(user.email), '0', 'no account');
+    assertStatus(await new Client(server.base).post('/api/auth/apple', { identity_token: await ctx.apple.identityToken(user) }), 201);
+  } finally {
+    await server.stop();
+  }
+  const stranger = appleUser();
+  const { res } = await appleLogin(ctx, { ...stranger, aud: `${ctx.apple.webClientId}.evil` });
+  assertEq([res.status, res.data.code], [401, 'apple_token_invalid'], 'a look-alike Services ID');
+  assertEq(appleUserCount(stranger.email), '0', 'no account');
 });
 
 // ---------------------------------------------------------------------------
@@ -1517,6 +1780,37 @@ test('Account', 'an account made with Apple is deleted without a password, and i
   const again = await appleLogin(ctx, user);
   assertStatus(again.res, 201);
   assertEq((await again.client.get('/api/clients')).data.items, [], 'nothing of the old one');
+});
+test('Account', 'an account made with Apple on the web has its token revoked as the Services ID it was made for', async (ctx) => {
+  const user = appleUser();
+  const code = appleCode();
+  const { client } = await appleWebLogin(ctx, user, { authorization_code: code });
+  const revoked = ctx.apple.asked('revoke').length;
+
+  assertStatus(await client.post('/api/auth/delete-account', {}), 200);
+  assertEq(appleUserCount(user.email), '0', 'the account is gone');
+  const requests = ctx.apple.asked('revoke').slice(revoked);
+  assertEq(requests.length, 1, 'Apple was told once');
+  assertEq(
+    [requests[0].fields.token, requests[0].fields.client_id, requests[0].secret.claims?.sub],
+    [`refresh-${code}`, ctx.apple.webClientId, ctx.apple.webClientId],
+    'which token, as the Services ID, with a client secret that speaks for it'
+  );
+  assertEq(requests[0].secret.valid, true, `and Apple accepts it: ${requests[0].secret.reason}`);
+});
+test('Account', 'a token kept before accounts remembered their client is revoked as the app', async (ctx) => {
+  const user = appleUser();
+  const code = appleCode();
+  const { client } = await appleLogin(ctx, user, { authorization_code: code });
+  // What the database held before the column of the client was added: a token and no client.
+  dbExec(`UPDATE users SET apple_client_id = NULL WHERE email = '${user.email}'`);
+  const revoked = ctx.apple.asked('revoke').length;
+
+  assertStatus(await client.post('/api/auth/delete-account', {}), 200);
+  const requests = ctx.apple.asked('revoke').slice(revoked);
+  assertEq(requests.length, 1, 'Apple was told once');
+  assertEq([requests[0].fields.token, requests[0].fields.client_id], [`refresh-${code}`, ctx.apple.clientId], 'as the app');
+  assertEq(requests[0].secret.valid, true, `with a client secret Apple accepts: ${requests[0].secret.reason}`);
 });
 test('Account', 'the account is deleted whatever Apple answers to the revoking', async (ctx) => {
   const failures = [[500, { error: 'server_error' }], [400, { error: 'invalid_grant' }], [401, undefined]];
@@ -2896,9 +3190,7 @@ async function main() {
   resetDatabase();
   const google = await startFakeGoogle();
   const apple = await startFakeApple();
-  const server = await startServer({
-    env: { GOOGLE_CLIENT_IDS: google.clientId, GOOGLE_CERTS_URL: google.certsUrl, ...apple.env },
-  });
+  const server = await startServer({ env: { ...google.env, ...apple.env } });
   const ctx = { server, anon: new Client(server.base), google, apple };
 
   let failed = 0;

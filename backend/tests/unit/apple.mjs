@@ -48,11 +48,15 @@ assert.deepEqual(await verifyAppleIdentityToken(await sign(), options), {
   email: 'ann@example.com',
   emailVerified: true,
   isPrivateEmail: false,
+  audience: APP,
 });
 
-// Either of our apps may be the audience (and a token may name more than one audience).
-assert.equal((await check({ aud: DEV_APP })).sub, '001234.abcdef.5678', 'the second app');
+// Either of our identifiers (the app's bundle ID, the Services ID of the web sign-in) may be the audience, and the result says
+// which it was: a token may name more than one audience, and the first of ours that it names is the one.
+assert.equal((await check({ aud: DEV_APP })).sub, '001234.abcdef.5678', 'the second one');
+assert.equal((await check({ aud: DEV_APP })).audience, DEV_APP, 'and it is named');
 assert.equal((await check({ aud: ['com.example.other', APP] })).sub, '001234.abcdef.5678', 'one of several audiences');
+assert.equal((await check({ aud: ['com.example.other', DEV_APP, APP] })).audience, APP, 'the first of ours in the list, whatever the token puts first');
 
 // A person who hides their address has one Apple made up for this app.
 assert.deepEqual(await check({ email: 'x7k2m9@privaterelay.appleid.com', is_private_email: true }), {
@@ -60,6 +64,7 @@ assert.deepEqual(await check({ email: 'x7k2m9@privaterelay.appleid.com', is_priv
   email: 'x7k2m9@privaterelay.appleid.com',
   emailVerified: true,
   isPrivateEmail: true,
+  audience: APP,
 });
 
 // The flags arrive as booleans or as the strings "true" and "false", or not at all. Only a true one counts.
@@ -130,13 +135,13 @@ const settings = loadConfig({
   APPLE_AUTH_URL: 'https://apple.test/auth/',
 });
 
-/** A client secret as Apple would check it: signed with the key it knows, and naming the team, the key and the app. */
-async function readSecret(token) {
+/** A client secret as Apple would check it: signed with the key it knows, and naming the team, the key and the client (the app by default). */
+async function readSecret(token, subject = APP) {
   const { payload, protectedHeader } = await jwtVerify(token, signing.publicKey, {
     algorithms: ['ES256'],
     issuer: TEAM,
     audience: 'https://appleid.apple.com',
-    subject: APP,
+    subject,
   });
   return { payload, protectedHeader };
 }
@@ -151,6 +156,11 @@ async function readSecret(token) {
   assert.ok(payload.iat >= before && payload.iat <= before + 5, 'issued now');
   const lifetime = payload.exp - payload.iat;
   assert.ok(lifetime >= 60 && lifetime <= 600, `a few minutes, not days: ${lifetime}s`);
+  // It speaks for the client it is asked to (the Services ID of the web sign-in, say), and for the first one without a say.
+  for (const [asked, expected] of [[DEV_APP, DEV_APP], [undefined, APP], [null, APP], ['', APP]]) {
+    const { payload } = await readSecret(await appleClientSecret(settings, asked), expected);
+    assert.equal(payload.sub, expected, `client secret for ${JSON.stringify(asked)}`);
+  }
   // Only the key it was signed with checks out.
   const secretOf = await appleClientSecret(settings);
   const { publicKey: strangerKey } = await generateKeyPair('ES256');
@@ -192,6 +202,32 @@ try {
     assert.deepEqual(Object.keys(form).sort(), ['client_id', 'client_secret', 'code', 'grant_type'], 'the fields');
     assert.deepEqual([form.grant_type, form.code, form.client_id], ['authorization_code', CODE, APP], 'what they say');
     assert.equal((await readSecret(form.client_secret)).protectedHeader.kid, KEY, 'signed as Apple expects');
+  }
+
+  // As the client the code was made out to: the Services ID of the web sign-in, not the app's bundle ID. Apple wants the one that
+  // got the code to trade it, and the one that got the token to revoke it.
+  {
+    const { fetchImpl, calls } = fakeFetch(200, { refresh_token: REFRESH });
+    assert.equal(await exchangeAppleAuthorizationCode(CODE, { settings, fetchImpl, clientId: DEV_APP }), REFRESH);
+    assert.equal(calls[0].form.client_id, DEV_APP, 'the trade is made as that client');
+    assert.equal((await readSecret(calls[0].form.client_secret, DEV_APP)).payload.sub, DEV_APP, 'with a secret that speaks for it');
+    // Nothing named, or nothing kept (null from the database): the app's.
+    for (const clientId of [undefined, null, '']) {
+      const plain = fakeFetch(200, { refresh_token: REFRESH });
+      await exchangeAppleAuthorizationCode(CODE, { settings, fetchImpl: plain.fetchImpl, clientId });
+      assert.equal(plain.calls[0].form.client_id, APP, `the app's when the client is ${JSON.stringify(clientId)}`);
+    }
+  }
+  {
+    const { fetchImpl, calls } = fakeFetch(200, undefined);
+    assert.equal(await revokeAppleToken(REFRESH, { settings, fetchImpl, clientId: DEV_APP }), true);
+    assert.equal(calls[0].form.client_id, DEV_APP, 'the revoking is made as that client');
+    assert.equal((await readSecret(calls[0].form.client_secret, DEV_APP)).payload.sub, DEV_APP, 'with a secret that speaks for it');
+    for (const clientId of [undefined, null, '']) {
+      const plain = fakeFetch(200, undefined);
+      await revokeAppleToken(REFRESH, { settings, fetchImpl: plain.fetchImpl, clientId });
+      assert.equal(plain.calls[0].form.client_id, APP, `the app's when the client is ${JSON.stringify(clientId)}`);
+    }
   }
 
   // What Apple does not give.

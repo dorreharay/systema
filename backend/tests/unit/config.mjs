@@ -34,6 +34,11 @@ assert.deepEqual(
 );
 assert.deepEqual(loadConfig({ GOOGLE_CLIENT_IDS: '' }).googleClientIds, [], 'an empty setting is none');
 assert.equal(dev.googleCertsUrl, 'https://www.googleapis.com/oauth2/v3/certs', 'Google\'s own keys');
+assert.equal(dev.googleTokeninfoUrl, 'https://oauth2.googleapis.com/tokeninfo', 'Google\'s own answer about an access token');
+assert.equal(dev.googleUserinfoUrl, 'https://openidconnect.googleapis.com/v1/userinfo', 'and about the person');
+assert.equal(loadConfig({ GOOGLE_TOKENINFO_URL: 'http://127.0.0.1:9/tokeninfo' }).googleTokeninfoUrl, 'http://127.0.0.1:9/tokeninfo');
+assert.equal(loadConfig({ GOOGLE_USERINFO_URL: 'http://127.0.0.1:9/userinfo' }).googleUserinfoUrl, 'http://127.0.0.1:9/userinfo');
+assert.equal(loadConfig({ GOOGLE_TOKENINFO_URL: '' }).googleTokeninfoUrl, 'https://oauth2.googleapis.com/tokeninfo', 'an empty setting is the default');
 
 // Sign in with Apple.
 assert.deepEqual(dev.appleClientIds, [], 'Apple sign-in is off until a bundle ID is given');

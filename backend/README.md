@@ -89,7 +89,7 @@ Every error is `{ "error": "message", "code"?: "machine_reason", "fields"?: { "f
 | `GET` | `/api/health` | `{ ok: true }`, no auth |
 | `POST` | `/api/auth/register` | `{ email, password, full_name?, language? }` → `201 { user, token }`, 409 `email_taken`. `language` is the language the app was in, one of `en`, `de`, `fr`, `es`, `it`, `pt`, `ja`, `uk`, `pl`: a new account is made in it, and so are its first services (it is `en` without one, and a language the server does not know is ignored); `google` and `apple` take it the same way |
 | `POST` | `/api/auth/login` | `{ email, password }` → `{ user, token }`, 401 `invalid_credentials` |
-| `POST` | `/api/auth/google` | `{ id_token, language? }`, the ID token from Google Sign-In → `{ user, token }` (`201` for a new account); 401 `google_token_invalid`, 403 `google_email_unverified` / `account_inactive`, 409 `google_account_mismatch`, 503 `google_not_configured` / `google_unavailable` |
+| `POST` | `/api/auth/google` | `{ id_token, language? }`, the ID token from Google Sign-In (the web build sends `{ access_token, language? }` instead) → `{ user, token }` (`201` for a new account); 401 `google_token_invalid`, 403 `google_email_unverified` / `account_inactive`, 409 `google_account_mismatch`, 503 `google_not_configured` / `google_unavailable` |
 | `POST` | `/api/auth/apple` | `{ identity_token, authorization_code?, full_name?, language? }`, from Sign in with Apple → `{ user, token }` (`201` for a new account); 400 `apple_email_missing`, 401 `apple_token_invalid`, 403 `account_inactive`, 409 `apple_account_mismatch` / `email_taken`, 503 `apple_not_configured` / `apple_unavailable` |
 | `POST` | `/api/auth/logout` | clears the cookie |
 | `GET` | `/api/auth/me` | the signed-in user |
@@ -109,7 +109,13 @@ Register, login, Google and Apple sign-in, delete-account, forgot-password and r
 
 The app signs in with Google on the device and sends the **ID token** to `POST /api/auth/google`. The server checks
 it (`src/utils/google.js`): signed with Google's published keys, issued to one of the client IDs in
-`GOOGLE_CLIENT_IDS`, not expired, and the email verified by Google. Then it answers with the same `{ user, token }`
+`GOOGLE_CLIENT_IDS`, not expired, and the email verified by Google. The web build cannot get an ID token (a page gets one only
+through a button Google draws, and the web build has its own), so it sends an `access_token` instead, in place of the
+`id_token` (one of the two, never both): the server asks Google about it (`src/utils/google.js`: `tokeninfo`, whom the token
+was made out to, which has to be one of `GOOGLE_CLIENT_IDS`, the same Web client ID as the phone's, or any other app's token
+would sign anyone in; `userinfo`, the name, an extra), and the answer is handled exactly as an ID token's is. Google not
+answering is 503 `google_unavailable`. `GOOGLE_TOKENINFO_URL` and `GOOGLE_USERINFO_URL` are where those two questions go; only a
+test has a reason to change them. Then it answers with the same `{ user, token }`
 as a password sign-in. With no `GOOGLE_CLIENT_IDS` the endpoint answers 503 `google_not_configured`. The Google Cloud
 side is set up as described in [`../docs/google-sign-in.md`](../docs/google-sign-in.md).
 
@@ -127,12 +133,15 @@ An inactive account is refused (403) and left as it was.
 
 ### Sign in with Apple
 
-The app signs in with Apple on the device and sends what Apple gave it to `POST /api/auth/apple`:
+The app signs in with Apple on the device (the web build, with Sign in with Apple JS, in the browser: see
+[`../docs/web-sign-in.md`](../docs/web-sign-in.md)) and sends what Apple gave it to `POST /api/auth/apple`:
 `{ identity_token, authorization_code?, full_name? }`. `identity_token` is the token (up to 8192 characters);
 `authorization_code` (up to 2048) is the code that came with it, and `full_name` (up to 100, trimmed) is the name, which
 Apple gives only the first time a person authorizes the app. The server checks the token (`src/utils/apple.js`): RS256,
-signed with Apple's published keys (`APPLE_KEYS_URL`), issued by `https://appleid.apple.com` to one of the bundle IDs in
-`APPLE_CLIENT_IDS`, not expired. With no `APPLE_CLIENT_IDS` the endpoint answers 503 `apple_not_configured`; a token that
+signed with Apple's published keys (`APPLE_KEYS_URL`), issued by `https://appleid.apple.com` to one of the identifiers in
+`APPLE_CLIENT_IDS`, not expired. The identifiers are the app's bundle ID, which the token of the native sign-in is made out
+to, and the Services ID of the web sign-in, which the browser's is made out to (the bundle ID goes first). With no
+`APPLE_CLIENT_IDS` the endpoint answers 503 `apple_not_configured`; a token that
 fails the check is 401 `apple_token_invalid`, and Apple's keys out of reach is 503 `apple_unavailable`. Then it answers with
 the same `{ user, token }` as a password sign-in (`201` for a new account, `200` otherwise).
 
@@ -159,9 +168,12 @@ in with Apple" ticked; the `.p8` file): `APPLE_TEAM_ID`, `APPLE_KEY_ID` and `APP
 for its line breaks when it is on one line). All three or none, and with them `APPLE_CLIENT_IDS`: the server refuses to
 start otherwise. With the key, a sign-in that comes with an `authorization_code` trades it with Apple for a refresh token,
 which is kept in `users.apple_refresh_token` (never sent to the app), and `delete-account` revokes that token before it
-deletes the account. Both calls sign a short-lived ES256 client secret with the key (the team, the key and the first of the
-`APPLE_CLIENT_IDS` in it) and are best effort: whatever goes wrong is logged as `[apple] …` (nothing secret in it) and the
-sign-in or the deletion goes on. `APPLE_AUTH_URL` is the base of Apple's `/token` and `/revoke` endpoints and `APPLE_KEYS_URL`
+deletes the account. Apple has the code traded, and the token revoked, only by the client it was made out to, so the trade is
+made as the identifier the identity token was made out to (the bundle ID for the app, the Services ID for the browser), and
+that is kept with the token in `users.apple_client_id` (empty for a token kept before that column, which was always the
+app's: the first of `APPLE_CLIENT_IDS`). Both calls sign a short-lived ES256 client secret with the key (the team, the key and
+that client in it; one key serves both, as the Services ID is grouped with the app's primary App ID) and are best effort:
+whatever goes wrong is logged as `[apple] …` (nothing secret in it) and the sign-in or the deletion goes on. `APPLE_AUTH_URL` is the base of Apple's `/token` and `/revoke` endpoints and `APPLE_KEYS_URL`
 is where its keys are; only a test has a reason to change them.
 
 ### Stringing: clients, rackets, strings, services, orders

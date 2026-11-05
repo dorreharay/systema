@@ -43,6 +43,13 @@
       "when": 1793875252715,
       "tag": "0005_offline_sync",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1793897508509,
+      "tag": "0006_apple_web_client",
+      "breakpoints": true
     }
   ]
 }

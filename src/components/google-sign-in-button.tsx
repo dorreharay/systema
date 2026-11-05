@@ -4,7 +4,7 @@ import { ActivityIndicator, Pressable } from 'react-native';
 import GoogleIcon from '@/components/icons/google-icon';
 import { useAuth } from '@/lib/auth';
 import { describeAuthError } from '@/lib/errors';
-import { googleSignInSupported } from '@/lib/google-sign-in';
+import { googleSignInSupported, usePrepareGoogleSignIn } from '@/lib/google-sign-in';
 import { useI18n } from '@/lib/i18n';
 
 // Google's own colours for its dark button, which is the one made for a dark background like the photo of the sign-in
@@ -33,6 +33,8 @@ export default function GoogleSignInButton({ size, radius, disabled, onError }: 
   const { t, language } = useI18n();
   const { signInWithGoogle } = useAuth();
   const [busy, setBusy] = useState(false);
+  // On the web, Google's library has to be in the page before the press: see usePrepareGoogleSignIn.
+  usePrepareGoogleSignIn();
 
   if (!googleSignInSupported) {
     return null;

@@ -12,8 +12,17 @@ const IOS_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID?.trim();
 // there throws: so the app asks for the module first, and does without until the build is made again.
 const NATIVE_GOOGLE_SIGN_IN = 'RNGoogleSignin';
 
-/** Whether the screens offer the Google button: not on the web build, which has no native sign-in. */
+/** Whether the screens offer the Google button: on a phone, always (the web build has its own, see google-sign-in.web.ts). */
 export const googleSignInSupported = Platform.OS !== 'web';
+
+/**
+ * What Google gave the app to sign in with, for the backend to check: on a phone the ID token, a signed proof of who signed in;
+ * on the web an access token, which the backend asks Google about (a page gets an ID token only through a button Google draws).
+ */
+export type GoogleCredential = { idToken: string } | { accessToken: string };
+
+/** Gets what the button will need ready before it is pressed. A phone has nothing to get: the library is part of the app. */
+export function usePrepareGoogleSignIn() {}
 
 type Library = typeof import('@react-native-google-signin/google-signin');
 
@@ -31,7 +40,7 @@ async function loadLibrary(): Promise<Library | null> {
  * Opens Google's sign-in and gives back the ID token for the backend to check. `null` when the person closed it without
  * choosing an account: that is not a failure, and there is nothing to say about it.
  */
-export async function requestGoogleIdToken(): Promise<string | null> {
+export async function requestGoogleCredential(): Promise<GoogleCredential | null> {
   if (!WEB_CLIENT_ID || (Platform.OS === 'ios' && !IOS_CLIENT_ID)) {
     throw new GoogleSignInError('not_configured');
   }
@@ -56,7 +65,7 @@ export async function requestGoogleIdToken(): Promise<string | null> {
     if (!response.data.idToken) {
       throw new GoogleSignInError('failed');
     }
-    return response.data.idToken;
+    return { idToken: response.data.idToken };
   } catch (error) {
     if (error instanceof GoogleSignInError) {
       throw error;

@@ -52,7 +52,7 @@ import { useI18n } from '@/lib/i18n';
 import { useMark } from '@/lib/offline/react';
 import { describeStrings, orderAsText, readyMessage } from '@/lib/order-text';
 import { useDeleteOrder, useOrder, useUpdateOrder } from '@/lib/queries';
-import type { OrderStatus } from '@/lib/types';
+import { ORDER_STATUSES, type OrderStatus } from '@/lib/types';
 
 // What the main button does for each status: where the order goes next.
 const NEXT: Partial<
@@ -120,16 +120,22 @@ export default function OrderDetails() {
   }
 
   const next = NEXT[order.status];
+  // The status before this one, which the order can be taken back to (a tap on the wrong button, or the racket is not done after all).
+  const index = ORDER_STATUSES.indexOf(order.status);
+  const previous: OrderStatus | undefined = index > 0 ? ORDER_STATUSES[index - 1] : undefined;
   const overdue = isOverdue(order, today);
   const money = (amount: number | null) => formatMoney(amount, currency, language);
   const hasContact = !!(order.client.phone || order.client.email);
 
   const move = async (status: OrderStatus) => {
+    if (update.isPending) return;
     try {
-      // Handing the racket over closes the order: it is paid for, too.
+      // Handing the racket over closes the order: it is paid for, too. Taking an order back leaves the payment as it is (it is
+      // changed in the payment block); the server clears the dates of the statuses the order has left.
       await update.mutateAsync({ id: order.id, status, ...(status === 'completed' && !order.is_paid && { is_paid: true }) });
-      // The racket is done: offer the customer a message that is already written.
-      if (status === 'ready') setReadyOpen(true);
+      // The racket is done: offer the customer a message that is already written. Not when an order that was handed over is taken
+      // back to ready: the customer has had it.
+      if (status === 'ready' && order.status === 'in_progress') setReadyOpen(true);
       else toast.success(t('order_status_changed', { status: t(`status_${status}`) }));
     } catch (error) {
       toast.error(describeError(error, t));
@@ -381,6 +387,9 @@ export default function OrderDetails() {
         visible={menu}
         onClose={() => setMenu(false)}
         actions={[
+          ...(previous
+            ? [{ label: t('action_back', { status: t(`status_${previous}`) }), icon: Undo2, onPress: () => void move(previous) }]
+            : []),
           {
             label: t('edit_order'),
             icon: Pencil,

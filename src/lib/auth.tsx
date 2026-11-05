@@ -18,7 +18,8 @@ import {
   type ProfilePatch,
   type User,
 } from '@/lib/auth-api';
-import { forgetGoogleAccount, requestGoogleIdToken } from '@/lib/google-sign-in';
+import { bestEffort } from '@/lib/best-effort';
+import { forgetGoogleAccount, requestGoogleCredential } from '@/lib/google-sign-in';
 import type { Language } from '@/lib/i18n';
 import { getItem, removeItem, setItem } from '@/lib/local-storage';
 import { offlineStore } from '@/lib/offline/app';
@@ -33,6 +34,9 @@ type AuthState =
 
 const USER_KEY = 'cached_user';
 const RETRY_MS = 8_000;
+// How long signing out waits for any one thing it takes away (the files of the offline layer, say): a storage that does not
+// answer must not keep a person in the app.
+const FORGET_STEP_MS = 5_000;
 
 /** The profile as it was when last seen, so the app can open without a connection. */
 async function readCachedUser() {
@@ -55,13 +59,13 @@ type AuthContextValue = {
   /** `language` is the one the app is in: a new account is made in it. */
   signUp: (email: string, password: string, language?: Language) => Promise<void>;
   /**
-   * Opens Google's sign-in and, once the person has chosen an account, signs in with it. Closing the sheet is not an error.
-   * `language` is the one the app is in: an account that is made now is made in it.
+   * Opens Google's sign-in (on the web, its window) and, once the person has chosen an account, signs in with it. Closing the sheet
+   * is not an error. `language` is the one the app is in: an account that is made now is made in it.
    */
   signInWithGoogle: (language?: Language) => Promise<void>;
   /**
-   * Opens Apple's sign-in sheet and, once the person has approved, signs in with it. Closing the sheet is not an error.
-   * `language` is the one the app is in: an account that is made now is made in it.
+   * Opens Apple's sign-in sheet (on the web, its window) and, once the person has approved, signs in with it. Closing the sheet is
+   * not an error. `language` is the one the app is in: an account that is made now is made in it.
    */
   signInWithApple: (language?: Language) => Promise<void>;
   signOut: () => Promise<void>;
@@ -196,15 +200,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
    * Forgets the session on this device: the token, the saved profile, the Google account, the reminders and what was cached. The
    * copy of their data that the phone keeps, and what they had not sent, go with it, unless `keepUnsent` is set: a stringer who
    * signs in again with a new password is the same stringer, and has the changes they made without a connection still to send.
+   *
+   * Each step is done as well as it can be and none stops the next, so whatever goes wrong (the files cannot be removed, the
+   * storage does not answer) the person ends up signed out, never in the app behind an error. This never rejects.
    */
   async function forgetSession({ keepUnsent = false }: { keepUnsent?: boolean } = {}) {
-    await clearToken();
-    await removeItem(USER_KEY);
+    const forget = (step: () => unknown) =>
+      bestEffort(step, FORGET_STEP_MS, (error) => {
+        if (typeof __DEV__ !== 'undefined' && __DEV__) console.warn('[auth] part of the session was not forgotten', error);
+      });
+    // The token first: it is what brings the person back in at the next start.
+    await forget(clearToken);
+    await forget(() => removeItem(USER_KEY));
     // The next sign-in with Google must ask which account, not hand over this one.
-    await forgetGoogleAccount();
+    await forget(forgetGoogleAccount);
     // The reminders are about this stringer's orders: they must not go on showing up on a phone nobody is signed in on.
-    await clearReminders();
-    if (!keepUnsent) await offlineStore.wipe();
+    await forget(clearReminders);
+    if (!keepUnsent) await forget(() => offlineStore.wipe());
     // The next person to sign in on this device must not see this stringer's orders, even for a moment.
     queryClient.clear();
     setState({ status: 'signedOut' });
@@ -217,10 +229,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     signIn: async (email, password) => startSession(await loginRequest(email, password)),
     signUp: async (email, password, language) => startSession(await registerRequest(email, password, language)),
     signInWithGoogle: async (language) => {
-      const idToken = await requestGoogleIdToken();
+      const credential = await requestGoogleCredential();
       // The person closed Google's sheet without choosing an account.
-      if (idToken) {
-        await startSession(await googleLoginRequest(idToken, language));
+      if (credential) {
+        await startSession(await googleLoginRequest(credential, language));
       }
     },
     signInWithApple: async (language) => {

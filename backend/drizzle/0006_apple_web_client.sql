@@ -1,0 +1,1 @@
+ALTER TABLE "users" ADD COLUMN "apple_client_id" text;

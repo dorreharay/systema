@@ -42,6 +42,10 @@ export const users = pgTable(
     // to revoke the link between the person and the app at Apple when the account is deleted. Empty when the server has no
     // key to ask Apple with, or Apple did not answer.
     apple_refresh_token: text('apple_refresh_token'),
+    // Which of the server's Apple identifiers that token was issued to: the app's bundle ID, or the Services ID of the web
+    // sign-in. Apple wants a token revoked by the one it was issued to, so it is kept with the token. Empty for a token kept
+    // before the web sign-in existed, which was always the app's (the first of APPLE_CLIENT_IDS).
+    apple_client_id: text('apple_client_id'),
     role: text('role').notNull().default('user'), // user, admin
     is_active: boolean('is_active').notNull().default(true),
     // A password reset link carries a random token. Only its SHA-256 is stored, so a copy of the

@@ -1,5 +1,6 @@
 import { api } from '@/lib/api';
 import type { AppleCredential } from '@/lib/apple-sign-in';
+import type { GoogleCredential } from '@/lib/google-sign-in';
 import type { Language } from '@/lib/i18n';
 import type { TensionUnit } from '@/lib/types';
 
@@ -46,11 +47,17 @@ export const registerRequest = (email: string, password: string, language?: Lang
   api<AuthResponse>('/api/auth/register', { method: 'POST', body: { email, password, language } });
 
 /**
- * Signs in (or up) with the ID token Google gave the app: the server checks it, and finds or makes the account (in the language the
- * app is in, which an account that exists already keeps its own).
+ * Signs in (or up) with what Google gave the app, the ID token of a phone or the access token of the web build: the server checks it,
+ * and finds or makes the account (in the language the app is in, which an account that exists already keeps its own).
  */
-export const googleLoginRequest = (idToken: string, language?: Language) =>
-  api<AuthResponse>('/api/auth/google', { method: 'POST', body: { id_token: idToken, language } });
+export const googleLoginRequest = (credential: GoogleCredential, language?: Language) =>
+  api<AuthResponse>('/api/auth/google', {
+    method: 'POST',
+    body: {
+      ...('idToken' in credential ? { id_token: credential.idToken } : { access_token: credential.accessToken }),
+      language,
+    },
+  });
 
 /**
  * Signs in (or up) with what Apple gave the app: the server checks the identity token, and finds or makes the account.

@@ -184,20 +184,81 @@ export async function startServer({ port = CONFIG.port, env = {} } = {}) {
 /**
  * Stands in for Google. It serves the public key its ID tokens are checked with and signs tokens the way Google does, so
  * the server's real check runs without the network: start the server with GOOGLE_CLIENT_IDS=`clientId` and
- * GOOGLE_CERTS_URL=`certsUrl`.
+ * GOOGLE_CERTS_URL=`certsUrl`. It also answers the two questions the server asks about an access token (the web build signs in
+ * with one): `tokeninfoUrl` says whom a token was made out to, `userinfoUrl` says who the person is (set GOOGLE_TOKENINFO_URL and
+ * GOOGLE_USERINFO_URL to them).
  */
 export async function startFakeGoogle({ clientId = 'test-web-client.apps.googleusercontent.com' } = {}) {
   const { publicKey, privateKey } = await generateKeyPair('RS256');
   const jwk = { ...(await exportJWK(publicKey)), kid: 'test-key', alg: 'RS256', use: 'sig' };
+
+  // The access tokens it has handed out: what tokeninfo and userinfo say about each.
+  const accessTokens = new Map();
+  let issued = 0;
+  const asked = [];
   const server = createServer((req, res) => {
-    res.setHeader('content-type', 'application/json');
-    res.end(JSON.stringify({ keys: [jwk] }));
+    let raw = '';
+    req.on('data', (chunk) => (raw += chunk));
+    req.on('end', () => {
+      const send = (status, body) => {
+        res.statusCode = status;
+        res.setHeader('content-type', 'application/json');
+        res.end(JSON.stringify(body));
+      };
+      const path = req.url.split('?')[0];
+
+      if (path === '/tokeninfo') {
+        // The token is in the form of a POST, as the server sends it (Google takes it in the address of a GET too).
+        const token = new URLSearchParams(raw).get('access_token') ?? new URL(req.url, 'http://127.0.0.1').searchParams.get('access_token');
+        asked.push({ endpoint: 'tokeninfo', method: req.method, contentType: req.headers['content-type'], address: req.url, token });
+        const entry = accessTokens.get(token);
+        if (!entry || entry.expired) return send(400, { error: 'invalid_token', error_description: 'Invalid Value' });
+        if (entry.tokeninfoStatus) return send(entry.tokeninfoStatus, { error: 'backend_error' });
+        return send(200, {
+          azp: entry.aud,
+          aud: entry.aud,
+          sub: entry.sub,
+          scope: 'openid https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile',
+          exp: String(Math.floor(Date.now() / 1000) + 3599),
+          expires_in: '3599',
+          // Google leaves the address out when the person did not give the scope for it.
+          ...(entry.email !== undefined && { email: entry.email, email_verified: entry.emailVerified }),
+          access_type: 'online',
+        });
+      }
+
+      if (path === '/userinfo') {
+        const token = req.headers.authorization?.match(/^Bearer\s+(.+)$/i)?.[1];
+        asked.push({ endpoint: 'userinfo', method: req.method, authorization: req.headers.authorization, address: req.url, token });
+        const entry = accessTokens.get(token);
+        if (!entry || entry.expired) return send(401, { error: 'invalid_request', error_description: 'Invalid Credentials' });
+        if (entry.userinfoStatus) return send(entry.userinfoStatus, { error: 'backend_error' });
+        return send(200, {
+          sub: entry.userinfoSub ?? entry.sub,
+          ...(entry.name !== undefined && { name: entry.name }),
+          ...(entry.email !== undefined && { email: entry.email, email_verified: entry.emailVerified === 'true' }),
+        });
+      }
+
+      // Everything else is the keys, wherever the server was told to look.
+      return send(200, { keys: [jwk] });
+    });
   });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const base = `http://127.0.0.1:${server.address().port}`;
 
   return {
     clientId,
-    certsUrl: `http://127.0.0.1:${server.address().port}/certs`,
+    certsUrl: `${base}/certs`,
+    tokeninfoUrl: `${base}/tokeninfo`,
+    userinfoUrl: `${base}/userinfo`,
+    /** What a server needs to sign in with this Google, the ID token and the access token alike. */
+    env: {
+      GOOGLE_CLIENT_IDS: clientId,
+      GOOGLE_CERTS_URL: `${base}/certs`,
+      GOOGLE_TOKENINFO_URL: `${base}/tokeninfo`,
+      GOOGLE_USERINFO_URL: `${base}/userinfo`,
+    },
     /**
      * An ID token as Google would issue it to this app. `claims` add to or replace its claims; `key` signs it with another
      * key than the one served, and `expires` is when it stops being valid (seconds since 1970, or a duration such as '1h').
@@ -208,6 +269,19 @@ export async function startFakeGoogle({ clientId = 'test-web-client.apps.googleu
         .setIssuedAt()
         .setExpirationTime(expires)
         .sign(key),
+    /**
+     * An access token as Google would give the web build for this app: what the server asks about it is answered from `claims`
+     * (`sub`, `email`, `name`; `aud` for the client it was made out to; `email_verified`, a boolean or a string; `email: undefined`
+     * for a person who did not give the scope for it). `expired` makes Google not know it any more; `tokeninfoStatus` and
+     * `userinfoStatus` make that endpoint answer with that status whatever it is asked; `userinfoSub` makes userinfo name someone else.
+     */
+    accessToken: ({ aud = clientId, sub, email, name, email_verified = 'true', expired = false, tokeninfoStatus, userinfoStatus, userinfoSub } = {}) => {
+      const token = `ya29.test-access-token-${++issued}`;
+      accessTokens.set(token, { aud, sub, email, name, emailVerified: String(email_verified), expired, tokeninfoStatus, userinfoStatus, userinfoSub });
+      return token;
+    },
+    /** What the server asked of `endpoint` (`'tokeninfo'` or `'userinfo'`), oldest first. */
+    asked: (endpoint) => asked.filter((request) => request.endpoint === endpoint),
     /** A key Google never published, for a token that is forged. */
     otherKey: async () => (await generateKeyPair('RS256')).privateKey,
     stop: () => new Promise((resolve) => server.close(resolve)),
@@ -217,10 +291,12 @@ export async function startFakeGoogle({ clientId = 'test-web-client.apps.googleu
 /**
  * Stands in for Apple. It serves the public key its identity tokens are checked with and signs tokens the way Apple does, and
  * it answers the two calls the server makes for itself, `/auth/token` and `/auth/revoke`, after checking the client secret
- * they come with as Apple does (signed with the Sign in with Apple key, naming the team, the key and the app). Start the
- * server with `env`, which is everything Sign in with Apple needs.
+ * they come with as Apple does (signed with the Sign in with Apple key, naming the team, the key and the client it speaks
+ * for). It knows two clients, as the real one does for an app that is also on the web: the app (`clientId`, a bundle ID, whom
+ * the token of the native sign-in is made out to) and the web sign-in (`webClientId`, a Services ID, whom the token of the
+ * browser is made out to). Start the server with `env`, which is everything Sign in with Apple needs.
  */
-export async function startFakeApple({ clientId = 'com.test.restring' } = {}) {
+export async function startFakeApple({ clientId = 'com.test.restring', webClientId = 'com.test.restring.web' } = {}) {
   const { publicKey, privateKey } = await generateKeyPair('RS256');
   const jwk = { ...(await exportJWK(publicKey)), kid: 'apple-test-key', alg: 'RS256', use: 'sig' };
   // The key (a .p8 file) the server asks Apple for things with: Apple knows the public half.
@@ -251,7 +327,8 @@ export async function startFakeApple({ clientId = 'com.test.restring' } = {}) {
         algorithms: ['ES256'],
         issuer: teamId,
         audience: 'https://appleid.apple.com',
-        subject: clientId,
+        // The client secret speaks for the same client the request is made as.
+        subject: fields.client_id,
       }).then(
         ({ payload, protectedHeader }) => ({ valid: true, header: protectedHeader, claims: payload }),
         (err) => ({ valid: false, reason: err.message })
@@ -259,7 +336,7 @@ export async function startFakeApple({ clientId = 'com.test.restring' } = {}) {
       asked.push({ endpoint, contentType: req.headers['content-type'], fields, secret });
 
       if (answers[endpoint]) return send(answers[endpoint].status, answers[endpoint].body);
-      if (!secret.valid || fields.client_id !== clientId) return send(400, { error: 'invalid_client' });
+      if (!secret.valid || ![clientId, webClientId].includes(fields.client_id)) return send(400, { error: 'invalid_client' });
       if (endpoint === 'token') {
         if (fields.grant_type !== 'authorization_code' || !fields.code) return send(400, { error: 'invalid_request' });
         // The refresh token is made from the code, so that a test can tell whose it is.
@@ -281,13 +358,15 @@ export async function startFakeApple({ clientId = 'com.test.restring' } = {}) {
 
   return {
     clientId,
+    webClientId,
     teamId,
     keyId,
     authUrl,
     keysUrl,
     /** What a server needs to sign in with this Apple and to ask it for things. The key is on one line, the way a host holds it. */
     env: {
-      APPLE_CLIENT_IDS: clientId,
+      // The app first, then the web: the order a real setting has.
+      APPLE_CLIENT_IDS: `${clientId},${webClientId}`,
       APPLE_KEYS_URL: keysUrl,
       APPLE_AUTH_URL: authUrl,
       APPLE_TEAM_ID: teamId,
@@ -295,9 +374,9 @@ export async function startFakeApple({ clientId = 'com.test.restring' } = {}) {
       APPLE_PRIVATE_KEY: privatePem.trim().replace(/\n/g, '\\n'),
     },
     /**
-     * An identity token as Apple would issue it to this app. `claims` add to or replace its claims (`sub`, `email`,
-     * `email_verified`, `is_private_email`, `aud`, `iss`); `key` signs it with another key than the one served, and `expires`
-     * is when it stops being valid (seconds since 1970, or a duration such as '10m').
+     * An identity token as Apple would issue it to this app (`aud: webClientId` for the one the browser gets). `claims` add to
+     * or replace its claims (`sub`, `email`, `email_verified`, `is_private_email`, `aud`, `iss`); `key` signs it with another
+     * key than the one served, and `expires` is when it stops being valid (seconds since 1970, or a duration such as '10m').
      */
     identityToken: ({ key = privateKey, expires = '10m', ...claims } = {}) =>
       new SignJWT({ iss: 'https://appleid.apple.com', aud: clientId, email_verified: 'true', ...claims })

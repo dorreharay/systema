@@ -70,7 +70,9 @@ Google), пошта й імʼя.
 ### 3.1 Web application (обовʼязково)
 
 - *Application type*: **Web application**, назва `re:string server`.
-- Redirect URI та origins не потрібні: веб-перенаправлення ми не використовуємо.
+- Redirect URI не потрібні: веб-перенаправлення ми не використовуємо. Для **застосунку** не потрібні й origins. Але
+  веб-версія входить через бібліотеку Google у браузері і користується цим самим клієнтом: їй потрібні *Authorized
+  JavaScript origins* (`http://localhost`, `http://localhost:8081` і адреса веб-версії), див. `docs/web-sign-in.md`.
 - Скопіюйте **Client ID** (`1234567890-abc.apps.googleusercontent.com`).
 
 Чому саме Web: застосунок просить Google видати токен «для вашого сервера», а сервером Google вважає Web-клієнт. Без

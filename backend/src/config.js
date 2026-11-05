@@ -51,9 +51,15 @@ export function loadConfig(env = process.env) {
     googleClientIds: list(env.GOOGLE_CLIENT_IDS, []),
     // Where Google publishes the keys it signs those tokens with. Only a test has a reason to change it.
     googleCertsUrl: text(env.GOOGLE_CERTS_URL) ?? 'https://www.googleapis.com/oauth2/v3/certs',
+    // Where Google says whom an access token was made out to, and who the person is. The web build signs in with an access token
+    // (see utils/google.js), which is not signed the way an ID token is: Google is asked about it. Only a test changes these.
+    googleTokeninfoUrl: text(env.GOOGLE_TOKENINFO_URL) ?? 'https://oauth2.googleapis.com/tokeninfo',
+    googleUserinfoUrl: text(env.GOOGLE_USERINFO_URL) ?? 'https://openidconnect.googleapis.com/v1/userinfo',
 
-    // Sign in with Apple: the app's bundle IDs, which are what the identity token it sends is meant for. Empty turns Apple
-    // sign-in off (see utils/apple.js).
+    // Sign in with Apple: the identifiers an identity token may be made out to. The app's bundle ID comes first: it is what
+    // the token of the native sign-in is for, and the one the server speaks for when it asks Apple something and no other is
+    // named. After it, the Services ID of the web sign-in (Sign in with Apple JS), which is what the browser's token is for.
+    // Empty turns Apple sign-in off (see utils/apple.js).
     appleClientIds: list(env.APPLE_CLIENT_IDS, []),
     // Where Apple publishes the keys it signs those tokens with, and the base of its /token and /revoke endpoints. Only a
     // test has a reason to change either.
