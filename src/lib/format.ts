@@ -46,7 +46,18 @@ export function parseDecimal(text: string) {
 
 // --- Money -----------------------------------------------------------------------------------
 
-const LOCALES: Record<Language, string> = { en: 'en-US', uk: 'uk-UA' };
+// How each language writes numbers and money (Portuguese is the Brazilian one, as the texts are).
+const LOCALES: Record<Language, string> = {
+  en: 'en-US',
+  de: 'de-DE',
+  fr: 'fr-FR',
+  es: 'es-ES',
+  it: 'it-IT',
+  pt: 'pt-BR',
+  ja: 'ja-JP',
+  uk: 'uk-UA',
+  pl: 'pl-PL',
+};
 
 export function formatMoney(amount: number | null, currency: string, language: Language) {
   if (amount === null) return '—';
@@ -145,9 +156,20 @@ export function weekdayOf(iso: string) {
 
 export const daysInMonth = (year: number, month: number) => new Date(Date.UTC(year, month, 0)).getUTCDate();
 
+// The names are written out, not asked of Intl: Hermes on iOS does not always know them, and the calendar needs the same names
+// everywhere. Japanese names a month by its number.
+const JA_MONTHS = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'];
+
 export const MONTHS_SHORT: Record<Language, string[]> = {
   en: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+  de: ['Jan.', 'Feb.', 'März', 'Apr.', 'Mai', 'Juni', 'Juli', 'Aug.', 'Sept.', 'Okt.', 'Nov.', 'Dez.'],
+  fr: ['janv.', 'févr.', 'mars', 'avr.', 'mai', 'juin', 'juil.', 'août', 'sept.', 'oct.', 'nov.', 'déc.'],
+  es: ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sept', 'oct', 'nov', 'dic'],
+  it: ['gen', 'feb', 'mar', 'apr', 'mag', 'giu', 'lug', 'ago', 'set', 'ott', 'nov', 'dic'],
+  pt: ['jan.', 'fev.', 'mar.', 'abr.', 'mai.', 'jun.', 'jul.', 'ago.', 'set.', 'out.', 'nov.', 'dez.'],
+  ja: JA_MONTHS,
   uk: ['січ.', 'лют.', 'бер.', 'квіт.', 'трав.', 'черв.', 'лип.', 'серп.', 'вер.', 'жовт.', 'лист.', 'груд.'],
+  pl: ['sty', 'lut', 'mar', 'kwi', 'maj', 'cze', 'lip', 'sie', 'wrz', 'paź', 'lis', 'gru'],
 };
 
 export const MONTHS_LONG: Record<Language, string[]> = {
@@ -155,23 +177,66 @@ export const MONTHS_LONG: Record<Language, string[]> = {
     'January', 'February', 'March', 'April', 'May', 'June',
     'July', 'August', 'September', 'October', 'November', 'December',
   ],
+  de: [
+    'Januar', 'Februar', 'März', 'April', 'Mai', 'Juni',
+    'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember',
+  ],
+  fr: [
+    'Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin',
+    'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre',
+  ],
+  es: [
+    'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+    'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
+  ],
+  it: [
+    'Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno',
+    'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre',
+  ],
+  pt: [
+    'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+    'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
+  ],
+  ja: JA_MONTHS,
   uk: [
     'Січень', 'Лютий', 'Березень', 'Квітень', 'Травень', 'Червень',
     'Липень', 'Серпень', 'Вересень', 'Жовтень', 'Листопад', 'Грудень',
   ],
+  pl: [
+    'Styczeń', 'Luty', 'Marzec', 'Kwiecień', 'Maj', 'Czerwiec',
+    'Lipiec', 'Sierpień', 'Wrzesień', 'Październik', 'Listopad', 'Grudzień',
+  ],
 };
 
+// The week starts on Monday.
 export const WEEKDAYS_SHORT: Record<Language, string[]> = {
   en: ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'],
+  de: ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'],
+  fr: ['Lu', 'Ma', 'Me', 'Je', 'Ve', 'Sa', 'Di'],
+  es: ['Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sá', 'Do'],
+  it: ['Lu', 'Ma', 'Me', 'Gi', 'Ve', 'Sa', 'Do'],
+  pt: ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'],
+  ja: ['月', '火', '水', '木', '金', '土', '日'],
   uk: ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Нд'],
+  pl: ['Pn', 'Wt', 'Śr', 'Cz', 'Pt', 'So', 'Nd'],
 };
 
-/** "12 Mar", or "12 Mar 2027" when it is not this year. */
+/**
+ * "12 Mar", or "12 Mar 2027" when it is not this year: in the order and with the marks of the language ("12. Nov.", and in
+ * Japanese "11月12日", "2027年11月12日").
+ */
 export function formatDate(iso: string, language: Language, today = todayIso()) {
   const { year, month, day } = parseIso(iso);
-  const text = `${day} ${MONTHS_SHORT[language][month - 1]}`;
-  return year === parseIso(today).year ? text : `${text} ${year}`;
+  const thisYear = year === parseIso(today).year;
+  const name = MONTHS_SHORT[language][month - 1];
+  if (language === 'ja') return `${thisYear ? '' : `${year}年`}${name}${day}日`;
+  const text = language === 'de' ? `${day}. ${name}` : `${day} ${name}`;
+  return thisYear ? text : `${text} ${year}`;
 }
+
+/** "November 2026", and in Japanese "2026年11月". `month` is 1 to 12. */
+export const formatMonthYear = (month: number, year: number, language: Language) =>
+  language === 'ja' ? `${year}年${month}月` : `${MONTHS_LONG[language][month - 1]} ${year}`;
 
 /** A full timestamp (when an order was finished) as a date in the stringer's time zone. */
 export function formatTimestamp(value: string, language: Language, timeZone?: string) {

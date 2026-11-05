@@ -8,10 +8,10 @@ import Sheet from '@/components/ui/sheet';
 import Shortcut from '@/components/ui/shortcut';
 import { Text } from '@/components/ui/text';
 import {
-  MONTHS_LONG,
   WEEKDAYS_SHORT,
   addDays,
   daysInMonth,
+  formatMonthYear,
   parseIso,
   toIso,
   weekdayOf,
@@ -60,7 +60,7 @@ function Calendar({
       <View className="flex-row items-center justify-between">
         <IconButton icon={ChevronLeft} label={t('previous_month')} onPress={() => shift(-1)} />
         <Text accessibilityRole="header" className="text-[18.5px] font-semibold">
-          {MONTHS_LONG[language][month.month - 1]} {month.year}
+          {formatMonthYear(month.month, month.year, language)}
         </Text>
         <IconButton icon={ChevronRight} label={t('next_month')} onPress={() => shift(1)} />
       </View>

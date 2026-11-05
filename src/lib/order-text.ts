@@ -70,6 +70,7 @@ export function readyMessage(
   if (order.total !== null && !order.is_paid) {
     lines.push(t('ready_message_total', { total: formatMoney(order.total, currency, language) }));
   }
-  if (workshop) lines.push(`— ${workshop}`);
-  return lines.join(' ');
+  // Japanese sentences end with 。 and are not separated by a space.
+  const text = lines.join(language === 'ja' ? '' : ' ');
+  return workshop ? `${text} — ${workshop}` : text;
 }
