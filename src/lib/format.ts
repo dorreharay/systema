@@ -255,6 +255,20 @@ export function formatTimestamp(value: string, language: Language, timeZone?: st
   }
 }
 
+/** A moment as the time of day when it was today ("14:05"), and with its date otherwise ("12 Nov, 14:05"), in the stringer's time zone. */
+export function formatMoment(value: string, language: Language, timeZone?: string) {
+  const date = new Date(value);
+  let time: string;
+  try {
+    time = new Intl.DateTimeFormat(LOCALES[language], { hour: '2-digit', minute: '2-digit', timeZone }).format(date);
+  } catch {
+    time = `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  }
+  const day = formatTimestamp(value, language, timeZone);
+  const today = todayIso(timeZone);
+  return day === formatDate(today, language, today) ? time : `${day}, ${time}`;
+}
+
 /** Work that is late: not finished by the day it was promised. A racket that is ready is done. */
 export function isOverdue(order: Pick<Order, 'status' | 'due_date'>, today: string) {
   return (
@@ -268,7 +282,8 @@ export function isOverdue(order: Pick<Order, 'status' | 'due_date'>, today: stri
 
 export const racketName = (racket: { brand: string; model: string }) => `${racket.brand} ${racket.model}`;
 
-export const orderNumber = (number: number) => `#${number}`;
+/** "#12", or "#—" for an order that has no number yet: the server gives the numbers, once the order has been sent. */
+export const orderNumber = (number: number | null) => (number === null ? '#—' : `#${number}`);
 
 /**
  * What was typed into a search for a client, as the start of a new one: digits with only what goes with them in a phone

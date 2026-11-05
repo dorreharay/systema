@@ -19,6 +19,7 @@ import { useI18n } from '@/lib/i18n';
 import {
   useCreateString,
   useDeleteString,
+  useOnline,
   useReferenceStrings,
   useStrings,
   useUpdateString,
@@ -68,6 +69,7 @@ function StringForm({ string, initialModel, onClose, onSaved }: Omit<StringFormS
     .filter(Boolean)
     .join(' ');
   const searching = !string && !picked && model.trim() !== '' && typed.length >= 2 && inCatalog.data !== undefined;
+  const online = useOnline();
   const found = useReferenceStrings(useDebounced(typed, SUGGEST_DELAY_MS), searching);
   const suggestions = searching
     ? withoutOwnedStrings(found.data ?? [], inCatalog.data ?? [])
@@ -193,6 +195,7 @@ function StringForm({ string, initialModel, onClose, onSaved }: Omit<StringFormS
             detail: t(`string_type_${item.type}`),
           }))}
           onPick={pick}
+          offline={searching && !online}
         />
         <View className="gap-1.5">
           <Text className="text-[14.3px] font-medium text-muted">{t('field_string_type')}</Text>

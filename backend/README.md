@@ -28,6 +28,7 @@ backend/
     middleware/           auth (requireAuth, requireRole), validate, rateLimit, error
     routes/               one file per resource: auth, clients, rackets, strings, reference, services, orders, photos, dashboard, insights
     utils/                http (HttpError), password, tokens, session, email, emailTemplates, emailFailure, google, apple, reference (search),
+                          clientIds + operations (the offline mode: ids made by the phone, keys of repeatable changes),
                           messages/ (what the server writes in the language of the account: the reset email and page, the first services)
     scripts/seed.js
   drizzle/                generated SQL migrations (commit them)
@@ -172,19 +173,21 @@ orders that used it (an old order never loses its history); an order is deleted 
 
 | | | |
 |---|---|---|
-| `GET` `POST` | `/api/clients` | `?q=` searches name and phone. A client needs a `name` and a `phone`; `email` and `notes` are optional. Each has `rackets_count`, `orders_count`, `last_order_date` |
+| `GET` `POST` | `/api/clients` | `?q=` searches name and phone. A client needs a `name` and a `phone`; `email` and `notes` are optional. Each has `rackets_count`, `orders_count`, `last_order_date`. `POST` takes an optional `id` (see [Working without a connection](#working-without-a-connection)) |
 | `GET` `PATCH` `DELETE` | `/api/clients/:id` | `GET` adds the client's `rackets` and `orders` (history) |
 | `GET` `POST` | `/api/rackets` | `?q=` (brand, model, owner), `?client_id=`, `?kind=client` or `catalog`, `?in_stock=1`. `{ client_id?, brand, model, notes?, track_stock?, stock? }`: with a `client_id` it is that client's racket; without one it is a catalog racket, one the stringer keeps in stock (see Stock below). Each has `orders_count` and, for a client's racket, `last_setup`: how it was last strung, to prefill a new order |
 | `GET` `PATCH` `DELETE` | `/api/rackets/:id` | `GET` adds the racket's `orders`, newest first |
+| `POST` | `/api/rackets/:id/stock` | `{ delta, op_id }`: adds `delta` rackets (a whole number, negative to take away) to a catalog racket's stock, once for each `op_id` → the racket (see [Working without a connection](#working-without-a-connection)) |
 | `GET` `POST` | `/api/strings` | the stringer's catalog. `?q=` (brand, model), `?in_stock=1`. `{ brand, model, gauge?, type, default_price?, track_stock?, stock? }`, `type`: `polyester`, `multifilament`, `synthetic_gut`, `natural_gut`, `other` |
 | `GET` `PATCH` `DELETE` | `/api/strings/:id` | |
+| `POST` | `/api/strings/:id/stock` | `{ delta, op_id }`: the same for sets of a string (whole or half) → the string |
 | `GET` | `/api/reference` | what the reference catalog holds: `updated`, and for `rackets` and `strings` the `count` and the `brands` |
 | `GET` | `/api/reference/rackets` | the rackets that exist, to find one by a part of its name. `?q=`, `?brand=`, `?limit=` (1 to 50, 20 by default), `?offset=` → `{ items, has_more }`, each item `{ id, brand, model }` |
 | `GET` | `/api/reference/strings` | the same for strings, and `?type=`. Each item is `{ id, brand, model, type, gauges }`: `gauges` are the sizes in mm, from the thinnest, empty when they are not known |
 | `GET` `POST` | `/api/services` | what the stringer charges for: `{ name, price?, kind: labor\|extra, active }`. New accounts start with Stringing Labor, Grip Replacement and Overgrip Installation (named in the language of the account), without prices |
 | `PATCH` | `/api/services/:id` | `active: false` archives a service (it is no longer offered on new orders), `true` brings it back |
-| `GET` `POST` | `/api/orders` | `?status=` (`received`, `in_progress`, `ready`, `completed`, or `active` for the first three), `?q=` (customer, racket, string, `#number`), `?client_id=`, `?racket_id=`, `?limit=&offset=` → `{ items, has_more }`. The queue is by due date, then finished orders, newest first |
-| `GET` `PATCH` `DELETE` | `/api/orders/:id` | `GET` adds `services` and `photos`. `PATCH` takes any field of an order plus `status` and `is_paid`; `services` replaces the whole list |
+| `GET` `POST` | `/api/orders` | `?status=` (`received`, `in_progress`, `ready`, `completed`, or `active` for the first three), `?q=` (customer, racket, string, `#number`), `?client_id=`, `?racket_id=`, `?limit=&offset=` → `{ items, has_more }`. The queue is by due date, then finished orders, newest first. `?details=1` adds each order's `services` and `photos`, as `GET /api/orders/:id` has them |
+| `GET` `PATCH` `DELETE` | `/api/orders/:id` | `GET` adds `services` and `photos`. `PATCH` takes any field of an order plus `status` and `is_paid`; `services` replaces the whole list. `POST` and `PATCH` take `at`, the moment of the tap on the phone (see [Working without a connection](#working-without-a-connection)); `POST` also an `id` |
 | `POST` | `/api/orders/:id/photos` | the body is the image (JPEG, PNG, WebP or HEIC, up to 8 MB, up to 10 per order); the type is read from the bytes |
 | `GET` `DELETE` | `/api/photos/:id` | the image itself (cached by the app: a photo never changes) / remove it |
 | `GET` | `/api/dashboard` | `active_orders`, `ready_for_pickup`, `completed_this_month` (the stringer's month, in their time zone) and the next orders `active` by due date |
@@ -238,6 +241,59 @@ brand's site, and it is a starting point rather than everything that was ever ma
 added to the catalog by typing it, as before. To add one, put it in the JSON file; `npm run test:unit` checks the
 files (a duplicate, an empty alias or a wrong gauge also stops the server from starting). `npm run dev` restarts on
 a change of code, not of a JSON file: restart it after editing the list.
+
+### Working without a connection
+
+The app keeps its own copy of the stringer's data, and what is done without a connection is sent when it is back, one request after another.
+So that a request that is sent twice does no harm (the connection dropped after the server had done the work, and the app never heard the
+answer), and so that a stock changed on two devices adds up, the API has four things. All of them are optional, and an older build of the
+app, which sends none of them, works as it did.
+
+**Ids made by the phone.** `POST /api/clients`, `/api/rackets`, `/api/strings`, `/api/services` and `/api/orders` take an optional `id` (a
+UUID), and so does the racket an order names (`new_racket.id`, in a `POST` and in a `PATCH` of an order). A change (`PATCH`) never takes one.
+The phone names what it makes, so that the orders it makes after can point at it before the server has heard of it.
+
+- A row with that `id` that is this stringer's already (a hidden one too: it was made, and a repeat of the request that made it is answered)
+  is not made again. The answer is **`200`** and not `201`, with the row as it is now (so the counts of a client or of a racket,
+  `rackets_count`, `orders_count`, `last_order_date`, `last_setup`, are today's). Nothing else happens: the body is checked for its shape and
+  for nothing else (a name that has been changed, a phone number that another client has, a client or a string that has been removed
+  since), the stock is not touched and no order number is used.
+- The `id` of another stringer's row is a `409` `{ "error": "This id is already in use", "code": "id_conflict" }`, which says nothing more.
+  The same goes for a racket named by an order with an `id` that is taken; the order is not made.
+- Two copies of one request at the same moment make one row: the second waits for the first (clients and orders: a lock of the stringer and
+  the id; the rest: `INSERT … ON CONFLICT DO NOTHING`) and gets the `200`. Two stringers who choose one id at the same moment get one
+  `201` and one `409`.
+- A racket that an order names (`new_racket`) is made with its `id`, in the transaction of the order. When the client has a racket of that
+  name already, that one is used and the `id` is not (the answer shows the racket's real `id`).
+- `PATCH` and `DELETE` of an order wait for each other: the transaction takes a lock of the stringer and the order first, and reads the
+  order (what it took from the stock, the racket it points at) only then. A change that the phone sends again while the first copy is
+  still being made finds the order as the first left it and moves no stock a second time (it gets its `200`, a repeat of a delete its
+  `404`), and a repeat that names a racket finds the racket the first one made, and is not a `409`.
+
+**Stock changed by an amount.** `POST /api/rackets/:id/stock` takes `{ "delta": 3, "op_id": "<uuid>" }` (a whole number), and
+`POST /api/strings/:id/stock` the same with whole or half sets. They add `delta` to the stock (a negative one takes away) and answer `200` with
+the item as `GET` shows it. The new stock is `least(greatest(stock + delta, 0), 100000)`, worked out by one `UPDATE`, so it never goes below
+0 or above what a stock may hold (the most that `stock` can be set to), and two changes at the same moment both count. Two devices that change one stock add up,
+and do not overwrite each other as they would with the absolute `stock` of a `PATCH`, which still works. `track_stock` is not touched: an item
+that is not counted adds up too, and counting it is a `PATCH` of `track_stock`. A client's racket has no stock (`400`, `fields.delta`); an
+unknown, removed or another stringer's item is a `404`; `|delta|` is at most 100000 and 0 changes nothing.
+
+`op_id` is a UUID the phone makes up for each change. It is written to `applied_operations (user_id, op_id, created_at)` in the same
+transaction as the change, and a request whose key is there already is answered (`200`, the item as it is now) and not applied again, so a
+change that is sent twice, or by two requests at the same moment, is made once. A refused request (`400`, `404`) leaves no key.
+Keys older than 90 days are deleted when the server starts and every 24 hours after.
+
+**The time of a tap.** `POST /api/orders` and `PATCH /api/orders/:id` take an optional `at`, an ISO 8601 date and time with a `Z` or an offset
+(`2026-11-05T09:30:00Z`, `…T11:30:00+02:00`): when the thing was done on the phone. A status that was changed, or an order that was paid,
+with no connection is dated by the tap and not by the moment the request got through, so `started_at`, `ready_at`, `completed_at` and
+`paid_at` are right, and so is the day that the revenue of the home screen counts a payment in. On a `POST` it is the `created_at` of the
+order (and its `paid_at`, when it is sent paid). A moment that is in the future (a clock that is ahead) or more than 90 days ago (a clock that
+is wrong) is not believed: the time of the request is used. `updated_at` is always the time of the request. A malformed `at` is a `400` with
+`fields.at`.
+
+**Orders with their details.** `GET /api/orders?details=1` (or `true`) gives each order on the page its `services` and `photos` too, as
+`GET /api/orders/:id` does, read with one query each for the whole page. Without it the list is as it was. It is how the app loads a copy of
+all the orders in a few requests and not one for each.
 
 ### Adding a resource
 

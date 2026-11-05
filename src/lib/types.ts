@@ -50,7 +50,8 @@ export type Setup = {
 
 export type LastSetup = Setup & {
   order_id: string;
-  number: number;
+  // Empty for an order that has not reached the server yet: the server gives the numbers (see `Order.number`).
+  number: number | null;
   received_date: string;
   labor_price: number | null;
   string_price: number | null;
@@ -115,7 +116,9 @@ export type Service = {
 
 export type Order = Setup & {
   id: string;
-  number: number;
+  // The server numbers the orders 1, 2, 3... for each stringer. An order made without a connection has none until it has
+  // been sent: nothing that leaves the phone (a message, a reminder) may name a number that is not there.
+  number: number | null;
   status: OrderStatus;
   is_paid: boolean;
   paid_at: string | null;
@@ -181,8 +184,9 @@ export type OrderInput = Partial<Setup> & {
   client_id?: string;
   racket_id?: string;
   // Instead of `racket_id`: a racket of the client that they may not have yet. The server makes it together with the
-  // order (and not if the order is not made), or uses the one of that name that the client has.
-  new_racket?: { brand: string; model: string };
+  // order (and not if the order is not made), or uses the one of that name that the client has. The `id` is the one the
+  // racket is made with, so that what is done to it before the order has been sent can name it.
+  new_racket?: { id?: string; brand: string; model: string };
   received_date?: string;
   due_date?: string | null;
   due_time?: string | null;

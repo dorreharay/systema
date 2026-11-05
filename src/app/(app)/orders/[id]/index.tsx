@@ -21,6 +21,7 @@ import {
 import UserIcon from '@/components/icons/user-icon';
 import { useDueText } from '@/components/order-card';
 import ReadyMessageSheet from '@/components/ready-message-sheet';
+import SyncBadge from '@/components/sync-badge';
 import ActionSheet from '@/components/ui/action-sheet';
 import { Badge, StatusBadge } from '@/components/ui/badge';
 import Card from '@/components/ui/card';
@@ -48,6 +49,7 @@ import {
   racketName,
 } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
+import { useMark } from '@/lib/offline/react';
 import { describeStrings, orderAsText, readyMessage } from '@/lib/order-text';
 import { useDeleteOrder, useOrder, useUpdateOrder } from '@/lib/queries';
 import type { OrderStatus } from '@/lib/types';
@@ -85,6 +87,7 @@ export default function OrderDetails() {
   const confirm = useConfirm();
   const { id } = useLocalSearchParams<{ id: string }>();
   const query = useOrder(id);
+  const mark = useMark(id);
   const update = useUpdateOrder();
   const remove = useDeleteOrder();
   const { today, dueText } = useDueText();
@@ -214,6 +217,7 @@ export default function OrderDetails() {
               tone={order.is_paid ? 'info' : 'warning'}
             />
             {overdue ? <Badge label={t('order_overdue')} tone="danger" /> : null}
+            {mark ? <SyncBadge mark={mark} /> : null}
           </View>
 
           <StatusSteps status={order.status} />

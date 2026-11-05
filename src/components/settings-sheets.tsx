@@ -21,7 +21,7 @@ import {
   zoneChoices,
   zoneForCountry,
 } from '@/lib/countries';
-import { describeError, isApiError } from '@/lib/errors';
+import { describeAuthError, describeError, isApiError } from '@/lib/errors';
 import { currencySymbol } from '@/lib/format';
 import { LANGUAGES, useI18n, type Language } from '@/lib/i18n';
 
@@ -341,7 +341,7 @@ function DeleteAccountForm() {
       if (isApiError(error, 'invalid_password')) {
         setPasswordError(describeError(error, t));
       } else {
-        setFormError(describeError(error, t));
+        setFormError(describeAuthError(error, t));
       }
       setDeleting(false);
     }
@@ -409,7 +409,7 @@ function AccountBody({ onClose }: { onClose: () => void }) {
       toast.success(t('account_reset_sent'));
       onClose();
     } catch (error) {
-      toast.error(describeError(error, t));
+      toast.error(describeAuthError(error, t));
       setSending(false);
     }
   };

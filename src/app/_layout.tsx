@@ -13,6 +13,7 @@ import { ConfirmProvider } from '@/components/ui/confirm';
 import { ToastProvider } from '@/components/ui/toast';
 import { AuthProvider, useAuth } from '@/lib/auth';
 import { I18nProvider } from '@/lib/i18n';
+import { OfflineProvider } from '@/lib/offline/react';
 import { queryClient } from '@/lib/query-client';
 
 SplashScreen.preventAutoHideAsync();
@@ -36,13 +37,15 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
-          <I18nProvider>
-            <ToastProvider>
-              <ConfirmProvider>
-                <RootNavigator />
-              </ConfirmProvider>
-            </ToastProvider>
-          </I18nProvider>
+          <OfflineProvider>
+            <I18nProvider>
+              <ToastProvider>
+                <ConfirmProvider>
+                  <RootNavigator />
+                </ConfirmProvider>
+              </ToastProvider>
+            </I18nProvider>
+          </OfflineProvider>
         </AuthProvider>
       </QueryClientProvider>
     </GestureHandlerRootView>

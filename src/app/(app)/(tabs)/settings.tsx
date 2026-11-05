@@ -3,7 +3,7 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { ScrollView, View } from 'react-native';
 
-import { Banknote, Bell, ClipboardList, Clock, Eye, Gauge, Globe, Languages, LogOut, ShieldCheck, Tags } from '@/components/icons';
+import { Banknote, Bell, ClipboardList, Clock, Eye, Gauge, Globe, Languages, LogOut, RotateCcw, ShieldCheck, Tags } from '@/components/icons';
 import {
   AccountSheet,
   CountrySettingsSheet,
@@ -25,6 +25,7 @@ import { countryName, countryOfAccount, zoneChoices } from '@/lib/countries';
 import { describeError } from '@/lib/errors';
 import { LANGUAGES, useI18n } from '@/lib/i18n';
 import { openLegalPage, type LegalPage } from '@/lib/legal';
+import { useSyncSummary } from '@/lib/offline/react';
 import { requestReminderPermission } from '@/lib/reminders';
 import type { TensionUnit } from '@/lib/types';
 
@@ -36,6 +37,7 @@ export default function Settings() {
   const router = useRouter();
   const toast = useToast();
   const confirm = useConfirm();
+  const sync = useSyncSummary();
   const [sheet, setSheet] = useState<OpenSheet>(null);
   const [pageHeight, setPageHeight] = useState(0);
   const [contentHeight, setContentHeight] = useState(0);
@@ -59,7 +61,8 @@ export default function Settings() {
   const askSignOut = async () => {
     const ok = await confirm({
       title: t('sign_out_title'),
-      message: t('sign_out_message'),
+      // Changes that have not reached the server go with the session: the person is told before it is ended.
+      message: sync.unsynced > 0 ? t('sign_out_unsynced', { count: sync.unsynced }) : t('sign_out_message'),
       confirmLabel: t('sign_out'),
       destructive: true,
     });
@@ -85,6 +88,12 @@ export default function Settings() {
         onContentSizeChange={(_, height) => setContentHeight(height)}>
         <ListGroup>
           <ListRow icon={Tags} label={t('settings_services')} onPress={() => router.push('/settings/services')} />
+          <ListRow
+            icon={RotateCcw}
+            label={t('settings_sync')}
+            value={sync.failed > 0 ? t('sync_status_failed', { count: sync.failed }) : sync.unsynced > 0 ? String(sync.unsynced) : ''}
+            onPress={() => router.push('/sync')}
+          />
           <ListRow icon={Banknote} label={t('settings_currency')} value={user.currency} onPress={() => setSheet('currency')} />
           <ListRow
             icon={Globe}

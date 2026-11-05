@@ -7,7 +7,8 @@ import {
 } from '../db/schema.js';
 import { requireAuth } from '../middleware/auth.js';
 import { parseQuery, validateBody } from '../middleware/validate.js';
-import { todayIn } from '../utils/dates.js';
+import { idConflict, isIdCollision, lockId } from '../utils/clientIds.js';
+import { eventTime, todayIn } from '../utils/dates.js';
 import { HttpError, notFound, rejectMalformedIds } from '../utils/http.js';
 import { detectImageType } from '../utils/images.js';
 import {
@@ -16,7 +17,7 @@ import {
 import { nameKey } from '../utils/reference.js';
 import { giveBackStock, stockWanted, takeStock } from '../utils/stock.js';
 import {
-  isoDate, matchesWords, money, optionalText, requiredText, searchText, tensionKg, timeOfDay, uuid,
+  flagQuery, isoDate, matchesWords, momentAt, money, optionalText, requiredText, searchText, tensionKg, timeOfDay, uuid,
 } from '../utils/validators.js';
 
 const router = express.Router();
@@ -33,8 +34,10 @@ const STOCK_FIELDS = ['racket_id', 'customer_strings', 'hybrid', 'main_string_id
 
 // A racket of the client that is named instead of pointed at, for one that is not in the client's rackets yet. It is the
 // client's racket of that name if they have one; otherwise it is made together with the order, in the same transaction,
-// so that an order that is not made leaves no racket behind.
+// so that an order that is not made leaves no racket behind. The racket may bring the id the phone made up for it (see
+// utils/clientIds.js); when the client has a racket of that name already, that one is used and the id is not.
 const newRacket = z.object({
+  id: uuid.optional(),
   brand: requiredText(80, 'Enter the brand'),
   model: requiredText(120, 'Enter the model'),
 });
@@ -68,15 +71,18 @@ const orderFields = z.object({
 
 const bothRackets = { error: 'Send either racket_id or new_racket', path: ['racket_id'] };
 
+// A new order may bring the id the phone made up for it, and the moment it was made (see utils/clientIds.js, utils/dates.js).
+const newOrderFields = orderFields.extend({ id: uuid.optional(), at: momentAt });
+
 // An order is for one racket, pointed at or named.
-const orderSchema = orderFields
+const orderSchema = newOrderFields
   .refine((body) => !!body.racket_id || !!body.new_racket, { error: 'Choose a racket', path: ['racket_id'] })
   .refine((body) => !(body.racket_id && body.new_racket), bothRackets);
 
 // An edit may leave the racket alone.
 const updateSchema = orderFields
   .partial()
-  .extend({ status: z.enum(ORDER_STATUSES).optional() })
+  .extend({ status: z.enum(ORDER_STATUSES).optional(), at: momentAt })
   .refine((body) => !(body.racket_id && body.new_racket), bothRackets);
 
 const listQuery = z.object({
@@ -86,6 +92,8 @@ const listQuery = z.object({
   racket_id: uuid.optional(),
   limit: z.coerce.number().int().min(1).max(100).default(30),
   offset: z.coerce.number().int().min(0).default(0),
+  // Each order with its service lines and its photos, as GET /api/orders/:id has them.
+  details: flagQuery,
 });
 
 const fieldError = (field, message) =>
@@ -93,13 +101,22 @@ const fieldError = (field, message) =>
 
 const ownedOrder = (id, userId) => and(eq(orders.id, id), eq(orders.user_id, userId));
 
-async function loadOrder(id, userId) {
-  const [row] = await withOrderJoins(db.select(orderColumns).from(orders))
+// (`executor` is the transaction when the order is read inside one: see `lockOrder`.)
+async function loadOrder(id, userId, executor = db) {
+  const [row] = await withOrderJoins(executor.select(orderColumns).from(orders))
     .where(ownedOrder(id, userId))
     .limit(1);
   if (!row) throw notFound();
   return row;
 }
+
+/**
+ * Makes the requests that change or delete this order wait for each other, until the transaction `tx` has ended. What an order took
+ * from the stock is read after taking this lock, never before: two copies of one request (the answer of the first never reached the
+ * phone, so it was sent again while the first was still being made) would both give back what the order took and both take what it
+ * needs, and the stock would move twice.
+ */
+const lockOrder = (tx, id, userId) => lockId(tx, 'order-change', userId, id);
 
 const serializeLine = (line) => ({
   id: line.id,
@@ -108,27 +125,62 @@ const serializeLine = (line) => ({
   price: toNumber(line.price),
 });
 
-async function loadLines(orderId) {
-  return db.select().from(orderServices).where(eq(orderServices.order_id, orderId)).orderBy(asc(orderServices.name));
+async function loadLines(orderId, executor = db) {
+  return executor.select().from(orderServices).where(eq(orderServices.order_id, orderId)).orderBy(asc(orderServices.name));
 }
+
+const photoColumns = {
+  id: orderPhotos.id,
+  content_type: orderPhotos.content_type,
+  size: orderPhotos.size,
+  created_at: orderPhotos.created_at,
+};
 
 /** An order with its service lines and the list of its photos (not the photos themselves). */
 async function orderDetail(id, userId) {
   const row = await loadOrder(id, userId);
   const [lines, photos] = await Promise.all([
     loadLines(id),
-    db
-      .select({
-        id: orderPhotos.id,
-        content_type: orderPhotos.content_type,
-        size: orderPhotos.size,
-        created_at: orderPhotos.created_at,
-      })
-      .from(orderPhotos)
-      .where(eq(orderPhotos.order_id, id))
-      .orderBy(asc(orderPhotos.created_at)),
+    db.select(photoColumns).from(orderPhotos).where(eq(orderPhotos.order_id, id)).orderBy(asc(orderPhotos.created_at)),
   ]);
   return { ...serializeOrder(row), services: lines.map(serializeLine), photos };
+}
+
+/** The same for a page of orders: the lines and the photos of all of them, each read with one query. */
+async function withDetails(rows) {
+  const ids = rows.map(({ order }) => order.id);
+  if (ids.length === 0) return [];
+  const [lines, photos] = await Promise.all([
+    db.select().from(orderServices).where(inArray(orderServices.order_id, ids)).orderBy(asc(orderServices.name)),
+    db
+      .select({ ...photoColumns, order_id: orderPhotos.order_id })
+      .from(orderPhotos)
+      .where(inArray(orderPhotos.order_id, ids))
+      .orderBy(asc(orderPhotos.created_at)),
+  ]);
+  const group = (items, pick) => {
+    const byOrder = new Map();
+    for (const item of items) byOrder.set(item.order_id, [...(byOrder.get(item.order_id) ?? []), pick(item)]);
+    return byOrder;
+  };
+  const linesByOrder = group(lines, serializeLine);
+  const photosByOrder = group(photos, ({ order_id: _order, ...photo }) => photo);
+  return rows.map((row) => ({
+    ...serializeOrder(row),
+    services: linesByOrder.get(row.order.id) ?? [],
+    photos: photosByOrder.get(row.order.id) ?? [],
+  }));
+}
+
+/**
+ * Whether this stringer has an order with this id already: a request that is made again, because the phone never heard the
+ * answer. Free is false; the id of another stringer's order is a 409.
+ */
+async function hasOrderWithId(executor, id, userId) {
+  const [row] = await executor.select({ user_id: orders.user_id }).from(orders).where(eq(orders.id, id)).limit(1);
+  if (!row) return false;
+  if (row.user_id !== userId) throw idConflict();
+  return true;
 }
 
 const stringLabel = (row) => [row.brand, row.model, row.gauge].filter(Boolean).join(' ');
@@ -137,11 +189,11 @@ const stringLabel = (row) => [row.brand, row.model, row.gauge].filter(Boolean).j
  * The string a field points at. A string the order already used keeps the name it was saved with, so
  * editing an old order never rewrites it; a newly chosen one is named from the catalog.
  */
-async function resolveString(userId, { id, name, previousId, previousName, field }) {
+async function resolveString(userId, { id, name, previousId, previousName, field }, executor = db) {
   if (!id) return { id: null, name: name ?? null };
   if (id === previousId) return { id, name: previousName ?? name ?? null };
 
-  const [row] = await db
+  const [row] = await executor
     .select()
     .from(catalogStrings)
     .where(and(eq(catalogStrings.id, id), eq(catalogStrings.user_id, userId), isNull(catalogStrings.deleted_at)))
@@ -157,9 +209,9 @@ async function resolveString(userId, { id, name, previousId, previousName, field
  * it, and otherwise is to be made: `make` is its brand and model, and the route makes it inside the transaction of the
  * order, because a racket that is made before the order is made stays when the order is not.
  */
-async function resolveRacket(userId, next, previous) {
+async function resolveRacket(userId, next, previous, executor = db) {
   if (next.new_racket) {
-    const owned = await db
+    const owned = await executor
       .select({ id: rackets.id, brand: rackets.brand, model: rackets.model })
       .from(rackets)
       .where(and(eq(rackets.user_id, userId), eq(rackets.client_id, next.client_id), isNull(rackets.deleted_at)));
@@ -168,7 +220,7 @@ async function resolveRacket(userId, next, previous) {
     return { racket: { id: have?.id ?? null, client_id: next.client_id }, make: have ? null : next.new_racket };
   }
 
-  const [racket] = await db
+  const [racket] = await executor
     .select({ id: rackets.id, client_id: rackets.client_id })
     .from(rackets)
     .where(
@@ -186,11 +238,11 @@ async function resolveRacket(userId, next, previous) {
   return { racket, make: null };
 }
 
-/** A racket of a client, made inside the transaction `tx` of the order that names it. Answers with its id. */
-async function makeRacket(tx, userId, clientId, { brand, model }) {
+/** A racket of a client, made inside the transaction `tx` of the order that names it, with the id the phone gave it if it did. Answers with its id. */
+async function makeRacket(tx, userId, clientId, { id, brand, model }) {
   const [made] = await tx
     .insert(rackets)
-    .values({ user_id: userId, client_id: clientId, brand, model })
+    .values({ ...(id && { id }), user_id: userId, client_id: clientId, brand, model })
     .returning({ id: rackets.id });
   return made.id;
 }
@@ -198,10 +250,11 @@ async function makeRacket(tx, userId, clientId, { brand, model }) {
 /**
  * Checks the references of an order against this stringer's data and works out what is stored (`values`): the
  * string names, which fields apply to this kind of setup, and the total; what it wants from the stock (`wanted`); and,
- * when the racket is named and does not exist yet, what it is to be made from (`make`).
+ * when the racket is named and does not exist yet, what it is to be made from (`make`). Inside a transaction, `executor` is that
+ * transaction, so that what is looked at is what the request that holds the lock of the order sees.
  */
-async function prepare(userId, next, previous) {
-  const [client] = await db
+async function prepare(userId, next, previous, executor = db) {
+  const [client] = await executor
     .select({ id: clients.id })
     .from(clients)
     .where(
@@ -214,31 +267,39 @@ async function prepare(userId, next, previous) {
     .limit(1);
   if (!client) throw fieldError('client_id', 'Unknown client');
 
-  const { racket, make } = await resolveRacket(userId, next, previous);
+  const { racket, make } = await resolveRacket(userId, next, previous, executor);
 
   if (next.due_time && !next.due_date) throw fieldError('due_time', 'Choose a date first');
 
   // Strings the customer brings are not from the catalog, and only a hybrid has a second string.
-  const main = await resolveString(userId, {
-    id: next.customer_strings ? null : next.main_string_id,
-    name: next.main_string_name,
-    previousId: previous?.main_string_id,
-    previousName: previous?.main_string_name,
-    field: 'main_string_id',
-  });
+  const main = await resolveString(
+    userId,
+    {
+      id: next.customer_strings ? null : next.main_string_id,
+      name: next.main_string_name,
+      previousId: previous?.main_string_id,
+      previousName: previous?.main_string_name,
+      field: 'main_string_id',
+    },
+    executor
+  );
   const cross = next.hybrid
-    ? await resolveString(userId, {
-        id: next.customer_strings ? null : next.cross_string_id,
-        name: next.cross_string_name,
-        previousId: previous?.cross_string_id,
-        previousName: previous?.cross_string_name,
-        field: 'cross_string_id',
-      })
+    ? await resolveString(
+        userId,
+        {
+          id: next.customer_strings ? null : next.cross_string_id,
+          name: next.cross_string_name,
+          previousId: previous?.cross_string_id,
+          previousName: previous?.cross_string_name,
+          field: 'cross_string_id',
+        },
+        executor
+      )
     : { id: null, name: null };
 
   const serviceIds = next.services.map((line) => line.service_id).filter(Boolean);
   if (serviceIds.length > 0) {
-    const found = await db
+    const found = await executor
       .select({ id: services.id })
       .from(services)
       .where(and(inArray(services.id, serviceIds), eq(services.user_id, userId)));
@@ -340,15 +401,22 @@ router.get('/', async (req, res) => {
     .limit(query.limit + 1)
     .offset(query.offset);
 
+  const page = rows.slice(0, query.limit);
   res.json({
-    items: rows.slice(0, query.limit).map(serializeOrder),
+    items: query.details ? await withDetails(page) : page.map(serializeOrder),
     has_more: rows.length > query.limit,
   });
 });
 
-// POST /api/orders
+// POST /api/orders. An order with the `id` that this stringer already has is not made again: it is answered with 200 and the order
+// as it is, and nothing is looked at, taken from the stock or numbered. `at` is the moment the order was made on the phone.
 router.post('/', validateBody(orderSchema), async (req, res) => {
-  const body = req.body;
+  const { id, at, ...body } = req.body;
+
+  if (id && (await hasOrderWithId(db, id, req.user.id))) {
+    return res.status(200).json(await orderDetail(id, req.user.id));
+  }
+
   const next = {
     customer_strings: false,
     hybrid: false,
@@ -371,39 +439,58 @@ router.post('/', validateBody(orderSchema), async (req, res) => {
   };
   const { values, wanted, make } = await prepare(req.user.id, next, undefined);
 
-  const id = await db.transaction(async (tx) => {
-    // The counter is only ever read and raised by this one statement, so two orders created at once
-    // never get the same number.
-    const [{ order_counter }] = await tx
-      .update(users)
-      .set({ order_counter: sql`${users.order_counter} + 1` })
-      .where(eq(users.id, req.user.id))
-      .returning({ order_counter: users.order_counter });
+  let repeated = false;
+  let orderId;
+  try {
+    orderId = await db.transaction(async (tx) => {
+      if (id) {
+        // Two copies of one request at the same moment: the second waits here for the first, and finds its order.
+        await lockId(tx, 'orders', req.user.id, id);
+        if (await hasOrderWithId(tx, id, req.user.id)) {
+          repeated = true;
+          return id;
+        }
+      }
 
-    // A racket that was named and is not the client's yet is made here, with the order: it only exists if the order does.
-    const racketId = make ? await makeRacket(tx, req.user.id, values.client_id, make) : values.racket_id;
+      // The counter is only ever read and raised by this one statement, so two orders created at once
+      // never get the same number.
+      const [{ order_counter }] = await tx
+        .update(users)
+        .set({ order_counter: sql`${users.order_counter} + 1` })
+        .where(eq(users.id, req.user.id))
+        .returning({ order_counter: users.order_counter });
 
-    // An order that finds too little in the stock fails here, and the number it was given goes back with it, and so
-    // does the racket that was made for it.
-    const taken = await takeStock(tx, req.user.id, wanted);
+      // A racket that was named and is not the client's yet is made here, with the order: it only exists if the order does.
+      const racketId = make ? await makeRacket(tx, req.user.id, values.client_id, make) : values.racket_id;
 
-    const now = new Date();
-    const [created] = await tx
-      .insert(orders)
-      .values({
-        ...values,
-        racket_id: racketId,
-        user_id: req.user.id,
-        number: order_counter,
-        stock_used: taken,
-        ...(body.is_paid && { is_paid: true, paid_at: now }),
-      })
-      .returning({ id: orders.id });
-    await insertLines(tx, created.id, next.services);
-    return created.id;
-  });
+      // An order that finds too little in the stock fails here, and the number it was given goes back with it, and so
+      // does the racket that was made for it.
+      const taken = await takeStock(tx, req.user.id, wanted);
 
-  res.status(201).json(await orderDetail(id, req.user.id));
+      const moment = eventTime(at);
+      const [created] = await tx
+        .insert(orders)
+        .values({
+          ...values,
+          ...(id && { id }),
+          racket_id: racketId,
+          user_id: req.user.id,
+          number: order_counter,
+          stock_used: taken,
+          created_at: moment,
+          ...(body.is_paid && { is_paid: true, paid_at: moment }),
+        })
+        .returning({ id: orders.id });
+      await insertLines(tx, created.id, next.services);
+      return created.id;
+    });
+  } catch (err) {
+    // The id of the order, or of the racket it named, was used by someone else at the same moment.
+    if (isIdCollision(err)) throw idConflict();
+    throw err;
+  }
+
+  res.status(repeated ? 200 : 201).json(await orderDetail(orderId, req.user.id));
 });
 
 // GET /api/orders/:id
@@ -413,67 +500,81 @@ router.get('/:id', async (req, res) => {
 
 // PATCH /api/orders/:id: any of the fields above, plus `status`. `services` replaces the whole list.
 router.patch('/:id', validateBody(updateSchema), async (req, res) => {
-  const { order: previous } = await loadOrder(req.params.id, req.user.id);
-  const body = req.body;
+  // `at` is the moment the phone made the change, which dates the status and the payment.
+  const { at, ...body } = req.body;
+  const now = eventTime(at);
+  try {
+    await db.transaction(async (tx) => {
+      // Everything about the order is read here, once the requests before this one have finished with it: a copy of a change that
+      // is already made finds the order as that change left it, and moves nothing again.
+      await lockOrder(tx, req.params.id, req.user.id);
+      const { order: previous } = await loadOrder(req.params.id, req.user.id, tx);
 
-  const current = {
-    ...previous,
-    main_tension: toNumber(previous.main_tension),
-    cross_tension: toNumber(previous.cross_tension),
-    labor_price: toNumber(previous.labor_price),
-    string_price: toNumber(previous.string_price),
-  };
-  const lines =
-    body.services ??
-    (await loadLines(previous.id)).map((line) => ({
-      service_id: line.service_id,
-      name: line.name,
-      price: toNumber(line.price),
-    }));
-  const next = { ...current, services: lines };
-  for (const [key, value] of Object.entries(body)) {
-    if (value !== undefined && key !== 'services') next[key] = value;
+      const current = {
+        ...previous,
+        main_tension: toNumber(previous.main_tension),
+        cross_tension: toNumber(previous.cross_tension),
+        labor_price: toNumber(previous.labor_price),
+        string_price: toNumber(previous.string_price),
+      };
+      const lines =
+        body.services ??
+        (await loadLines(previous.id, tx)).map((line) => ({
+          service_id: line.service_id,
+          name: line.name,
+          price: toNumber(line.price),
+        }));
+      const next = { ...current, services: lines };
+      for (const [key, value] of Object.entries(body)) {
+        if (value !== undefined && key !== 'services') next[key] = value;
+      }
+
+      const { values: prepared, wanted, make } = await prepare(req.user.id, next, previous, tx);
+
+      // A racket that was named and is not the client's yet is made here, with the change: it only exists if the change does.
+      const values = make
+        ? { ...prepared, racket_id: await makeRacket(tx, req.user.id, prepared.client_id, make) }
+        : prepared;
+
+      // What the order took goes back and what it needs now is taken, but only when what it points at has changed:
+      // an order that is only moved on, or paid, leaves the stock alone.
+      const stockChange = {};
+      if (STOCK_FIELDS.some((field) => previous[field] !== values[field])) {
+        await giveBackStock(tx, req.user.id, previous.stock_used);
+        stockChange.stock_used = await takeStock(tx, req.user.id, wanted);
+      }
+
+      await tx
+        .update(orders)
+        .set({
+          ...values,
+          ...stockChange,
+          ...(body.status && statusChanges(body.status, previous, now)),
+          ...paymentChanges(body.is_paid, previous, now),
+        })
+        .where(ownedOrder(previous.id, req.user.id));
+
+      if (body.services) {
+        await tx.delete(orderServices).where(eq(orderServices.order_id, previous.id));
+        await insertLines(tx, previous.id, body.services);
+      }
+    });
+  } catch (err) {
+    // The id the phone gave to the racket it named was used by someone else.
+    if (isIdCollision(err)) throw idConflict();
+    throw err;
   }
 
-  const { values: prepared, wanted, make } = await prepare(req.user.id, next, previous);
-  const now = new Date();
-  await db.transaction(async (tx) => {
-    // A racket that was named and is not the client's yet is made here, with the change: it only exists if the change does.
-    const values = make
-      ? { ...prepared, racket_id: await makeRacket(tx, req.user.id, prepared.client_id, make) }
-      : prepared;
-
-    // What the order took goes back and what it needs now is taken, but only when what it points at has changed:
-    // an order that is only moved on, or paid, leaves the stock alone.
-    const stockChange = {};
-    if (STOCK_FIELDS.some((field) => previous[field] !== values[field])) {
-      await giveBackStock(tx, req.user.id, previous.stock_used);
-      stockChange.stock_used = await takeStock(tx, req.user.id, wanted);
-    }
-
-    await tx
-      .update(orders)
-      .set({
-        ...values,
-        ...stockChange,
-        ...(body.status && statusChanges(body.status, previous, now)),
-        ...paymentChanges(body.is_paid, previous, now),
-      })
-      .where(ownedOrder(previous.id, req.user.id));
-
-    if (body.services) {
-      await tx.delete(orderServices).where(eq(orderServices.order_id, previous.id));
-      await insertLines(tx, previous.id, body.services);
-    }
-  });
-
-  res.json(await orderDetail(previous.id, req.user.id));
+  res.json(await orderDetail(req.params.id, req.user.id));
 });
 
 // DELETE /api/orders/:id: the order with its services and photos; what it took from the stock goes back
 router.delete('/:id', async (req, res) => {
-  const { order } = await loadOrder(req.params.id, req.user.id);
   await db.transaction(async (tx) => {
+    // What the order took is read once the requests before this one have finished with it, so that it is given back once: of two
+    // copies of one delete, the second finds the order gone.
+    await lockOrder(tx, req.params.id, req.user.id);
+    const { order } = await loadOrder(req.params.id, req.user.id, tx);
     await giveBackStock(tx, req.user.id, order.stock_used);
     await tx.delete(orders).where(ownedOrder(req.params.id, req.user.id));
   });

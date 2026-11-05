@@ -20,6 +20,18 @@ export function messengerNumber(phone: string): string | null {
   return /^[1-9]\d{7,14}$/.test(international) ? international : null;
 }
 
+/**
+ * What makes two phone numbers one number, however they were typed: its digits, with a Ukrainian number always in its
+ * international form. The server's rule (backend/src/utils/phone.js), which the phone applies to the clients it has before it
+ * sends a new one, so that a number that is taken is refused at once and not when the connection is back.
+ */
+export function phoneKey(phone: string | null | undefined): string {
+  const digits = String(phone ?? '').replace(/\D/g, '');
+  if (/^0\d{9}$/.test(digits)) return `38${digits}`;
+  if (/^80\d{9}$/.test(digits)) return `3${digits}`;
+  return digits;
+}
+
 /** WhatsApp's link to the chat with a number, with the text written in the box (https://faq.whatsapp.com/5913398998672934). */
 export const whatsappLink = (number: string, text: string) => `https://wa.me/${number}?text=${encodeURIComponent(text)}`;
 

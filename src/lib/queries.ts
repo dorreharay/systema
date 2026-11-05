@@ -1,36 +1,39 @@
-import {
-  keepPreviousData,
-  useInfiniteQuery,
-  useMutation,
-  useQuery,
-  useQueryClient,
-} from '@tanstack/react-query';
-import { useCallback } from 'react';
+import { keepPreviousData, useInfiniteQuery, useQuery } from '@tanstack/react-query';
+import { useCallback, useMemo, useState } from 'react';
 
 import { api, apiBlob, type RequestOptions } from '@/lib/api';
+import { ApiError } from '@/lib/api-error';
 import { useAuth } from '@/lib/auth';
+import { engine, offlineActions } from '@/lib/offline/app';
+import type { ClientInput, RacketInput, ServiceInput, StringInput } from '@/lib/offline/inputs';
+import { useSnapshot } from '@/lib/offline/react';
+import {
+  selectClient,
+  selectClients,
+  selectDashboard,
+  selectOrder,
+  selectOrders,
+  selectRacket,
+  selectRackets,
+  selectServices,
+  selectStrings,
+  type OrderFilter,
+  type RacketFilter,
+} from '@/lib/offline/select';
+import type { Tables } from '@/lib/offline/types';
 import type {
-  CatalogString,
-  Client,
-  ClientDetail,
-  Dashboard,
   Insights,
-  Order,
-  OrderDetail,
   OrderInput,
-  OrderStatus,
-  Racket,
-  RacketDetail,
   ReferenceRacket,
   ReferenceString,
-  Service,
-  StringType,
 } from '@/lib/types';
 
-// How many orders the list asks for at a time; the next page is asked for when the end of it is near.
+export type { ClientInput, OrderFilter, RacketFilter, RacketInput, ServiceInput, StringInput };
+
+// How many orders the list shows at a time; the next page is shown when the end of it is near.
 const ORDERS_PAGE = 20;
 
-/** `api()` with the signed-in person's token. */
+/** `api()` with the signed-in person's token. For what only the server can answer (the reference list, a photo). */
 export function useRequest() {
   const { token } = useAuth();
   return useCallback(
@@ -38,140 +41,158 @@ export function useRequest() {
     [token]
   );
 }
-type Request = ReturnType<typeof useRequest>;
-
-const search = (q: string) => (q.trim() ? `?q=${encodeURIComponent(q.trim())}` : '');
 
 // --- Reading ---------------------------------------------------------------------------------
+//
+// Everything the stringer works with is read from the copy of their data that the phone keeps (see lib/offline): the same
+// whether there is a connection or not, and at once. These hooks answer in the shape of a query, so that the screens do not
+// have to know.
 
-export const useDashboard = () => {
-  const request = useRequest();
-  return useQuery({ queryKey: ['dashboard'], queryFn: () => request<Dashboard>('/api/dashboard') });
+const NOT_FOUND = new ApiError(404, 'Not found');
+const UNREACHABLE = new ApiError(0, 'The server could not be reached', 'network');
+const UNAVAILABLE = new ApiError(503, 'The server is not answering');
+
+type Read<T> = {
+  data: T | undefined;
+  isLoading: boolean;
+  isPending: boolean;
+  isError: boolean;
+  error: unknown;
+  isFetching: boolean;
+  /** Asks the server for its data again (the pull to refresh). */
+  refetch: () => Promise<unknown>;
 };
 
-export const useInsights = () => {
-  const request = useRequest();
-  return useQuery({ queryKey: ['insights'], queryFn: () => request<Insights>('/api/insights') });
-};
+const refetch = () => engine.syncNow({ pull: true });
 
-export type OrderFilter = { status?: OrderStatus | 'active'; q?: string; clientId?: string };
+/**
+ * Reads something from the copy. `data` is empty until the phone has the server's data for the first time (then `isLoading`,
+ * or `isError` when that cannot be had); a thing that is asked for by its id and is not there is an error too (`missing`).
+ */
+function useRead<T>(
+  select: (tables: Tables) => T | undefined,
+  // What `select` depends on besides the tables, as one string: the answer is worked out again when it changes.
+  key: string,
+  { enabled = true, missing = false }: { enabled?: boolean; missing?: boolean } = {}
+): Read<T> {
+  const snapshot = useSnapshot();
+  const loaded = snapshot.ready && snapshot.hasData;
+  const data = useMemo(
+    () => (enabled && loaded ? select(snapshot.tables) : undefined),
+    // `select` depends on `key` only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [snapshot.tables, loaded, enabled, key]
+  );
 
-export function useOrders({ status, q = '', clientId }: OrderFilter) {
-  const request = useRequest();
-  return useInfiniteQuery({
-    queryKey: ['orders', { status, q: q.trim(), clientId }],
-    initialPageParam: 0,
-    queryFn: ({ pageParam }) => {
-      const params = new URLSearchParams({ limit: String(ORDERS_PAGE), offset: String(pageParam) });
-      if (status) params.set('status', status);
-      if (q.trim()) params.set('q', q.trim());
-      if (clientId) params.set('client_id', clientId);
-      return request<{ items: Order[]; has_more: boolean }>(`/api/orders?${params}`);
-    },
-    getNextPageParam: (last, pages) => (last.has_more ? pages.length * ORDERS_PAGE : undefined),
-    // While a search is being typed the previous results stay up instead of flashing empty.
-    placeholderData: keepPreviousData,
-  });
+  // Nothing to show and nothing coming: the first read of the server's data was tried and failed.
+  const failed = enabled && snapshot.ready && !snapshot.hasData && snapshot.net.settled && !snapshot.net.syncing;
+  const gone = enabled && missing && loaded && data === undefined;
+  const isError = failed || gone;
+  return {
+    data,
+    isLoading: enabled && !loaded && !failed,
+    isPending: enabled && data === undefined && !isError,
+    isError,
+    error: failed ? (snapshot.net.online ? UNAVAILABLE : UNREACHABLE) : gone ? NOT_FOUND : null,
+    isFetching: snapshot.net.syncing,
+    refetch,
+  };
 }
 
-export const useOrder = (id: string | undefined) => {
-  const request = useRequest();
-  return useQuery({
-    queryKey: ['order', id],
-    queryFn: () => request<OrderDetail>(`/api/orders/${id}`),
-    enabled: !!id,
-  });
+export const useDashboard = () => {
+  const { user } = useAuth();
+  return useRead((tables) => selectDashboard(tables, user?.timezone, Date.now()), user?.timezone ?? '');
 };
 
-export const useClients = (q = '') => {
-  const request = useRequest();
-  return useQuery({
-    queryKey: ['clients', q.trim()],
-    queryFn: () => request<{ items: Client[] }>(`/api/clients${search(q)}`),
-    placeholderData: keepPreviousData,
-    select: (data) => data.items,
-  });
+/** The charts of the home screen, as the server last drew them: they are not worked out on the phone. `at` is when. */
+export const useInsights = (): Read<Insights> & { at: string | null } => {
+  const { meta, ready, hasData, net } = useSnapshot();
+  const data = meta?.insights?.data;
+  const failed = ready && !data && net.settled && !net.syncing;
+  return {
+    data,
+    at: meta?.insights?.at ?? null,
+    isLoading: !data && !failed,
+    isPending: !data && !failed,
+    isError: failed && !hasData,
+    error: net.online ? UNAVAILABLE : UNREACHABLE,
+    isFetching: net.syncing,
+    refetch,
+  };
 };
 
-export const useClient = (id: string | undefined) => {
-  const request = useRequest();
-  return useQuery({
-    queryKey: ['client', id],
-    queryFn: () => request<ClientDetail>(`/api/clients/${id}`),
-    enabled: !!id,
-  });
-};
+export function useOrders({ status, q = '', clientId }: OrderFilter) {
+  const text = q.trim();
+  const key = `${status ?? ''}|${text}|${clientId ?? ''}`;
+  const all = useRead((tables) => selectOrders(tables, { status, q: text, clientId }), key);
+  const [shown, setShown] = useState({ key, count: 1 });
+  // A new filter starts from the first page again.
+  const count = shown.key === key ? shown.count : 1;
 
-export type RacketFilter = {
-  q?: string;
-  clientId?: string;
-  // The rackets of clients, or the catalog's (the ones kept in stock).
-  kind?: 'client' | 'catalog';
-  inStock?: boolean;
-  // False while the list is not wanted: it is asked for once it is.
-  enabled?: boolean;
-};
+  const data = useMemo(() => {
+    const items = all.data;
+    if (!items) return undefined;
+    const pages = Array.from({ length: count }, (_, index) => ({
+      items: items.slice(index * ORDERS_PAGE, (index + 1) * ORDERS_PAGE),
+      has_more: items.length > (index + 1) * ORDERS_PAGE,
+    }));
+    return { pages, pageParams: pages.map((_, index) => index * ORDERS_PAGE) };
+  }, [all.data, count]);
 
-export const useRackets = ({ q = '', clientId, kind, inStock, enabled = true }: RacketFilter = {}) => {
-  const request = useRequest();
-  return useQuery({
-    queryKey: ['rackets', { q: q.trim(), clientId, kind, inStock }],
-    enabled,
-    queryFn: () => {
-      const params = new URLSearchParams();
-      if (q.trim()) params.set('q', q.trim());
-      if (clientId) params.set('client_id', clientId);
-      if (kind) params.set('kind', kind);
-      if (inStock) params.set('in_stock', '1');
-      const query = params.toString();
-      return request<{ items: Racket[] }>(`/api/rackets${query ? `?${query}` : ''}`);
+  return {
+    ...all,
+    data,
+    hasNextPage: !!all.data && all.data.length > count * ORDERS_PAGE,
+    isFetchingNextPage: false,
+    fetchNextPage: () => {
+      setShown({ key, count: count + 1 });
+      return Promise.resolve();
     },
-    placeholderData: keepPreviousData,
-    select: (data) => data.items,
-  });
-};
+  };
+}
 
-export const useRacket = (id: string | undefined) => {
-  const request = useRequest();
-  return useQuery({
-    queryKey: ['racket', id],
-    queryFn: () => request<RacketDetail>(`/api/rackets/${id}`),
-    enabled: !!id,
-  });
-};
+/** The orders that are still to be done, for the reminders on the phone. */
+export const useActiveOrders = () => useRead((tables) => selectOrders(tables, { status: 'active' }), '');
 
-export const useStrings = (q = '', { inStock, enabled = true }: { inStock?: boolean; enabled?: boolean } = {}) => {
-  const request = useRequest();
-  return useQuery({
-    queryKey: ['strings', q.trim(), inStock],
-    enabled,
-    queryFn: () => {
-      const params = new URLSearchParams();
-      if (q.trim()) params.set('q', q.trim());
-      if (inStock) params.set('in_stock', '1');
-      const query = params.toString();
-      return request<{ items: CatalogString[] }>(`/api/strings${query ? `?${query}` : ''}`);
-    },
-    placeholderData: keepPreviousData,
-    select: (data) => data.items,
-  });
-};
+export const useOrder = (id: string | undefined) =>
+  useRead((tables) => selectOrder(tables, id), id ?? '', { enabled: !!id, missing: true });
+
+export const useClients = (q = '') => useRead((tables) => selectClients(tables, q), q.trim());
+
+export const useClient = (id: string | undefined) =>
+  useRead((tables) => selectClient(tables, id), id ?? '', { enabled: !!id, missing: true });
+
+export const useRackets = ({ q = '', clientId, kind, inStock, enabled = true }: RacketFilter & { enabled?: boolean } = {}) =>
+  useRead((tables) => selectRackets(tables, { q, clientId, kind, inStock }), `${q.trim()}|${clientId}|${kind}|${inStock}`, { enabled });
+
+export const useRacket = (id: string | undefined) =>
+  useRead((tables) => selectRacket(tables, id), id ?? '', { enabled: !!id, missing: true });
+
+export const useStrings = (q = '', { inStock, enabled = true }: { inStock?: boolean; enabled?: boolean } = {}) =>
+  useRead((tables) => selectStrings(tables, q, inStock), `${q.trim()}|${inStock}`, { enabled });
+
+export const useServices = () => useRead((tables) => selectServices(tables), '');
+
+/** Whether the server was reachable the last time it was asked: what only it can answer (the reference list) needs it. */
+export const useOnline = () => useSnapshot().net.online;
 
 // The reference list: the rackets and strings that exist, found by a part of the name while a new one is typed.
-// It is the same for everyone and does not change while the app is open, so an answer is kept for a while.
+// It is the same for everyone and does not change while the app is open, so an answer is kept for a while. It is the one
+// thing here that only the server has: without a connection it is not offered, and the name is typed.
 const REFERENCE_STALE_MS = 60 * 60_000;
 // How many are asked for: more than a form shows, since what the catalog already has is taken out of them.
 const REFERENCE_FETCH = 12;
 
 function useReference<T>(kind: 'rackets' | 'strings', q: string, enabled: boolean, limit: number) {
   const request = useRequest();
+  const online = useOnline();
   const text = q.trim();
   return useQuery({
     queryKey: ['reference', kind, text, limit],
     queryFn: () =>
       request<{ items: T[] }>(`/api/reference/${kind}?q=${encodeURIComponent(text)}&limit=${limit}`),
     // One letter finds too much to be of use.
-    enabled: enabled && text.length >= 2,
+    enabled: enabled && online && text.length >= 2,
     staleTime: REFERENCE_STALE_MS,
     placeholderData: keepPreviousData,
     select: (data) => data.items,
@@ -191,10 +212,11 @@ const REFERENCE_PAGE = 30;
 /** The reference rackets a page at a time, all of them or the ones that fit what is typed: for a picker to scroll through. */
 export function useReferenceRacketPages(q: string, enabled = true) {
   const request = useRequest();
+  const online = useOnline();
   const text = q.trim();
   return useInfiniteQuery({
     queryKey: ['reference', 'racket-pages', text],
-    enabled,
+    enabled: enabled && online,
     initialPageParam: 0,
     queryFn: ({ pageParam }) =>
       request<{ items: ReferenceRacket[]; has_more: boolean }>(
@@ -209,21 +231,8 @@ export function useReferenceRacketPages(q: string, enabled = true) {
 
 /** The lists of rackets and strings, read again: for when the server says that what they show is out of date (what ran out, or is gone). */
 export function useRefreshCatalog() {
-  const queryClient = useQueryClient();
-  return () => {
-    void queryClient.invalidateQueries({ queryKey: ['rackets'] });
-    void queryClient.invalidateQueries({ queryKey: ['strings'] });
-  };
+  return () => void engine.syncNow({ pull: true });
 }
-
-export const useServices = () => {
-  const request = useRequest();
-  return useQuery({
-    queryKey: ['services'],
-    queryFn: () => request<{ items: Service[] }>('/api/services'),
-    select: (data) => data.items,
-  });
-};
 
 function blobToDataUri(blob: Blob) {
   return new Promise<string>((resolve, reject) => {
@@ -234,7 +243,7 @@ function blobToDataUri(blob: Blob) {
   });
 }
 
-/** An order photo, as an image address. A photo never changes, so it is loaded once. */
+/** An order photo, as an image address. A photo never changes, so it is loaded once. Photos need a connection. */
 export function usePhotoUri(id: string) {
   const { token } = useAuth();
   return useQuery({
@@ -246,123 +255,62 @@ export function usePhotoUri(id: string) {
 }
 
 // --- Writing ---------------------------------------------------------------------------------
+//
+// A change is put in the queue of the phone and shows at once; the engine takes it to the server when it can (see
+// lib/offline/actions). The hooks keep the shape of a mutation that the screens use.
 
-/**
- * A change to the data. Once it has worked, everything on screen that may show it is read again:
- * an order is on the home screen, in two lists, on the client's page and in the racket's history.
- *
- * What is only added (a string, a racket, a client, a service) is on no order and in no total yet: it changes the lists
- * it is in, and `affects` names them. Reading all of the rest again, each with its screen drawn again behind the form
- * that was just saved, made saving a string a pause.
- */
-function useAction<Vars, Result>(
-  run: (request: Request, vars: Vars) => Promise<Result>,
-  affects?: readonly string[]
-) {
-  const request = useRequest();
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (vars: Vars) => run(request, vars),
-    onSuccess: () => {
-      // Not returned: the caller carries on at once, and the screens update as the answers arrive. The reference
-      // list is nobody's data: nothing done here changes it.
-      void queryClient.invalidateQueries({
-        predicate: ({ queryKey: [root] }) => (affects ? affects.includes(String(root)) : root !== 'reference'),
-      });
-    },
+function useAction<Vars, Result>(run: (vars: Vars) => Promise<Result>) {
+  const [state, setState] = useState<{ isPending: boolean; variables: Vars | undefined }>({
+    isPending: false,
+    variables: undefined,
   });
+  const mutateAsync = useCallback(
+    async (variables: Vars) => {
+      setState({ isPending: true, variables });
+      try {
+        return await run(variables);
+      } finally {
+        setState((current) => ({ ...current, isPending: false }));
+      }
+    },
+    [run]
+  );
+  return {
+    mutateAsync,
+    mutate: (variables: Vars) => void mutateAsync(variables).catch(() => undefined),
+    isPending: state.isPending,
+    variables: state.variables,
+  };
 }
 
-export const useCreateOrder = () =>
-  useAction((request, input: OrderInput) =>
-    request<OrderDetail>('/api/orders', { method: 'POST', body: input })
-  );
+const createOrder = (input: OrderInput) => offlineActions.createOrder(input);
+const updateOrder = ({ id, ...input }: OrderInput & { id: string }) => offlineActions.updateOrder(id, input);
+const deleteOrder = (id: string) => offlineActions.deleteOrder(id);
+const createClient = (input: ClientInput) => offlineActions.createClient(input);
+const updateClient = ({ id, ...input }: ClientInput & { id: string }) => offlineActions.updateClient(id, input);
+const deleteClient = (id: string) => offlineActions.deleteClient(id);
+const createRacket = (input: RacketInput) => offlineActions.createRacket(input);
+const updateRacket = ({ id, ...input }: RacketInput & { id: string }) => offlineActions.updateRacket(id, input);
+const deleteRacket = (id: string) => offlineActions.deleteRacket(id);
+const createString = (input: StringInput) => offlineActions.createString(input);
+const updateString = ({ id, ...input }: StringInput & { id: string }) => offlineActions.updateString(id, input);
+const deleteString = (id: string) => offlineActions.deleteString(id);
+const createService = (input: ServiceInput) => offlineActions.createService(input);
+const updateService = ({ id, ...input }: ServiceInput & { id: string }) => offlineActions.updateService(id, input);
+const deletePhoto = (id: string) => offlineActions.deletePhoto(id);
 
-export const useUpdateOrder = () =>
-  useAction((request, { id, ...input }: OrderInput & { id: string }) =>
-    request<OrderDetail>(`/api/orders/${id}`, { method: 'PATCH', body: input })
-  );
-
-export const useDeleteOrder = () =>
-  useAction((request, id: string) => request<{ ok: true }>(`/api/orders/${id}`, { method: 'DELETE' }));
-
-export type ClientInput = { name?: string; phone?: string | null; email?: string | null; notes?: string | null };
-
-export const useCreateClient = () =>
-  useAction(
-    (request, input: ClientInput) => request<Client>('/api/clients', { method: 'POST', body: input }),
-    ['clients']
-  );
-
-export const useUpdateClient = () =>
-  useAction((request, { id, ...input }: ClientInput & { id: string }) =>
-    request<Client>(`/api/clients/${id}`, { method: 'PATCH', body: input })
-  );
-
-export const useDeleteClient = () =>
-  useAction((request, id: string) => request<{ ok: true }>(`/api/clients/${id}`, { method: 'DELETE' }));
-
-export type RacketInput = {
-  // Left out, the racket is a catalog racket: one the stringer keeps in stock.
-  client_id?: string;
-  brand?: string;
-  model?: string;
-  notes?: string | null;
-  track_stock?: boolean;
-  stock?: number;
-};
-
-// A client's racket is in the client's page and in how many rackets the client has.
-export const useCreateRacket = () =>
-  useAction(
-    (request, input: RacketInput) => request<Racket>('/api/rackets', { method: 'POST', body: input }),
-    ['rackets', 'clients', 'client']
-  );
-
-export const useUpdateRacket = () =>
-  useAction((request, { id, ...input }: RacketInput & { id: string }) =>
-    request<Racket>(`/api/rackets/${id}`, { method: 'PATCH', body: input })
-  );
-
-export const useDeleteRacket = () =>
-  useAction((request, id: string) => request<{ ok: true }>(`/api/rackets/${id}`, { method: 'DELETE' }));
-
-export type StringInput = {
-  brand?: string;
-  model?: string;
-  gauge?: string | null;
-  type?: StringType;
-  default_price?: number | null;
-  track_stock?: boolean;
-  stock?: number;
-};
-
-export const useCreateString = () =>
-  useAction(
-    (request, input: StringInput) => request<CatalogString>('/api/strings', { method: 'POST', body: input }),
-    ['strings']
-  );
-
-export const useUpdateString = () =>
-  useAction((request, { id, ...input }: StringInput & { id: string }) =>
-    request<CatalogString>(`/api/strings/${id}`, { method: 'PATCH', body: input })
-  );
-
-export const useDeleteString = () =>
-  useAction((request, id: string) => request<{ ok: true }>(`/api/strings/${id}`, { method: 'DELETE' }));
-
-export type ServiceInput = { name?: string; price?: number | null; kind?: 'labor' | 'extra'; active?: boolean };
-
-export const useCreateService = () =>
-  useAction(
-    (request, input: ServiceInput) => request<Service>('/api/services', { method: 'POST', body: input }),
-    ['services']
-  );
-
-export const useUpdateService = () =>
-  useAction((request, { id, ...input }: ServiceInput & { id: string }) =>
-    request<Service>(`/api/services/${id}`, { method: 'PATCH', body: input })
-  );
-
-export const useDeletePhoto = () =>
-  useAction((request, id: string) => request<{ ok: true }>(`/api/photos/${id}`, { method: 'DELETE' }));
+export const useCreateOrder = () => useAction(createOrder);
+export const useUpdateOrder = () => useAction(updateOrder);
+export const useDeleteOrder = () => useAction(deleteOrder);
+export const useCreateClient = () => useAction(createClient);
+export const useUpdateClient = () => useAction(updateClient);
+export const useDeleteClient = () => useAction(deleteClient);
+export const useCreateRacket = () => useAction(createRacket);
+export const useUpdateRacket = () => useAction(updateRacket);
+export const useDeleteRacket = () => useAction(deleteRacket);
+export const useCreateString = () => useAction(createString);
+export const useUpdateString = () => useAction(updateString);
+export const useDeleteString = () => useAction(deleteString);
+export const useCreateService = () => useAction(createService);
+export const useUpdateService = () => useAction(updateService);
+export const useDeletePhoto = () => useAction(deletePhoto);

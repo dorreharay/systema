@@ -11,7 +11,7 @@ import TextField, { type TextFieldRef } from '@/components/text-field';
 import { colors } from '@/components/ui/colors';
 import Shortcut from '@/components/ui/shortcut';
 import { useAuth } from '@/lib/auth';
-import { describeError, isApiError } from '@/lib/errors';
+import { describeAuthError, isApiError } from '@/lib/errors';
 import { useI18n } from '@/lib/i18n';
 import {
   MIN_PASSWORD_LENGTH,
@@ -76,9 +76,9 @@ export default function Register() {
       await signUp(email.trim(), password, language);
     } catch (error) {
       if (isApiError(error, 'email_taken')) {
-        setErrors((current) => ({ ...current, email: describeError(error, t) }));
+        setErrors((current) => ({ ...current, email: describeAuthError(error, t) }));
       } else {
-        setFormError(describeError(error, t));
+        setFormError(describeAuthError(error, t));
       }
       setSubmitting(false);
     }

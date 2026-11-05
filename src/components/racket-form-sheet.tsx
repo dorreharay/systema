@@ -16,7 +16,7 @@ import { useToast } from '@/components/ui/toast';
 import { describeError } from '@/lib/errors';
 import { formatNumber } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
-import { useClients, useCreateRacket, useRackets, useReferenceRackets, useUpdateRacket } from '@/lib/queries';
+import { useClients, useCreateRacket, useOnline, useRackets, useReferenceRackets, useUpdateRacket } from '@/lib/queries';
 import { withoutOwnedRackets } from '@/lib/reference';
 import type { Racket } from '@/lib/types';
 import { useDebounced } from '@/lib/use-debounced';
@@ -79,6 +79,7 @@ function RacketForm({
     .join(' ');
   const searching =
     !racket && !picked && model.trim() !== '' && typed.length >= 2 && (!forCatalog || inCatalog.data !== undefined);
+  const online = useOnline();
   const found = useReferenceRackets(useDebounced(typed, SUGGEST_DELAY_MS), searching);
   const suggestions = searching
     ? withoutOwnedRackets(found.data ?? [], forCatalog ? (inCatalog.data ?? []) : [])
@@ -185,6 +186,7 @@ function RacketForm({
         <Suggestions
           items={suggestions.map((item) => ({ key: item.id, title: `${item.brand} ${item.model}` }))}
           onPick={pick}
+          offline={searching && !online}
         />
         <Input
           ref={notesRef}

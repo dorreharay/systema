@@ -44,6 +44,8 @@ import {
   todayIso,
 } from '@/lib/format';
 import { useI18n, type Translate } from '@/lib/i18n';
+import { offlineStore } from '@/lib/offline/app';
+import { selectRackets } from '@/lib/offline/select';
 import {
   applySetup,
   buildInput,
@@ -68,7 +70,6 @@ import {
   useRackets,
   useReferenceRacketPages,
   useRefreshCatalog,
-  useRequest,
   useServices,
   useStrings,
   useUpdateOrder,
@@ -151,7 +152,6 @@ export default function OrderForm({ initial, order }: OrderFormProps) {
   const insets = useSafeAreaInsets();
   const toast = useToast();
   const confirm = useConfirm();
-  const request = useRequest();
   const createOrder = useCreateOrder();
   const updateOrder = useUpdateOrder();
   const deletePhoto = useDeletePhoto();
@@ -230,7 +230,7 @@ export default function OrderForm({ initial, order }: OrderFormProps) {
     setErrors((current) => ({ ...current, racket: undefined, client: undefined, mainString: undefined, mainTension: undefined }));
   };
 
-  const chooseClient = async (client: Pick<Client, 'id' | 'name'>) => {
+  const chooseClient = (client: Pick<Client, 'id' | 'name'>) => {
     if (draft.client?.id !== client.id) {
       // A client's racket goes with its owner and is left behind with them; a catalog racket stays, and so does a racket
       // that was only picked from the reference list: it is nobody's yet.
@@ -239,20 +239,17 @@ export default function OrderForm({ initial, order }: OrderFormProps) {
         fromStock ? ['client'] : ['client', 'racket']
       );
       if (fromStock) return;
-      try {
-        const { items } = await request<{ items: Racket[] }>(`/api/rackets?client_id=${client.id}`);
-        const picked = draft.referenceRacket;
-        if (picked) {
-          // The client may have that racket already: then it is theirs, with how it was strung, and no second is made.
-          const key = nameKey(picked.brand, picked.model);
-          const have = items.find((racket) => nameKey(racket.brand, racket.model) === key);
-          if (have) chooseRacket(have);
-        } else if (items.length === 1) {
-          // A customer with one racket needs no choosing.
-          chooseRacket(items[0]);
-        }
-      } catch {
-        // the racket can be picked by hand
+      // The client's rackets, as the phone has them: nothing is asked of the server, so this works without a connection too.
+      const items = selectRackets(offlineStore.getSnapshot().tables, { clientId: client.id, kind: 'client' });
+      const picked = draft.referenceRacket;
+      if (picked) {
+        // The client may have that racket already: then it is theirs, with how it was strung, and no second is made.
+        const key = nameKey(picked.brand, picked.model);
+        const have = items.find((racket) => nameKey(racket.brand, racket.model) === key);
+        if (have) chooseRacket(have);
+      } else if (items.length === 1) {
+        // A customer with one racket needs no choosing.
+        chooseRacket(items[0]);
       }
     }
   };
@@ -343,10 +340,11 @@ export default function OrderForm({ initial, order }: OrderFormProps) {
       // Photos taken off go after the order exists.
       for (const id of removedPhotos) await deletePhoto.mutateAsync(id).catch(() => undefined);
 
+      // An order the server has not numbered yet (there is no connection) is saved all the same; it gets its number when it is sent.
       toast.success(
-        editing
-          ? t('order_saved', { number: orderNumber(saved.number) })
-          : t('order_created', { number: orderNumber(saved.number) })
+        saved.number === null
+          ? t(editing ? 'order_saved_unnumbered' : 'order_created_unnumbered')
+          : t(editing ? 'order_saved' : 'order_created', { number: orderNumber(saved.number) })
       );
       if (editing) router.back();
       else router.replace({ pathname: '/orders/[id]', params: { id: saved.id } });
@@ -798,7 +796,7 @@ export default function OrderForm({ initial, order }: OrderFormProps) {
           row.kind === 'heading' ? `heading:${row.group}` : row.kind === 'own' ? row.racket.id : `reference:${row.item.id}`
         }
         selectedKey={racket?.id ?? (draft.referenceRacket ? `reference:${draft.referenceRacket.id}` : undefined)}
-        loading={rackets.isLoading || (!fromStock && reference.isPending)}
+        loading={rackets.isLoading || (!fromStock && reference.isLoading)}
         // The reference list comes a page at a time, as the list is scrolled.
         loadingMore={reference.isFetchingNextPage}
         onEndReached={() => {

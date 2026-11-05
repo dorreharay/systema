@@ -5,10 +5,12 @@ import { db } from '../db/index.js';
 import { STRING_TYPES, catalogStrings } from '../db/schema.js';
 import { requireAuth } from '../middleware/auth.js';
 import { parseQuery, validateBody } from '../middleware/validate.js';
+import { idConflict } from '../utils/clientIds.js';
 import { notFound, rejectMalformedIds } from '../utils/http.js';
+import { claimOperation } from '../utils/operations.js';
 import { toNumber } from '../utils/orders.js';
 import {
-  inStockQuery, matchesWords, money, optionalText, requiredText, searchText, setsInStock,
+  MAX_STOCK, inStockQuery, matchesWords, money, opId, optionalText, requiredText, searchText, setsInStock, stockDelta, uuid,
 } from '../utils/validators.js';
 
 const router = express.Router();
@@ -24,6 +26,16 @@ const stringSchema = z.object({
   // Whether the stock is counted, and how many sets there are.
   track_stock: z.boolean().optional(),
   stock: setsInStock.optional(),
+});
+
+// A new string may bring the id the phone made up for it (see utils/clientIds.js). A change never takes one.
+const newStringSchema = stringSchema.extend({ id: uuid.optional() });
+
+// A change of the stock by an amount: half sets, since a hybrid takes half a set of each of its two strings. `op_id` makes the same
+// request harmless when it is sent again (see utils/operations.js).
+const stockChangeSchema = z.object({
+  delta: stockDelta.refine((value) => Number.isInteger(value * 2), 'Use whole or half sets'),
+  op_id: opId,
 });
 
 const listQuery = z.object({ q: searchText, in_stock: inStockQuery });
@@ -72,13 +84,20 @@ router.get('/', async (req, res) => {
   res.json({ items: rows.map(serialize) });
 });
 
-// POST /api/strings
-router.post('/', validateBody(stringSchema), async (req, res) => {
+// POST /api/strings: a string with the `id` that this stringer already has is not made again; it is answered with 200 and the
+// string as it is. The id of another stringer's string is a 409.
+router.post('/', validateBody(newStringSchema), async (req, res) => {
+  const { id, ...fields } = req.body;
   const [row] = await db
     .insert(catalogStrings)
-    .values({ ...req.body, user_id: req.user.id })
+    .values({ ...fields, ...(id && { id }), user_id: req.user.id })
+    .onConflictDoNothing({ target: catalogStrings.id })
     .returning();
-  res.status(201).json(serialize(row));
+  if (row) return res.status(201).json(serialize(row));
+
+  const [existing] = await db.select().from(catalogStrings).where(eq(catalogStrings.id, id)).limit(1);
+  if (!existing || existing.user_id !== req.user.id) throw idConflict();
+  res.status(200).json(serialize(existing));
 });
 
 // GET /api/strings/:id
@@ -95,6 +114,25 @@ router.patch('/:id', validateBody(stringSchema.partial()), async (req, res) => {
     .where(owned(req.params.id, req.user.id))
     .returning();
   res.json(serialize(row));
+});
+
+// POST /api/strings/:id/stock: adds `delta` sets to the stock (a negative one takes them away), never below 0 and never above
+// what a stock may be. The stock of a string that is not counted is changed too; counting it is a change of `track_stock`.
+router.post('/:id/stock', validateBody(stockChangeSchema), async (req, res) => {
+  await findString(req.params.id, req.user.id);
+  const { delta, op_id: key } = req.body;
+  await db.transaction(async (tx) => {
+    // A key that was written before: the change was made, and it is not made again.
+    if (!(await claimOperation(tx, req.user.id, key)) || delta === 0) return;
+    const changed = await tx
+      .update(catalogStrings)
+      .set({ stock: sql`least(greatest(${catalogStrings.stock} + ${delta}, 0), ${MAX_STOCK})` })
+      .where(owned(req.params.id, req.user.id))
+      .returning({ id: catalogStrings.id });
+    // Removed since the check above: the key goes with the change.
+    if (changed.length === 0) throw notFound();
+  });
+  res.json(serialize(await findString(req.params.id, req.user.id)));
 });
 
 // DELETE /api/strings/:id: orders keep the name of the string they were made with

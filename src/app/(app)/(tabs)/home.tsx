@@ -1,9 +1,11 @@
 import { useRouter } from 'expo-router';
 import { Pressable, ScrollView, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import HomeInsights from '@/components/home-insights';
 import CatalogIcon from '@/components/icons/catalog-icon';
 import PlusIcon from '@/components/icons/plus-icon';
+import SyncPill from '@/components/sync-pill';
 import UserIcon from '@/components/icons/user-icon';
 import { colors } from '@/components/ui/colors';
 import { Screen } from '@/components/ui/screen';
@@ -70,6 +72,7 @@ export default function Home() {
   const { user } = useAuth();
   const { t } = useI18n();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const dashboard = useDashboard();
   const data = dashboard.data;
 
@@ -109,6 +112,11 @@ export default function Home() {
         </View>
       }
     >
+      {/* The home page has the logo where other pages have a title: the mark of the queue (see SyncPill) stands in line with it. */}
+      <View pointerEvents="box-none" className="absolute z-10" style={{ right: 16, top: insets.top + 6 }}>
+        <SyncPill />
+      </View>
+
       {/* All of the page, from under the logo to the shortcuts, is in one white block, rounded at the top and at the
           foot (the radius of the containers it sits among: see Screen). */}
       <View className="flex-1 overflow-hidden rounded-[18px] bg-white">

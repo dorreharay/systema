@@ -41,6 +41,8 @@ type SearchPickerProps<T> = {
   // For a list that comes in pages: asked for when the end of it is near, and whether the next page is on its way.
   onEndReached?: () => void;
   loadingMore?: boolean;
+  // Said instead of "no results" when the list cannot be had at all (only the server has it, and there is no connection).
+  unavailable?: string;
 };
 
 /** A heading over a group of rows of a picker: a grey band with the name of the group, to set it apart from the rest. */
@@ -73,6 +75,7 @@ function PickerBody<T>({
   isHeading,
   onEndReached,
   loadingMore,
+  unavailable,
 }: Omit<SearchPickerProps<T>, 'visible' | 'onClose' | 'title'>) {
   const { t } = useI18n();
   const [query, setQuery] = useState('');
@@ -165,7 +168,9 @@ function PickerBody<T>({
           automaticallyAdjustKeyboardInsets
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
-            loading ? (
+            unavailable ? (
+              <Text className="px-page py-10 text-center text-[16.5px] text-muted">{unavailable}</Text>
+            ) : loading ? (
               <ActivityIndicator className="py-10" color={colors.primary} />
             ) : trimmed || !emptyHint ? (
               <NoResults query={trimmed} />

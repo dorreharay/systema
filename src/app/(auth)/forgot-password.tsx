@@ -10,7 +10,7 @@ import TextField from '@/components/text-field';
 import { colors } from '@/components/ui/colors';
 import Shortcut from '@/components/ui/shortcut';
 import { useAuth } from '@/lib/auth';
-import { describeError } from '@/lib/errors';
+import { describeAuthError } from '@/lib/errors';
 import { useI18n } from '@/lib/i18n';
 import { validateEmail } from '@/lib/validation';
 
@@ -44,7 +44,7 @@ function ForgotPasswordForm() {
       await requestPasswordReset(email.trim());
       replace({ pathname: '/check-email', params: { email: email.trim() } });
     } catch (failure) {
-      setFormError(describeError(failure, t));
+      setFormError(describeAuthError(failure, t));
     } finally {
       setSubmitting(false);
     }

@@ -40,6 +40,8 @@ export default function AppLayout() {
         <Stack.Screen name="clients/[id]" />
         <Stack.Screen name="rackets/[id]" />
         <Stack.Screen name="settings/services" />
+        {/* The changes that have not reached the server: opened from the mark in the headers and from Settings. */}
+        <Stack.Screen name="sync" options={{ animation: 'default', gestureEnabled: true }} />
       </Stack.Protected>
       <Stack.Protected guard={!setupDone} redirectTo="/home">
         <Stack.Screen name="setup" />

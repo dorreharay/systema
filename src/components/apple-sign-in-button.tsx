@@ -3,7 +3,7 @@ import { View } from 'react-native';
 
 import type { AppleLibrary } from '@/lib/apple-sign-in';
 import { useAuth } from '@/lib/auth';
-import { describeError } from '@/lib/errors';
+import { describeAuthError } from '@/lib/errors';
 import { useI18n } from '@/lib/i18n';
 
 type AppleSignInButtonProps = {
@@ -35,7 +35,7 @@ export default function AppleSignInButton({ library, size, radius, disabled, onE
       // On success the root layout moves a signed-in user to the app: nothing to navigate to here.
       await signInWithApple(language);
     } catch (error) {
-      onError(describeError(error, t));
+      onError(describeAuthError(error, t));
     }
     setBusy(false);
   };

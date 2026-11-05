@@ -5,9 +5,10 @@ import { db } from '../db/index.js';
 import { services } from '../db/schema.js';
 import { requireAuth } from '../middleware/auth.js';
 import { validateBody } from '../middleware/validate.js';
+import { idConflict } from '../utils/clientIds.js';
 import { notFound, rejectMalformedIds } from '../utils/http.js';
 import { toNumber } from '../utils/orders.js';
-import { money, requiredText } from '../utils/validators.js';
+import { money, requiredText, uuid } from '../utils/validators.js';
 
 const router = express.Router();
 router.use(requireAuth);
@@ -19,6 +20,9 @@ const serviceSchema = z.object({
   kind: z.enum(['labor', 'extra']).optional(),
   active: z.boolean().optional(),
 });
+
+// A new service may bring the id the phone made up for it (see utils/clientIds.js). A change never takes one.
+const newServiceSchema = serviceSchema.extend({ id: uuid.optional() });
 
 const owned = (id, userId) => and(eq(services.id, id), eq(services.user_id, userId));
 
@@ -52,13 +56,20 @@ router.get('/', async (req, res) => {
   res.json({ items: rows.map(serialize) });
 });
 
-// POST /api/services
-router.post('/', validateBody(serviceSchema), async (req, res) => {
+// POST /api/services: a service with the `id` that this stringer already has is not made again; it is answered with 200 and the
+// service as it is. The id of another stringer's service is a 409.
+router.post('/', validateBody(newServiceSchema), async (req, res) => {
+  const { id, ...fields } = req.body;
   const [row] = await db
     .insert(services)
-    .values({ ...req.body, user_id: req.user.id })
+    .values({ ...fields, ...(id && { id }), user_id: req.user.id })
+    .onConflictDoNothing({ target: services.id })
     .returning();
-  res.status(201).json(serialize(row));
+  if (row) return res.status(201).json(serialize(row));
+
+  const [existing] = await db.select().from(services).where(eq(services.id, id)).limit(1);
+  if (!existing || existing.user_id !== req.user.id) throw idConflict();
+  res.status(200).json(serialize(existing));
 });
 
 // PATCH /api/services/:id: also how a service is archived (`active: false`) and brought back

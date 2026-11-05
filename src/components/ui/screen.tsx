@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { LOGO_FOOT } from '@/components/app-header';
 import { ArrowLeft } from '@/components/icons';
+import SyncPill from '@/components/sync-pill';
 import { colors } from '@/components/ui/colors';
 import { Text } from '@/components/ui/text';
 import { useI18n } from '@/lib/i18n';
@@ -103,7 +104,10 @@ export function ScreenHeader({ title, subtitle, right, floating, drop }: ScreenH
           </Text>
         ) : null}
       </View>
-      {right ? <View className="flex-row items-center">{right}</View> : null}
+      <View className="flex-row items-center gap-2">
+        <SyncPill />
+        {right}
+      </View>
     </>
   );
 
@@ -221,6 +225,7 @@ export function DetailHeader({ title, right, onBack, floating }: DetailHeaderPro
         minimumFontScale={0.8}>
         {title}
       </Text>
+      <SyncPill />
       {right ? <View className="flex-row items-center pr-2">{right}</View> : null}
     </>
   );

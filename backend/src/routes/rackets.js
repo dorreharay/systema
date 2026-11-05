@@ -5,12 +5,14 @@ import { db } from '../db/index.js';
 import { clients, orders, rackets } from '../db/schema.js';
 import { requireAuth } from '../middleware/auth.js';
 import { parseQuery, validateBody } from '../middleware/validate.js';
+import { idConflict } from '../utils/clientIds.js';
 import { HttpError, notFound, rejectMalformedIds } from '../utils/http.js';
+import { claimOperation } from '../utils/operations.js';
 import {
   orderColumns, serializeLastSetup, serializeOrder, withOrderJoins,
 } from '../utils/orders.js';
 import {
-  inStockQuery, matchesWords, optionalText, racketsInStock, requiredText, searchText, uuid,
+  MAX_STOCK, inStockQuery, matchesWords, opId, optionalText, racketsInStock, requiredText, searchText, stockDelta, uuid,
 } from '../utils/validators.js';
 
 const router = express.Router();
@@ -26,6 +28,15 @@ const racketSchema = z.object({
   // Only for a catalog racket: whether it is counted, and how many there are.
   track_stock: z.boolean().optional(),
   stock: racketsInStock.optional(),
+});
+
+// A new racket may bring the id the phone made up for it (see utils/clientIds.js). A change never takes one.
+const newRacketSchema = racketSchema.extend({ id: uuid.optional() });
+
+// A change of the stock by an amount, in rackets. `op_id` makes the same request harmless when it is sent again (see utils/operations.js).
+const stockChangeSchema = z.object({
+  delta: stockDelta.int('Use a whole number'),
+  op_id: opId,
 });
 
 const listQuery = z.object({
@@ -89,6 +100,18 @@ async function findRacket(id, userId) {
   return row;
 }
 
+/**
+ * The racket with this id as GET shows it, when this stringer has it (a hidden one too: it was made, and a repeat of the request
+ * that made it is answered). Undefined when the id is free; the id of another stringer's racket is a 409.
+ */
+async function racketWithId(id, userId) {
+  const [row] = await selectRackets().where(eq(rackets.id, id)).limit(1);
+  if (!row) return undefined;
+  if (row.racket.user_id !== userId) throw idConflict();
+  const latest = await latestOrders(userId, [id]);
+  return serialize(row, latest.get(id));
+}
+
 /** A client's racket belongs to one of this stringer's clients. */
 async function assertClient(clientId, userId) {
   const [client] = await db
@@ -124,20 +147,34 @@ router.get('/', async (req, res) => {
   res.json({ items: rows.map((row) => serialize(row, latest.get(row.racket.id))) });
 });
 
-// POST /api/rackets: a client's racket, or (without `client_id`) a catalog racket with its stock
-router.post('/', validateBody(racketSchema), async (req, res) => {
-  const { client_id: clientId, track_stock: trackStock, stock, ...rest } = req.body;
+// POST /api/rackets: a client's racket, or (without `client_id`) a catalog racket with its stock. A racket with the `id` that this
+// stringer already has is not made again: it is answered with 200 and the racket as it is, whatever the client is now.
+router.post('/', validateBody(newRacketSchema), async (req, res) => {
+  const { id, client_id: clientId, track_stock: trackStock, stock, ...rest } = req.body;
+
+  if (id) {
+    const found = await racketWithId(id, req.user.id);
+    if (found) return res.status(200).json(found);
+  }
   if (clientId) await assertClient(clientId, req.user.id);
 
   const [created] = await db
     .insert(rackets)
     .values({
       ...rest,
+      ...(id && { id }),
       user_id: req.user.id,
       client_id: clientId ?? null,
       ...(!clientId && { track_stock: trackStock ?? false, stock: stock ?? 0 }),
     })
+    .onConflictDoNothing({ target: rackets.id })
     .returning();
+  if (!created) {
+    // A copy of this same request, or another stringer's use of the id, got in between the look above and the insert.
+    const found = await racketWithId(id, req.user.id);
+    if (!found) throw idConflict();
+    return res.status(200).json(found);
+  }
   res.status(201).json(serialize(await findRacket(created.id, req.user.id)));
 });
 
@@ -176,6 +213,30 @@ router.patch('/:id', validateBody(racketSchema.partial()), async (req, res) => {
   if (Object.keys(changes).length > 0) {
     await db.update(rackets).set(changes).where(owned(req.params.id, req.user.id));
   }
+
+  const row = await findRacket(req.params.id, req.user.id);
+  const latest = await latestOrders(req.user.id, [row.racket.id]);
+  res.json(serialize(row, latest.get(row.racket.id)));
+});
+
+// POST /api/rackets/:id/stock: adds `delta` rackets to the stock of a catalog racket (a negative one takes them away), never below 0 and
+// never above what a stock may be. A racket that is not counted is changed too; counting it is a change of `track_stock`.
+router.post('/:id/stock', validateBody(stockChangeSchema), async (req, res) => {
+  const { racket } = await findRacket(req.params.id, req.user.id);
+  if (racket.client_id) throw fieldError('delta', 'Only a catalog racket has a stock');
+
+  const { delta, op_id: key } = req.body;
+  await db.transaction(async (tx) => {
+    // A key that was written before: the change was made, and it is not made again.
+    if (!(await claimOperation(tx, req.user.id, key)) || delta === 0) return;
+    const changed = await tx
+      .update(rackets)
+      .set({ stock: sql`least(greatest(${rackets.stock} + ${delta}, 0), ${MAX_STOCK})` })
+      .where(owned(req.params.id, req.user.id))
+      .returning({ id: rackets.id });
+    // Removed since the check above: the key goes with the change.
+    if (changed.length === 0) throw notFound();
+  });
 
   const row = await findRacket(req.params.id, req.user.id);
   const latest = await latestOrders(req.user.id, [row.racket.id]);

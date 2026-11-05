@@ -3,6 +3,7 @@ import { memo } from 'react';
 import { View } from 'react-native';
 
 import { CalendarDays, Check, Clock } from '@/components/icons';
+import SyncBadge from '@/components/sync-badge';
 import { StatusBadge } from '@/components/ui/badge';
 import Card from '@/components/ui/card';
 import { colors } from '@/components/ui/colors';
@@ -10,6 +11,7 @@ import { Text } from '@/components/ui/text';
 import { useAuth } from '@/lib/auth';
 import { addDays, formatDate, formatMoney, formatTimestamp, isOverdue, racketName, todayIso } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
+import { useMark } from '@/lib/offline/react';
 import { describeSetup } from '@/lib/order-text';
 import type { Order } from '@/lib/types';
 
@@ -43,6 +45,7 @@ const OrderCard = memo(function OrderCard({ order }: { order: Order }) {
   const { user } = useAuth();
   const { t, language } = useI18n();
   const { dateText, today } = useDueText();
+  const mark = useMark(order.id);
   const handover = order.completed_at
     ? {
         text: t('order_card_issued', { date: formatTimestamp(order.completed_at, language, user?.timezone) }),
@@ -63,9 +66,12 @@ const OrderCard = memo(function OrderCard({ order }: { order: Order }) {
     <Card
       onPress={() => router.push({ pathname: '/orders/[id]', params: { id: order.id } })}
       className="gap-1"
-      accessibilityLabel={t('order_card_label', { number: order.number, client: order.client.name })}>
+      accessibilityLabel={t('order_card_label', { number: order.number ?? '—', client: order.client.name })}>
       <View className="flex-row items-center justify-between gap-3">
-        <StatusBadge status={order.status} />
+        <View className="flex-row items-center gap-2">
+          <StatusBadge status={order.status} />
+          {mark ? <SyncBadge mark={mark} /> : null}
+        </View>
         <View className="min-w-0 shrink flex-row items-center gap-1.5">
           <CalendarDays size={15} color={colors.muted} />
           <Text className="shrink text-[14.3px] text-muted" numberOfLines={1}>
@@ -85,7 +91,7 @@ const OrderCard = memo(function OrderCard({ order }: { order: Order }) {
         <Text className="flex-1 text-[16.5px]" numberOfLines={1}>
           {racketName(order.racket)}
         </Text>
-        <Text className="text-[14.3px] text-muted">{t('order_number', { number: order.number })}</Text>
+        <Text className="text-[14.3px] text-muted">{t('order_number', { number: order.number ?? '—' })}</Text>
       </View>
       <Text className="text-[15.4px] text-muted" numberOfLines={2}>
         {describeSetup(order, user?.tension_unit ?? 'kg', t)}

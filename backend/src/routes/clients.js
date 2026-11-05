@@ -5,11 +5,12 @@ import { db } from '../db/index.js';
 import { clients, orders, rackets } from '../db/schema.js';
 import { requireAuth } from '../middleware/auth.js';
 import { parseQuery, validateBody } from '../middleware/validate.js';
+import { idConflict, isIdCollision } from '../utils/clientIds.js';
 import { HttpError, notFound, rejectMalformedIds } from '../utils/http.js';
 import { orderColumns, serializeOrder, withOrderJoins } from '../utils/orders.js';
 import { phoneKey } from '../utils/phone.js';
 import {
-  matchesWords, optionalEmail, optionalText, requiredText, searchQuery,
+  matchesWords, optionalEmail, optionalText, requiredText, searchQuery, uuid,
 } from '../utils/validators.js';
 
 const router = express.Router();
@@ -22,6 +23,9 @@ const clientSchema = z.object({
   email: optionalEmail,
   notes: optionalText(2000),
 });
+
+// A new client may bring the id the phone made up for it (see utils/clientIds.js). A change never takes one.
+const newClientSchema = clientSchema.extend({ id: uuid.optional() });
 
 // Written out in full: Drizzle drops the table name from the columns of a single-table query, which
 // would make `id` below mean the inner table's.
@@ -118,18 +122,33 @@ router.get('/', async (req, res) => {
   res.json({ items: rows.map(serialize) });
 });
 
-// POST /api/clients: a phone number that another client of the stringer has is a 409 (`phone_taken`)
-router.post('/', validateBody(clientSchema), async (req, res) => {
-  const client = await db.transaction(async (tx) => {
-    await lockClients(tx, req.user.id);
-    await rejectTakenPhone(tx, req.user.id, req.body.phone);
-    const [created] = await tx
-      .insert(clients)
-      .values({ ...req.body, user_id: req.user.id })
-      .returning();
-    return created;
-  });
-  res.status(201).json(serialize({ client, rackets_count: 0, orders_count: 0, last_order_date: null }));
+// POST /api/clients: a phone number that another client of the stringer has is a 409 (`phone_taken`). A client with the `id` that
+// this stringer already has is not made again, whatever its phone: it is answered with 200 and the client as it is.
+router.post('/', validateBody(newClientSchema), async (req, res) => {
+  const { id, ...fields } = req.body;
+  let result;
+  try {
+    result = await db.transaction(async (tx) => {
+      await lockClients(tx, req.user.id);
+      if (id) {
+        const [existing] = await tx.select({ client: clients, ...stats }).from(clients).where(eq(clients.id, id)).limit(1);
+        if (existing && existing.client.user_id !== req.user.id) throw idConflict();
+        if (existing) return { found: existing };
+      }
+      await rejectTakenPhone(tx, req.user.id, fields.phone);
+      const [created] = await tx
+        .insert(clients)
+        .values({ ...fields, ...(id && { id }), user_id: req.user.id })
+        .returning();
+      return { created };
+    });
+  } catch (err) {
+    // Another stringer chose the same id at the same moment, and the database let them in first.
+    if (isIdCollision(err)) throw idConflict();
+    throw err;
+  }
+  if (result.found) return res.status(200).json(serialize(result.found));
+  res.status(201).json(serialize({ client: result.created, rackets_count: 0, orders_count: 0, last_order_date: null }));
 });
 
 // GET /api/clients/:id: the client with their rackets and order history

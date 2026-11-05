@@ -3,7 +3,7 @@ import { ActivityIndicator, Pressable } from 'react-native';
 
 import GoogleIcon from '@/components/icons/google-icon';
 import { useAuth } from '@/lib/auth';
-import { describeError } from '@/lib/errors';
+import { describeAuthError } from '@/lib/errors';
 import { googleSignInSupported } from '@/lib/google-sign-in';
 import { useI18n } from '@/lib/i18n';
 
@@ -48,7 +48,7 @@ export default function GoogleSignInButton({ size, radius, disabled, onError }: 
       // On success the root layout moves a signed-in user to the app: nothing to navigate to here.
       await signInWithGoogle(language);
     } catch (error) {
-      onError(describeError(error, t));
+      onError(describeAuthError(error, t));
     }
     setBusy(false);
   };

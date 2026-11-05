@@ -84,6 +84,14 @@ export function describeError(error: unknown, t: Translate) {
   return t('error_generic');
 }
 
+/**
+ * The same for what cannot be done without a connection (signing in or up, a new password, deleting the account): with none, it
+ * says so, and not only that the server could not be reached.
+ */
+export function describeAuthError(error: unknown, t: Translate) {
+  return isOffline(error) ? t('error_network_required') : describeError(error, t);
+}
+
 export const isApiError = (error: unknown, code: string): error is ApiError =>
   error instanceof ApiError && error.code === code;
 

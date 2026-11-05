@@ -27,9 +27,10 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ErrorState } from '@/components/ui/states';
 import { Text } from '@/components/ui/text';
 import { useAuth } from '@/lib/auth';
-import { MONTHS_LONG, WEEKDAYS_SHORT, formatMoneyWhole, parseIso, weekdayOf } from '@/lib/format';
+import { MONTHS_LONG, WEEKDAYS_SHORT, formatMoment, formatMoneyWhole, parseIso, weekdayOf } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
-import { useInsights } from '@/lib/queries';
+import { useInsights, useOnline } from '@/lib/queries';
+import { useNow } from '@/lib/use-now';
 import type { ClientTotal, Insights } from '@/lib/types';
 
 // Green is for the charts alone: the bars of the days that are done are in the brand colour, and the days of the week
@@ -423,6 +424,9 @@ function DebtsSlide({ data }: { data: Insights['receivables'] }) {
 
 // --- On the page -----------------------------------------------------------------------------
 
+// Charts that were drawn longer ago than this are said not to be live.
+const INSIGHTS_LIVE_MS = 10 * 60_000;
+
 // The heights, as a share of the chart, of the bars that stand in for it while it loads.
 const SKELETON_BARS = [38, 62, 48, 80, 30, 100, 56, 72, 42, 90, 60, 46];
 
@@ -447,13 +451,19 @@ function InsightsSkeleton() {
  * busy the next week is, and who owes and who pays. The three come from one request.
  */
 export default function HomeInsights() {
-  const { t } = useI18n();
+  const { user } = useAuth();
+  const { t, language } = useI18n();
   const insights = useInsights();
+  const online = useOnline();
   const data = insights.data;
+  // The charts are the server's: they are as it last drew them, which is not "now" without a connection, or after a while.
+  const now = useNow();
+  const notLive = !!insights.at && (!online || now - Date.parse(insights.at) > INSIGHTS_LIVE_MS);
 
   return (
     <View className="min-h-[280px] flex-1">
       {data ? (
+        <>
         <Pager
           slides={[
             {
@@ -473,6 +483,12 @@ export default function HomeInsights() {
             },
           ]}
         />
+        {notLive && insights.at ? (
+          <Text className="px-7 pb-2 text-[13.2px] text-muted">
+            {t('insights_not_live', { time: formatMoment(insights.at, language, user?.timezone) })}
+          </Text>
+        ) : null}
+        </>
       ) : insights.isError ? (
         <View className="flex-1 justify-center">
           <ErrorState error={insights.error} onRetry={() => insights.refetch()} />

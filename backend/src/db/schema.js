@@ -7,6 +7,7 @@ import {
   jsonb,
   numeric,
   pgTable,
+  primaryKey,
   smallint,
   text,
   timestamp,
@@ -246,4 +247,20 @@ export const orderPhotos = pgTable(
     created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [index('order_photos_order_idx').on(table.order_id)]
+);
+
+// The requests that are not harmless when repeated (a change of the stock by an amount) carry an `op_id` that the phone made up. It is
+// written here in the same transaction as the change, so a request the phone sends again, because it never heard the answer, is
+// answered and not applied twice. Old keys are deleted (see utils/operations.js).
+export const appliedOperations = pgTable(
+  'applied_operations',
+  {
+    user_id: owner(),
+    op_id: uuid('op_id').notNull(),
+    created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.user_id, table.op_id] }),
+    index('applied_operations_created_idx').on(table.created_at),
+  ]
 );

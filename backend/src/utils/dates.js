@@ -37,3 +37,21 @@ export function monthOf(date) {
   const length = new Date(Date.UTC(year, month, 0)).getUTCDate();
   return { start: iso(year, month, 1), end: iso(year, month, length), length };
 }
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+/** How far back the phone may date what it did while it had no connection. */
+export const EVENT_BACKDATE_DAYS = 90;
+
+/**
+ * When something happened, as the phone says (`at`): a status that was changed or an order that was paid with no connection
+ * is dated by the moment of the tap and not by the moment the request got through, so the day's revenue and the times on the
+ * order are right. A moment that is missing, is in the future (a clock that is ahead) or is more than 90 days ago (a clock that is
+ * wrong) is not believed: it is `now`.
+ */
+export function eventTime(at, now = new Date()) {
+  if (!at) return now;
+  const moment = new Date(at);
+  const time = moment.getTime();
+  if (Number.isNaN(time) || time > now.getTime() || time < now.getTime() - EVENT_BACKDATE_DAYS * DAY_MS) return now;
+  return moment;
+}

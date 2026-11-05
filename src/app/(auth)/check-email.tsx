@@ -8,7 +8,7 @@ import FormMessage from '@/components/form-message';
 import { colors } from '@/components/ui/colors';
 import Shortcut from '@/components/ui/shortcut';
 import { useAuth } from '@/lib/auth';
-import { describeError } from '@/lib/errors';
+import { describeAuthError } from '@/lib/errors';
 import { useI18n } from '@/lib/i18n';
 
 function ResendRow({ email }: { email?: string }) {
@@ -28,7 +28,7 @@ function ResendRow({ email }: { email?: string }) {
       await requestPasswordReset(email);
       setResent(true);
     } catch (failure) {
-      setError(describeError(failure, t));
+      setError(describeAuthError(failure, t));
     } finally {
       setSending(false);
     }

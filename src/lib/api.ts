@@ -1,6 +1,8 @@
 import Constants from 'expo-constants';
 import { Platform, TurboModuleRegistry } from 'react-native';
 
+import { ApiError } from '@/lib/api-error';
+
 const API_PORT = 4000;
 const REQUEST_TIMEOUT_MS = 10_000;
 // A photo is several megabytes, which a phone on a slow connection takes a while to load.
@@ -51,32 +53,8 @@ function apiUrl() {
   throw new Error('The backend address is unknown: set EXPO_PUBLIC_API_URL');
 }
 
-/**
- * An answer from the backend that is not a success: `{ error, code?, fields?, data? }`. Status 0 and code
- * `network` mean the server could not be reached at all. `data` is what more the server said: the client who already
- * has the phone number (`phone_taken`).
- */
-export class ApiError extends Error {
-  status: number;
-  code?: string;
-  fields?: Record<string, string>;
-  data?: { client?: { id: string; name: string } };
-
-  constructor(
-    status: number,
-    message: string,
-    code?: string,
-    fields?: Record<string, string>,
-    data?: ApiError['data']
-  ) {
-    super(message);
-    this.name = 'ApiError';
-    this.status = status;
-    this.code = code;
-    this.fields = fields;
-    this.data = data;
-  }
-}
+// The class is in its own file (it needs nothing from React Native); everything that imports it from here keeps working.
+export { ApiError };
 
 type SendOptions = {
   method: 'GET' | 'POST' | 'PATCH' | 'DELETE';

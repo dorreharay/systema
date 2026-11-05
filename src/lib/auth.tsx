@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { createContext, use, useEffect, useState, type ReactNode } from 'react';
+import { createContext, use, useCallback, useEffect, useState, type ReactNode } from 'react';
 
 import { ApiError } from '@/lib/api';
 import { requestAppleCredential } from '@/lib/apple-sign-in';
@@ -21,6 +21,7 @@ import {
 import { forgetGoogleAccount, requestGoogleIdToken } from '@/lib/google-sign-in';
 import type { Language } from '@/lib/i18n';
 import { getItem, removeItem, setItem } from '@/lib/local-storage';
+import { offlineStore } from '@/lib/offline/app';
 import { clearReminders } from '@/lib/reminders';
 import { clearToken, getToken, saveToken } from '@/lib/token-storage';
 
@@ -65,6 +66,11 @@ type AuthContextValue = {
   signInWithApple: (language?: Language) => Promise<void>;
   signOut: () => Promise<void>;
   /**
+   * The server said the session is over (a 401): this device forgets it. What the person had not sent yet stays on the phone, for
+   * when they sign in again; signing out by hand is what removes it.
+   */
+  endSession: () => void;
+  /**
    * Deletes the account and everything in it for good, then signs out. The password is what the server asks for when the
    * account has one (`invalid_password` otherwise); the session stays when it is refused.
    */
@@ -101,6 +107,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!cancelled) setState({ status: 'signedOut' });
         return;
       }
+      // The profile saved on this device opens the app at once, with a connection or without: waiting for the server would keep
+      // the splash screen up for as long as a dead connection takes to give up. The server's answer follows and confirms it,
+      // or ends the session (it was ended elsewhere, or the password changed).
+      const cached = await readCachedUser();
+      if (cached && !cancelled) setState({ status: 'signedIn', user: cached, token, offline: true });
       try {
         const user = await fetchMe(token);
         void cacheUser(user);
@@ -110,16 +121,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           // The server said the token is no good: forget it.
           await clearToken();
           await removeItem(USER_KEY);
-        } else {
-          // No connection, or the server is down: the session is not at fault. Open the app with the
-          // profile saved on this device, and check again below.
-          const cached = await readCachedUser();
-          if (cached && !cancelled) {
-            setState({ status: 'signedIn', user: cached, token, offline: true });
-            return;
-          }
+          if (!cancelled) setState({ status: 'signedOut' });
+        } else if (!cached && !cancelled) {
+          // No connection and nothing saved to open with.
+          setState({ status: 'signedOut' });
         }
-        if (!cancelled) setState({ status: 'signedOut' });
+        // Otherwise the app is open on the saved profile, and the retry below asks again until the server answers.
       }
     }
 
@@ -132,28 +139,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // The server no longer accepts this session (it ended elsewhere, the password changed, the account was
   // removed): any request that is answered with 401 sends the person back to sign in, instead of leaving
   // them on a screen that can no longer load anything.
+  const endSession = useCallback(() => {
+    // Deferred: this runs while the cache is notifying, and clearing it right there would cut that short.
+    setTimeout(async () => {
+      await clearToken();
+      await removeItem(USER_KEY);
+      queryClient.clear();
+      setState((current) => (current.status === 'signedIn' ? { status: 'signedOut' } : current));
+    }, 0);
+  }, [queryClient]);
+
   useEffect(() => {
     const sessionEnded = (error: unknown) => error instanceof ApiError && error.status === 401;
-    const end = () => {
-      // Deferred: this runs while the cache is notifying, and clearing it right there would cut that short.
-      setTimeout(async () => {
-        await clearToken();
-        await removeItem(USER_KEY);
-        queryClient.clear();
-        setState((current) => (current.status === 'signedIn' ? { status: 'signedOut' } : current));
-      }, 0);
-    };
     const stopQueries = queryClient.getQueryCache().subscribe((event) => {
-      if (event.type === 'updated' && event.action.type === 'error' && sessionEnded(event.action.error)) end();
+      if (event.type === 'updated' && event.action.type === 'error' && sessionEnded(event.action.error)) endSession();
     });
     const stopMutations = queryClient.getMutationCache().subscribe((event) => {
-      if (event.type === 'updated' && event.action.type === 'error' && sessionEnded(event.action.error)) end();
+      if (event.type === 'updated' && event.action.type === 'error' && sessionEnded(event.action.error)) endSession();
     });
     return () => {
       stopQueries();
       stopMutations();
     };
-  }, [queryClient]);
+  }, [queryClient, endSession]);
 
   // Opened offline: ask again until the server answers, so the profile is the real one and a session
   // that was ended elsewhere is noticed.
@@ -184,14 +192,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setState({ status: 'signedIn', user, token });
   }
 
-  /** Forgets the session on this device: the token, the saved profile, the Google account, the reminders and what was cached. */
-  async function forgetSession() {
+  /**
+   * Forgets the session on this device: the token, the saved profile, the Google account, the reminders and what was cached. The
+   * copy of their data that the phone keeps, and what they had not sent, go with it, unless `keepUnsent` is set: a stringer who
+   * signs in again with a new password is the same stringer, and has the changes they made without a connection still to send.
+   */
+  async function forgetSession({ keepUnsent = false }: { keepUnsent?: boolean } = {}) {
     await clearToken();
     await removeItem(USER_KEY);
     // The next sign-in with Google must ask which account, not hand over this one.
     await forgetGoogleAccount();
     // The reminders are about this stringer's orders: they must not go on showing up on a phone nobody is signed in on.
     await clearReminders();
+    if (!keepUnsent) await offlineStore.wipe();
     // The next person to sign in on this device must not see this stringer's orders, even for a moment.
     queryClient.clear();
     setState({ status: 'signedOut' });
@@ -224,6 +237,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       await forgetSession();
     },
+    endSession,
     deleteAccount: async (password) => {
       if (state.status !== 'signedIn') {
         throw new Error('Not signed in');
@@ -247,9 +261,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await resetPasswordRequest(token, password);
       // The server has ended every session opened before now. If someone is signed in here (the link can be asked for in
       // Settings), this device forgets its session at once and not at the next request answered with 401: they sign in
-      // again with the new password.
+      // again with the new password, and find what they had not sent yet still waiting.
       if (state.status === 'signedIn') {
-        await forgetSession();
+        await forgetSession({ keepUnsent: true });
       }
     },
   };

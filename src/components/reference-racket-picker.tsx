@@ -6,7 +6,7 @@ import { useToast } from '@/components/ui/toast';
 import { describeError } from '@/lib/errors';
 import { racketName } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
-import { useCreateRacket, useReferenceRacketPages } from '@/lib/queries';
+import { useCreateRacket, useOnline, useReferenceRacketPages } from '@/lib/queries';
 import type { ReferenceRacket } from '@/lib/types';
 
 type ReferenceRacketPickerProps = {
@@ -29,6 +29,7 @@ export default function ReferenceRacketPicker({ visible, onClose, owner, onCreat
   const { t } = useI18n();
   const toast = useToast();
   const [query, setQuery] = useState('');
+  const online = useOnline();
   const reference = useReferenceRacketPages(query, visible);
   const create = useCreateRacket();
 
@@ -49,7 +50,9 @@ export default function ReferenceRacketPicker({ visible, onClose, owner, onCreat
       placeholder={t('rackets_search_placeholder')}
       items={reference.data?.pages.flatMap((page) => page.items) ?? []}
       keyOf={(item) => item.id}
-      loading={reference.isPending}
+      loading={reference.isLoading}
+      // The reference list is the server's: without a connection a racket is typed in (the first row).
+      unavailable={online ? undefined : t('reference_offline')}
       // The list comes a page at a time, as it is scrolled.
       loadingMore={reference.isFetchingNextPage}
       onEndReached={() => {

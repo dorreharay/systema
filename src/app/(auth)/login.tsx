@@ -12,7 +12,7 @@ import TextField, { type TextFieldRef } from '@/components/text-field';
 import { colors } from '@/components/ui/colors';
 import Shortcut from '@/components/ui/shortcut';
 import { useAuth } from '@/lib/auth';
-import { describeError } from '@/lib/errors';
+import { describeAuthError } from '@/lib/errors';
 import { useI18n } from '@/lib/i18n';
 import { validateEmail, validateRequiredPassword } from '@/lib/validation';
 
@@ -58,7 +58,7 @@ export default function Login() {
       // On success the root layout moves a signed-in user to the app: nothing to navigate to here.
       await signIn(email.trim(), password);
     } catch (error) {
-      setFormError(describeError(error, t));
+      setFormError(describeAuthError(error, t));
       setSubmitting(false);
     }
   };

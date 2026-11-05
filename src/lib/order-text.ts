@@ -33,7 +33,8 @@ type TextContext = {
 /** The order as plain text: what "Copy Order Details" puts on the clipboard. */
 export function orderAsText(order: OrderDetail, { t, language, unit, currency, timeZone }: TextContext) {
   const lines = [
-    `${t('order_title', { number: orderNumber(order.number) })} · ${t(`status_${order.status}`)}`,
+    // The text may be sent on to the customer: an order that has no number yet is not given one.
+    `${order.number === null ? t('order_title_unnumbered') : t('order_title', { number: orderNumber(order.number) })} · ${t(`status_${order.status}`)}`,
     `${t('field_client')}: ${order.client.name}${order.client.phone ? ` (${order.client.phone})` : ''}`,
     `${t('field_racket')}: ${racketName(order.racket)}`,
     `${t('field_strings')}: ${describeStrings(order, t)}`,

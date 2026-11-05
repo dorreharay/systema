@@ -3,6 +3,7 @@ import { Pressable, View } from 'react-native';
 
 import { useRevealInSheet } from '@/components/ui/sheet';
 import { Text } from '@/components/ui/text';
+import { useI18n } from '@/lib/i18n';
 
 // How long what is typed has to hold still before the reference list is asked about it.
 export const SUGGEST_DELAY_MS = 250;
@@ -19,6 +20,8 @@ export type Suggestion = {
 type SuggestionsProps = {
   items: Suggestion[];
   onPick: (key: string) => void;
+  // The names are looked up at the server, and there is no connection: the field is typed in as it is.
+  offline?: boolean;
 };
 
 /**
@@ -26,7 +29,8 @@ type SuggestionsProps = {
  * stands under the field and shows nothing when there is nothing to offer. In a sheet it is brought into sight
  * above the keyboard when it appears.
  */
-export function Suggestions({ items, onPick }: SuggestionsProps) {
+export function Suggestions({ items, onPick, offline }: SuggestionsProps) {
+  const { t } = useI18n();
   const reveal = useRevealInSheet();
   const block = useRef<ComponentRef<typeof View>>(null);
   const count = items.length;
@@ -35,6 +39,7 @@ export function Suggestions({ items, onPick }: SuggestionsProps) {
     if (count > 0) reveal?.(block.current);
   }, [count, reveal]);
 
+  if (offline) return <Text className="text-[14.3px] text-muted">{t('reference_offline')}</Text>;
   if (count === 0) return null;
 
   return (

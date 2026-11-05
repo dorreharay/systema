@@ -7,6 +7,8 @@
  *
  * Exits with a non-zero code if any test fails.
  */
+import { randomUUID } from 'node:crypto';
+import { setTimeout as sleep } from 'node:timers/promises';
 import {
   CONFIG, Client, assertEq, assertStatus, assertTrue,
   dbExec, dbScalar, resetDatabase, startFakeApple, startFakeGoogle, startFakeResend, startServer,
@@ -1810,6 +1812,636 @@ test('Stock', 'a catalog racket goes with any client and has no setup of its own
   assertEq(data.last_setup, null, 'a setup is a client\'s, so there is none to repeat');
   const stranger = await register(ctx);
   assertStatus(await stranger.client.post('/api/orders', { client_id: iga.id, racket_id: s.catalogRacket.id }), 400);
+});
+
+// ---------------------------------------------------------------------------
+// Offline mode: ids that the phone makes up, stock changed by an amount, the time of a tap, orders with their details
+// ---------------------------------------------------------------------------
+const ID_CONFLICT = 'This id is already in use';
+const idOf = () => randomUUID();
+const stamp = (ms) => new Date(Date.now() + ms).toISOString();
+const HOUR = 3_600_000;
+const DAY = 24 * HOUR;
+
+/** The five things the phone can name, made by `client` under the ids in `ids`; `more` adds to the order. */
+async function madeUnderOwnIds(client, ids, more = {}) {
+  const customer = await client.post('/api/clients', { id: ids.client, name: 'Ann Lee', phone: '+380501112233' });
+  const racket = await client.post('/api/rackets', { id: ids.racket, client_id: ids.client, brand: 'Wilson', model: 'Blade' });
+  const string = await client.post('/api/strings', { id: ids.string, brand: 'Luxilon', model: 'ALU Power', type: 'polyester' });
+  const service = await client.post('/api/services', { id: ids.service, name: 'Dampener', price: 3 });
+  const order = await client.post('/api/orders', {
+    id: ids.order,
+    client_id: ids.client,
+    racket_id: ids.racket,
+    main_string_id: ids.string,
+    services: [{ service_id: ids.service, name: 'Dampener', price: 3 }],
+    ...more,
+  });
+  return { customer, racket, string, service, order };
+}
+const newIds = () => ({ client: idOf(), racket: idOf(), string: idOf(), service: idOf(), order: idOf() });
+
+test('Offline ids', 'a client, a racket, a string, a service and an order are made under the id the phone gave them', async (ctx) => {
+  const { client } = await register(ctx);
+  const ids = newIds();
+  const made = await madeUnderOwnIds(client, ids);
+  for (const [kind, res] of Object.entries(made)) assertEq([kind, res.status], [kind, 201], 'made');
+  assertEq(
+    [made.customer.data.id, made.racket.data.id, made.string.data.id, made.service.data.id, made.order.data.id],
+    [ids.client, ids.racket, ids.string, ids.service, ids.order],
+    'under those ids'
+  );
+  assertEq([made.order.data.number, made.order.data.client.id, made.order.data.racket.id, made.order.data.main_string_id], [1, ids.client, ids.racket, ids.string], 'and they point at each other');
+  for (const path of [`clients/${ids.client}`, `rackets/${ids.racket}`, `strings/${ids.string}`, `orders/${ids.order}`]) {
+    assertStatus(await client.get(`/api/${path}`), 200);
+  }
+  assertTrue((await client.get('/api/services')).data.items.some((service) => service.id === ids.service), 'the service is listed');
+
+  // Without an id the server still makes one, as it always did.
+  const plain = await client.post('/api/clients', { name: 'Bob', phone: '+380509998877' });
+  assertEq([plain.status, plain.data.id === ids.client, /^[0-9a-f-]{36}$/.test(plain.data.id)], [201, false, true], 'the server\'s own id');
+});
+test('Offline ids', 'an id has to be a UUID, and a change never takes a new id', async (ctx) => {
+  const { client } = await register(ctx);
+  for (const [path, body] of [
+    ['clients', { name: 'Ann', phone: '+380501112233' }],
+    ['rackets', { brand: 'Head', model: 'Speed' }],
+    ['strings', { brand: 'Head', model: 'Hawk' }],
+    ['services', { name: 'Dampener' }],
+  ]) {
+    const bad = await client.post(`/api/${path}`, { ...body, id: 'not-a-uuid' });
+    assertStatus(bad, 400);
+    assertTrue(bad.data.fields.id, `${path}: the id is named`);
+  }
+  const s = await shop(ctx);
+  const bad = await s.client.post('/api/orders', minimalOrder(s, { id: 'nope' }));
+  assertStatus(bad, 400);
+  assertTrue(bad.data.fields.id, 'orders: the id is named');
+  const badRacket = await s.client.post('/api/orders', { client_id: s.customer.id, new_racket: { id: 'nope', brand: 'Head', model: 'Speed' } });
+  assertStatus(badRacket, 400);
+  assertTrue(badRacket.data.fields['new_racket.id'], 'a named racket: its id is named');
+
+  const other = idOf();
+  const edited = await s.client.patch(`/api/clients/${s.customer.id}`, { id: other, notes: 'Left-handed' });
+  assertEq([edited.status, edited.data.id, edited.data.notes], [200, s.customer.id, 'Left-handed'], 'the id of a client stays');
+  assertStatus(await s.client.get(`/api/clients/${other}`), 404);
+  const order = (await s.client.post('/api/orders', minimalOrder(s))).data;
+  const moved = await s.client.patch(`/api/orders/${order.id}`, { id: other, notes: 'Fast' });
+  assertEq([moved.status, moved.data.id], [200, order.id], 'and so does the id of an order');
+  assertEq((await s.client.patch(`/api/rackets/${s.racket.id}`, { id: other, notes: 'Demo' })).data.id, s.racket.id, 'a racket');
+  assertEq((await s.client.patch(`/api/strings/${s.string.id}`, { id: other, model: 'x' })).data.id, s.string.id, 'a string');
+});
+test('Offline ids', 'the same request sent again is answered with 200 and the same row, and makes nothing', async (ctx) => {
+  const { client } = await register(ctx);
+  const ids = newIds();
+  const first = await madeUnderOwnIds(client, ids);
+  const again = await madeUnderOwnIds(client, ids);
+  for (const kind of ['customer', 'racket', 'string', 'service', 'order']) {
+    assertEq([kind, again[kind].status], [kind, 200], 'answered with 200');
+  }
+  // The row as it is: what only counts other rows (the orders of a client, the history of a racket) is as it is now.
+  const without = (data, keys) => Object.fromEntries(Object.entries(data).filter(([key]) => !keys.includes(key)));
+  const counts = ['rackets_count', 'orders_count', 'last_order_date', 'last_setup'];
+  assertEq(without(again.customer.data, counts), without(first.customer.data, counts), 'the same client');
+  assertEq(without(again.racket.data, counts), without(first.racket.data, counts), 'the same racket');
+  assertEq(again.string.data, first.string.data, 'the same string');
+  assertEq(again.service.data, first.service.data, 'the same service');
+  assertEq(again.order.data, first.order.data, 'the same order');
+  assertEq([again.customer.data.rackets_count, again.customer.data.orders_count], [1, 1], 'a client with the counts they have now');
+  assertEq(again.racket.data.orders_count, 1, 'and a racket');
+  assertEq((await client.get('/api/clients')).data.items.length, 1, 'one client');
+  assertEq((await client.get('/api/rackets')).data.items.length, 1, 'one racket');
+  assertEq((await client.get('/api/strings')).data.items.length, 1, 'one string');
+  assertEq((await client.get('/api/services')).data.items.filter((s) => s.name === 'Dampener').length, 1, 'one service');
+  assertEq((await client.get('/api/orders')).data.items.length, 1, 'one order');
+  assertEq(dbScalar(`SELECT count(*) FROM order_services WHERE order_id='${ids.order}'`), '1', 'and one service line');
+  // The repeat is of the first request: what it says now does not change the row.
+  const changed = await client.post('/api/clients', { id: ids.client, name: 'Somebody Else', phone: '+380631110000' });
+  assertEq([changed.status, changed.data.name, changed.data.phone], [200, 'Ann Lee', '+380501112233'], 'nothing is overwritten');
+  // The next order is the second: the repeat used no number.
+  const next = await client.post('/api/orders', { client_id: ids.client, racket_id: ids.racket });
+  assertEq([next.status, next.data.number], [201, 2], 'no number was used');
+});
+test('Offline ids', 'a repeat is a repeat even where a new request would be refused', async (ctx) => {
+  const { client } = await register(ctx);
+  const ids = newIds();
+  assertStatus(await client.post('/api/clients', { id: ids.client, name: 'Ann Lee', phone: '+380501112233' }), 201);
+  // The phone of this client is taken, for any other client...
+  const twin = await client.post('/api/clients', { id: idOf(), name: 'Twin', phone: '050 111 22 33' });
+  assertEq([twin.status, twin.data.code], [409, 'phone_taken'], 'a new id with the same phone is refused as ever');
+  // ...but not for the client itself, sent again.
+  const same = await client.post('/api/clients', { id: ids.client, name: 'Ann Lee', phone: '+380501112233' });
+  assertStatus(same, 200);
+
+  assertStatus(await client.post('/api/rackets', { id: ids.racket, client_id: ids.client, brand: 'Wilson', model: 'Blade' }), 201);
+  assertStatus(await client.post('/api/strings', { id: ids.string, brand: 'Luxilon', model: 'ALU Power' }), 201);
+  const order = { id: ids.order, client_id: ids.client, racket_id: ids.racket, main_string_id: ids.string };
+  assertStatus(await client.post('/api/orders', order), 201);
+
+  // Everything it points at is gone since; the repeat still finds what it made.
+  assertStatus(await client.delete(`/api/clients/${ids.client}`), 200);
+  assertStatus(await client.delete(`/api/strings/${ids.string}`), 200);
+  assertStatus(await client.post('/api/orders', order), 200);
+  assertStatus(await client.post('/api/orders', { ...order, id: idOf() }), 400);
+  const racket = await client.post('/api/rackets', { id: ids.racket, client_id: ids.client, brand: 'Wilson', model: 'Blade' });
+  assertEq([racket.status, racket.data.id], [200, ids.racket], 'a racket whose owner is gone');
+  // What was removed is answered, not brought back.
+  const string = await client.post('/api/strings', { id: ids.string, brand: 'Luxilon', model: 'ALU Power' });
+  assertEq([string.status, string.data.id], [200, ids.string], 'a removed string is answered');
+  const customer = await client.post('/api/clients', { id: ids.client, name: 'Ann Lee', phone: '+380501112233' });
+  assertEq([customer.status, customer.data.id], [200, ids.client], 'a removed client is answered');
+  assertStatus(await client.get(`/api/strings/${ids.string}`), 404);
+  assertStatus(await client.get(`/api/clients/${ids.client}`), 404);
+  assertEq((await client.get('/api/strings')).data.items.length, 0, 'and stays out of the lists');
+
+  // The body of a repeat is still checked.
+  assertStatus(await client.post('/api/clients', { id: ids.client, name: '', phone: '+380501112233' }), 400);
+  assertStatus(await client.post('/api/orders', { id: ids.order, client_id: 'x' }), 400);
+});
+test('Offline ids', 'the id of another stringer\'s row is refused with the same answer for every kind, and nothing is made', async (ctx) => {
+  const a = await register(ctx);
+  const b = await register(ctx);
+  const ids = newIds();
+  await madeUnderOwnIds(a.client, ids);
+  const mine = await shop(ctx);
+  const mineCatalog = { client_id: mine.customer.id, racket_id: mine.racket.id };
+
+  const refused = [
+    await b.client.post('/api/clients', { id: ids.client, name: 'Mine', phone: '+380631110000' }),
+    await b.client.post('/api/rackets', { id: ids.racket, brand: 'Head', model: 'Speed' }),
+    await b.client.post('/api/strings', { id: ids.string, brand: 'Head', model: 'Hawk' }),
+    await b.client.post('/api/services', { id: ids.service, name: 'Mine' }),
+    await mine.client.post('/api/orders', { id: ids.order, ...mineCatalog }),
+  ];
+  for (const res of refused) {
+    assertStatus(res, 409);
+    assertEq(res.data, { error: ID_CONFLICT, code: 'id_conflict' }, 'a 409 that says nothing more');
+  }
+  // The stringer who owns them has them as they were, and the other has nothing new.
+  assertEq((await a.client.get(`/api/clients/${ids.client}`)).data.name, 'Ann Lee', 'the client is unchanged');
+  assertEq((await a.client.get(`/api/orders/${ids.order}`)).data.number, 1, 'the order is unchanged');
+  assertEq((await b.client.get('/api/clients')).data.items.length, 0, 'no client for the other');
+  assertEq((await b.client.get('/api/rackets')).data.items.length, 0, 'no racket for the other');
+  assertEq((await mine.client.get('/api/orders')).data.items.length, 0, 'and no order');
+  // The order numbers of the stringer who was refused were not used.
+  assertEq((await mine.client.post('/api/orders', mineCatalog)).data.number, 1, 'no number was used');
+});
+test('Offline ids', 'copies of one request at the same moment make one row; two stringers using one id get one 409', async (ctx) => {
+  const { client } = await register(ctx);
+  const ids = newIds();
+  const copies = (send) => Promise.all([1, 2, 3].map(send));
+  const statuses = (results) => results.map((res) => res.status).sort();
+
+  const clients = await copies(() => client.post('/api/clients', { id: ids.client, name: 'Ann Lee', phone: '+380501112233' }));
+  assertEq(statuses(clients), [200, 200, 201], 'a client: one is made, and the phone of the others is no obstacle');
+  const rackets = await copies(() => client.post('/api/rackets', { id: ids.racket, client_id: ids.client, brand: 'Wilson', model: 'Blade' }));
+  assertEq(statuses(rackets), [200, 200, 201], 'a racket');
+  const strings = await copies(() => client.post('/api/strings', { id: ids.string, brand: 'Luxilon', model: 'ALU Power' }));
+  assertEq(statuses(strings), [200, 200, 201], 'a string');
+  const services = await copies(() => client.post('/api/services', { id: ids.service, name: 'Dampener' }));
+  assertEq(statuses(services), [200, 200, 201], 'a service');
+  const orders = await copies(() => client.post('/api/orders', { id: ids.order, client_id: ids.client, racket_id: ids.racket, main_string_id: ids.string }));
+  assertEq(statuses(orders), [200, 200, 201], 'an order');
+  assertEq(new Set(orders.map((res) => res.data.number)).size, 1, 'with one number');
+  assertEq((await client.get('/api/orders')).data.items.length, 1, 'and only one order');
+  for (const table of ['clients', 'rackets', 'strings']) {
+    assertEq(dbScalar(`SELECT count(*) FROM ${table} WHERE id='${ids[table.slice(0, -1)]}'`), '1', `${table}: one row`);
+  }
+
+  // Two stringers who chose one id at the same moment: one is let in, the other is told so, and nobody gets a 500.
+  const b = await register(ctx);
+  const c = await register(ctx);
+  const fresh = newIds();
+  for (const [kind, send] of [
+    ['client', (who, n) => who.client.post('/api/clients', { id: fresh.client, name: `Who ${n}`, phone: `+38050000000${n}` })],
+    ['racket', (who, n) => who.client.post('/api/rackets', { id: fresh.racket, brand: 'Head', model: `Speed ${n}` })],
+    ['string', (who, n) => who.client.post('/api/strings', { id: fresh.string, brand: 'Head', model: `Hawk ${n}` })],
+    ['service', (who, n) => who.client.post('/api/services', { id: fresh.service, name: `Service ${n}` })],
+  ]) {
+    const both = await Promise.all([send(b, 1), send(c, 2)]);
+    assertEq(statuses(both), [201, 409], `${kind}: one in, one told`);
+    assertEq(both.find((res) => res.status === 409).data.code, 'id_conflict', `${kind}: the code`);
+  }
+  const one = await shop(ctx);
+  const two = await shop(ctx);
+  const raced = await Promise.all([
+    one.client.post('/api/orders', minimalOrder(one, { id: fresh.order })),
+    two.client.post('/api/orders', minimalOrder(two, { id: fresh.order })),
+  ]);
+  assertEq(statuses(raced), [201, 409], 'an order: one in, one told');
+  const lost = raced.find((res) => res.status === 409);
+  assertEq(lost.data, { error: ID_CONFLICT, code: 'id_conflict' }, 'and the shape of the answer');
+  const loser = raced[0].status === 409 ? one : two;
+  assertEq((await loser.client.get('/api/orders')).data.items.length, 0, 'the loser has no order');
+  assertEq((await loser.client.post('/api/orders', minimalOrder(loser))).data.number, 1, 'and used no number');
+});
+test('Offline ids', 'a repeated order takes nothing from the stock again and uses no number', async (ctx) => {
+  const s = await stocked(ctx, { racketStock: 5, stringStock: 3 });
+  const id = idOf();
+  const order = catalogOrder(s, { id, main_string_id: s.string.id });
+  const first = await s.client.post('/api/orders', order);
+  assertStatus(first, 201);
+  assertEq([await racketStock(s, s.catalogRacket.id), await stringStock(s, s.string.id)], [4, 2], 'taken once');
+  for (let i = 0; i < 3; i++) {
+    const again = await s.client.post('/api/orders', order);
+    assertEq([again.status, again.data.number, again.data.id], [200, first.data.number, id], `the repeat ${i + 1}`);
+  }
+  assertEq([await racketStock(s, s.catalogRacket.id), await stringStock(s, s.string.id)], [4, 2], 'and not again');
+  const next = await s.client.post('/api/orders', catalogOrder(s));
+  assertEq([next.status, next.data.number, await racketStock(s, s.catalogRacket.id)], [201, 2, 3], 'the next order is the second');
+
+  // Three copies at the same moment take the stock once.
+  const racing = idOf();
+  const copies = await Promise.all([1, 2, 3].map(() => s.client.post('/api/orders', catalogOrder(s, { id: racing, main_string_id: s.string.id }))));
+  assertEq(copies.map((res) => res.status).sort(), [200, 200, 201], 'one is made');
+  assertEq([await racketStock(s, s.catalogRacket.id), await stringStock(s, s.string.id)], [2, 1], 'and takes once');
+  assertEq((await s.client.get('/api/orders')).data.items.length, 3, 'three orders in all');
+  // An order that is refused for the stock is not remembered: it can be sent again when there is some.
+  const refused = idOf();
+  await s.client.patch(`/api/rackets/${s.catalogRacket.id}`, { stock: 0 });
+  const out = await s.client.post('/api/orders', catalogOrder(s, { id: refused }));
+  assertEq([out.status, out.data.code], [409, 'out_of_stock'], 'refused');
+  await s.client.patch(`/api/rackets/${s.catalogRacket.id}`, { stock: 1 });
+  assertEq((await s.client.post('/api/orders', catalogOrder(s, { id: refused }))).status, 201, 'and made later under the same id');
+});
+test('Offline ids', 'a racket named by an order may bring an id; the client\'s racket of that name wins over it', async (ctx) => {
+  const s = await shop(ctx);
+  const racketId = idOf();
+  const orderId = idOf();
+  const body = { id: orderId, client_id: s.customer.id, new_racket: { id: racketId, brand: ' Babolat ', model: 'Pure Drive' } };
+  const made = await s.client.post('/api/orders', body);
+  assertStatus(made, 201);
+  assertEq([made.data.racket.id, made.data.racket.brand, made.data.racket.client_id], [racketId, 'Babolat', s.customer.id], 'the racket has the id');
+  assertEq((await s.client.get(`/api/rackets/${racketId}`)).data.orders_count, 1, 'and the order');
+  // The order sent again: one order, one racket.
+  const again = await s.client.post('/api/orders', body);
+  assertEq([again.status, again.data.racket.id], [200, racketId], 'a repeat');
+  assertEq(await clientRackets(s), ['Babolat Pure Drive', 'Wilson Pro Staff 97'], 'no racket was made twice');
+
+  // The client has a racket of that name by now: it is used, and the id the phone gave is not.
+  const unused = idOf();
+  const other = await s.client.post('/api/orders', { client_id: s.customer.id, new_racket: { id: unused, brand: 'babolat', model: 'PURE-DRIVE' } });
+  assertStatus(other, 201);
+  assertEq(other.data.racket.id, racketId, 'the racket the client has');
+  assertStatus(await s.client.get(`/api/rackets/${unused}`), 404);
+
+  // A change that names a racket can bring an id as well.
+  const moving = (await s.client.post('/api/orders', minimalOrder(s))).data;
+  const movedId = idOf();
+  const moved = await s.client.patch(`/api/orders/${moving.id}`, { new_racket: { id: movedId, brand: 'Yonex', model: 'Ezone 98' } });
+  assertEq([moved.status, moved.data.racket.id], [200, movedId], 'a change');
+
+  // An id that is not free for a racket refuses the order whole.
+  const stranger = await shop(ctx);
+  const taken = await s.client.post('/api/orders', { client_id: s.customer.id, new_racket: { id: stranger.racket.id, brand: 'Head', model: 'Speed' } });
+  assertEq([taken.status, taken.data.code], [409, 'id_conflict'], 'another stringer\'s racket id');
+  const ours = await s.client.post('/api/orders', { client_id: s.customer.id, new_racket: { id: s.racket.id, brand: 'Head', model: 'Speed' } });
+  assertEq([ours.status, ours.data.code], [409, 'id_conflict'], 'and one of this stringer\'s, for another racket');
+  assertEq(await clientRackets(s), ['Babolat Pure Drive', 'Wilson Pro Staff 97', 'Yonex Ezone 98'], 'no racket was made by the refused orders');
+  assertEq((await s.client.get('/api/orders')).data.items.length, 3, 'and no order');
+  assertEq((await s.client.post('/api/orders', minimalOrder(s))).data.number, 4, 'and no number was used');
+});
+
+test('Offline stock', 'a racket\'s stock changes by an amount, never below zero or above the most', async (ctx) => {
+  const s = await stocked(ctx, { racketStock: 2 });
+  const change = (delta, op = idOf(), id = s.catalogRacket.id) => s.client.post(`/api/rackets/${id}/stock`, { delta, op_id: op });
+
+  const more = await change(3);
+  assertStatus(more, 200);
+  assertEq([more.data.id, more.data.stock, more.data.available, more.data.track_stock], [s.catalogRacket.id, 5, true, true], 'added');
+  assertEq((await change(-1)).data.stock, 4, 'taken');
+  assertEq((await change(0)).data.stock, 4, 'zero changes nothing');
+  const gone = await change(-10);
+  assertEq([gone.status, gone.data.stock, gone.data.available], [200, 0, false], 'not below zero');
+  assertEq(await racketStock(s, s.catalogRacket.id), 0, 'and it is what GET says');
+  assertEq((await change(100_000)).data.stock, 100_000, 'the most a stock holds');
+  assertEq((await change(7)).data.stock, 100_000, 'and it stops there');
+
+  for (const bad of [1.5, '3', null, 100_001, -100_001, true]) {
+    const res = await change(bad);
+    assertStatus(res, 400);
+    assertTrue(res.data.fields.delta, `${JSON.stringify(bad)}: the amount is named`);
+  }
+  const noKey = await s.client.post(`/api/rackets/${s.catalogRacket.id}/stock`, { delta: 1 });
+  assertStatus(noKey, 400);
+  assertTrue(noKey.data.fields.op_id, 'the key is named');
+  const badKey = await change(1, 'not-a-uuid');
+  assertStatus(badKey, 400);
+  assertTrue(badKey.data.fields.op_id, 'a key that is not a UUID');
+  assertEq(await racketStock(s, s.catalogRacket.id), 100_000, 'a refused request changes nothing');
+  assertStatus(await new Client(ctx.server.base).post(`/api/rackets/${s.catalogRacket.id}/stock`, { delta: 1, op_id: idOf() }), 401);
+});
+test('Offline stock', 'a string\'s stock changes by whole and half sets', async (ctx) => {
+  const s = await stocked(ctx, { stringStock: 3 });
+  const change = (delta, op = idOf(), id = s.string.id) => s.client.post(`/api/strings/${id}/stock`, { delta, op_id: op });
+
+  assertEq((await change(0.5)).data.stock, 3.5, 'half a set');
+  assertEq((await change(-1.5)).data.stock, 2, 'one and a half taken');
+  const res = await change(2);
+  assertEq([res.status, res.data.stock, res.data.available, res.data.id], [200, 4, true, s.string.id], 'whole sets');
+  assertEq((await change(-100)).data.stock, 0, 'not below zero');
+  assertEq((await change(100_000)).data.stock, 100_000, 'the most');
+  assertEq((await change(0.5)).data.stock, 100_000, 'and it stops there');
+  for (const bad of [0.3, 1.25, '1', null, 100_000.5, -100_001]) {
+    const refused = await change(bad);
+    assertStatus(refused, 400);
+    assertTrue(refused.data.fields.delta, `${JSON.stringify(bad)}: the amount is named`);
+  }
+  assertEq(await stringStock(s, s.string.id), 100_000, 'a refused request changes nothing');
+});
+test('Offline stock', 'the same key is answered and not applied twice; the key is the stringer\'s own', async (ctx) => {
+  const s = await stocked(ctx, { racketStock: 2, stringStock: 3 });
+  const racketOp = idOf();
+  const stringOp = idOf();
+  const racketPath = `/api/rackets/${s.catalogRacket.id}/stock`;
+  const stringPath = `/api/strings/${s.string.id}/stock`;
+
+  assertEq((await s.client.post(racketPath, { delta: 3, op_id: racketOp })).data.stock, 5, 'applied');
+  for (let i = 0; i < 3; i++) {
+    const again = await s.client.post(racketPath, { delta: 3, op_id: racketOp });
+    assertEq([again.status, again.data.stock], [200, 5], `a repeat of the racket's change ${i + 1}`);
+  }
+  assertEq((await s.client.post(stringPath, { delta: 1.5, op_id: stringOp })).data.stock, 4.5, 'applied');
+  assertEq((await s.client.post(stringPath, { delta: 1.5, op_id: stringOp })).data.stock, 4.5, 'and not again');
+  // The key is what makes it the same change: another key is another change, and a repeat shows the stock as it is now.
+  assertEq((await s.client.post(racketPath, { delta: 3, op_id: idOf() })).data.stock, 8, 'another key');
+  await s.client.patch(`/api/rackets/${s.catalogRacket.id}`, { stock: 1 });
+  assertEq((await s.client.post(racketPath, { delta: 3, op_id: racketOp })).data.stock, 1, 'a repeat shows the stock as it is now');
+  assertEq(dbScalar(`SELECT count(*) FROM applied_operations WHERE op_id IN ('${racketOp}', '${stringOp}')`), '2', 'the keys are written once each');
+
+  // Another stringer may use the same key: it is theirs.
+  const other = await stocked(ctx, { racketStock: 1 });
+  assertEq((await other.client.post(`/api/rackets/${other.catalogRacket.id}/stock`, { delta: 2, op_id: racketOp })).data.stock, 3, 'their own change');
+
+  // Five copies at the same moment are one change; five different changes at the same moment are five.
+  const racing = idOf();
+  await Promise.all([1, 2, 3, 4, 5].map(() => s.client.post(racketPath, { delta: 1, op_id: racing })));
+  assertEq(await racketStock(s, s.catalogRacket.id), 2, 'one change');
+  const results = await Promise.all([1, 2, 3, 4, 5].map(() => s.client.post(racketPath, { delta: 1, op_id: idOf() })));
+  assertEq(results.map((res) => res.status), [200, 200, 200, 200, 200], 'all answered');
+  assertEq(await racketStock(s, s.catalogRacket.id), 7, 'and all counted');
+});
+test('Offline stock', 'a client\'s racket has no stock; an unknown, removed or another stringer\'s item is a 404; a refused key is free', async (ctx) => {
+  const s = await stocked(ctx);
+  const op = idOf();
+  const own = await s.client.post(`/api/rackets/${s.racket.id}/stock`, { delta: 1, op_id: op });
+  assertStatus(own, 400);
+  assertEq(own.data.code, 'validation_error', 'code');
+  assertTrue(own.data.fields.delta, 'the amount is named');
+  assertEq(dbScalar(`SELECT count(*) FROM applied_operations WHERE op_id='${op}'`), '0', 'the key was not used up');
+
+  const unknown = idOf();
+  assertStatus(await s.client.post(`/api/rackets/${unknown}/stock`, { delta: 1, op_id: op }), 404);
+  assertStatus(await s.client.post(`/api/strings/${unknown}/stock`, { delta: 1, op_id: op }), 404);
+  assertStatus(await s.client.post('/api/rackets/not-a-uuid/stock', { delta: 1, op_id: op }), 404);
+  const { client: stranger } = await register(ctx);
+  assertStatus(await stranger.post(`/api/rackets/${s.catalogRacket.id}/stock`, { delta: 1, op_id: op }), 404);
+  assertStatus(await stranger.post(`/api/strings/${s.string.id}/stock`, { delta: 1, op_id: op }), 404);
+  assertStatus(await s.client.delete(`/api/rackets/${s.catalogRacket.id}`), 200);
+  assertStatus(await s.client.delete(`/api/strings/${s.string.id}`), 200);
+  assertStatus(await s.client.post(`/api/rackets/${s.catalogRacket.id}/stock`, { delta: 1, op_id: op }), 404);
+  assertStatus(await s.client.post(`/api/strings/${s.string.id}/stock`, { delta: 1, op_id: op }), 404);
+  assertEq(dbScalar(`SELECT count(*) FROM applied_operations WHERE op_id='${op}'`), '0', 'no refused request used the key up');
+
+  // So the same key still works for an item that is there.
+  const catalog = (await s.client.post('/api/rackets', { brand: 'Head', model: 'Speed', track_stock: true, stock: 1 })).data;
+  assertEq((await s.client.post(`/api/rackets/${catalog.id}/stock`, { delta: 2, op_id: op })).data.stock, 3, 'free to use');
+});
+test('Offline stock', 'an item that is not counted adds up too; counting it is a change of track_stock; old absolute stock still works', async (ctx) => {
+  const s = await shop(ctx);
+  const plain = (await s.client.post('/api/rackets', { brand: 'Prince', model: 'Phantom' })).data;
+  const added = await s.client.post(`/api/rackets/${plain.id}/stock`, { delta: 2, op_id: idOf() });
+  assertEq([added.data.stock, added.data.track_stock, added.data.available], [2, false, true], 'added, still not counted');
+  const counted = await s.client.patch(`/api/rackets/${plain.id}`, { track_stock: true });
+  assertEq([counted.data.track_stock, counted.data.stock], [true, 2], 'counting it keeps the amount');
+  const strung = await s.client.post(`/api/strings/${s.string.id}/stock`, { delta: 1.5, op_id: idOf() });
+  assertEq([strung.data.stock, strung.data.track_stock], [1.5, false], 'a string too');
+
+  // The absolute number the older builds of the app send is untouched.
+  assertEq((await s.client.patch(`/api/rackets/${plain.id}`, { stock: 9 })).data.stock, 9, 'absolute stock of a racket');
+  assertEq((await s.client.patch(`/api/strings/${s.string.id}`, { stock: 4, track_stock: true })).data.stock, 4, 'absolute stock of a string');
+  assertEq((await s.client.post(`/api/rackets/${plain.id}/stock`, { delta: -4, op_id: idOf() })).data.stock, 5, 'and an amount after it');
+});
+test('Offline stock', 'a change by an amount goes with the orders that take and give back', async (ctx) => {
+  const s = await stocked(ctx, { racketStock: 5, stringStock: 3 });
+  const order = (await s.client.post('/api/orders', catalogOrder(s, { main_string_id: s.string.id }))).data;
+  assertEq([await racketStock(s, s.catalogRacket.id), await stringStock(s, s.string.id)], [4, 2], 'taken by the order');
+  await s.client.post(`/api/rackets/${s.catalogRacket.id}/stock`, { delta: 3, op_id: idOf() });
+  await s.client.post(`/api/strings/${s.string.id}/stock`, { delta: -0.5, op_id: idOf() });
+  assertEq([await racketStock(s, s.catalogRacket.id), await stringStock(s, s.string.id)], [7, 1.5], 'changed by an amount');
+  assertStatus(await s.client.delete(`/api/orders/${order.id}`), 200);
+  assertEq([await racketStock(s, s.catalogRacket.id), await stringStock(s, s.string.id)], [8, 2.5], 'and what the order took comes back to what is there');
+  // Taking what is there leaves an order that needs it to be refused.
+  await s.client.post(`/api/strings/${s.string.id}/stock`, { delta: -100, op_id: idOf() });
+  assertEq((await s.client.post('/api/orders', minimalOrder(s, { main_string_id: s.string.id }))).status, 409, 'nothing left for an order');
+});
+test('Offline stock', 'the keys of an account go with it', async (ctx) => {
+  const s = await stocked(ctx);
+  const userId = (await s.client.get('/api/auth/me')).data.id;
+  assertStatus(await s.client.post(`/api/rackets/${s.catalogRacket.id}/stock`, { delta: 1, op_id: idOf() }), 200);
+  assertStatus(await s.client.post(`/api/strings/${s.string.id}/stock`, { delta: 1, op_id: idOf() }), 200);
+  assertEq(dbScalar(`SELECT count(*) FROM applied_operations WHERE user_id='${userId}'`), '2', 'two keys');
+  assertStatus(await s.client.post('/api/auth/delete-account', { password }), 200);
+  assertEq(dbScalar(`SELECT count(*) FROM applied_operations WHERE user_id='${userId}'`), '0', 'none left');
+});
+test('Offline stock', 'a change of nothing changes nothing, and is still answered once', async (ctx) => {
+  const s = await stocked(ctx, { racketStock: 2, stringStock: 1 });
+  const before = (await s.client.get(`/api/rackets/${s.catalogRacket.id}`)).data;
+  delete before.orders; // the history is on the page of the racket, not in the answer of a change
+  const same = await s.client.post(`/api/rackets/${s.catalogRacket.id}/stock`, { delta: 0, op_id: idOf() });
+  assertEq([same.status, same.data], [200, before], 'the racket as it was, updated_at too');
+  const string = await s.client.post(`/api/strings/${s.string.id}/stock`, { delta: 0, op_id: idOf() });
+  assertEq([string.status, string.data.stock], [200, 1], 'and the string');
+});
+test('Offline stock', 'the keys of operations older than 90 days are deleted when the server starts', async (ctx) => {
+  const s = await stocked(ctx);
+  const userId = (await s.client.get('/api/auth/me')).data.id;
+  const [old, recent] = [idOf(), idOf()];
+  dbExec(
+    `INSERT INTO applied_operations (user_id, op_id, created_at) VALUES ('${userId}', '${old}', now() - interval '91 days'), ('${userId}', '${recent}', now() - interval '89 days')`
+  );
+  const count = (op) => dbScalar(`SELECT count(*) FROM applied_operations WHERE op_id='${op}'`);
+  assertEq([count(old), count(recent)], ['1', '1'], 'both are there');
+
+  const second = await startServer({ port: CONFIG.port + 1 });
+  try {
+    for (let attempt = 0; attempt < 50 && count(old) !== '0'; attempt++) await sleep(100);
+    assertEq(count(old), '0', 'the older one is gone');
+    assertEq(count(recent), '1', 'the newer one stays');
+  } finally {
+    await second.stop();
+  }
+});
+
+test('Offline time', 'the moment of a tap dates the status and the payment', async (ctx) => {
+  const s = await shop(ctx);
+  const order = (await s.client.post('/api/orders', minimalOrder(s))).data;
+  const started = stamp(-2 * DAY);
+  const ready = stamp(-DAY);
+  const done = stamp(-HOUR);
+  const patch = async (body) => (await s.client.patch(`/api/orders/${order.id}`, body)).data;
+  const time = (value) => new Date(value).getTime();
+
+  let o = await patch({ status: 'in_progress', at: started });
+  assertEq(time(o.started_at), time(started), 'started when it was tapped');
+  o = await patch({ status: 'ready', at: ready });
+  assertEq([time(o.started_at), time(o.ready_at)], [time(started), time(ready)], 'ready then, and started as before');
+  o = await patch({ status: 'completed', is_paid: true, at: done });
+  assertEq([time(o.completed_at), time(o.paid_at), time(o.ready_at)], [time(done), time(done), time(ready)], 'completed and paid at the tap');
+  const just = Date.now();
+  assertTrue(just - time(o.updated_at) < 60_000, 'but the order was changed now');
+  // The moment of a tap is for what the tap does: a note changed later has none.
+  o = await patch({ notes: 'Fast', at: stamp(-30 * 60_000) });
+  assertEq([time(o.completed_at), time(o.paid_at)], [time(done), time(done)], 'nothing else is dated');
+  o = await patch({ is_paid: false, at: stamp(-10 * 60_000) });
+  assertEq(o.paid_at, null, 'unpaid has no time');
+  o = await patch({ is_paid: true, at: stamp(-5 * 60_000) });
+  assertTrue(Math.abs(time(o.paid_at) - (Date.now() - 5 * 60_000)) < 60_000, 'paid again at the new tap');
+  o = await patch({ status: 'in_progress', at: stamp(-3 * 60_000) });
+  assertEq([o.ready_at, o.completed_at], [null, null], 'moving back clears the later times, as ever');
+});
+test('Offline time', 'a moment in the future, over 90 days ago or missing is the time of the request', async (ctx) => {
+  const s = await shop(ctx);
+  const close = (value, before) => Math.abs(new Date(value).getTime() - before) < 60_000;
+  for (const [what, at] of [
+    ['in the future', stamp(HOUR)],
+    ['a day ahead', stamp(DAY)],
+    ['91 days ago', stamp(-91 * DAY)],
+    ['years ago', '2020-01-01T00:00:00Z'],
+  ]) {
+    const order = (await s.client.post('/api/orders', minimalOrder(s))).data;
+    const before = Date.now();
+    const moved = (await s.client.patch(`/api/orders/${order.id}`, { status: 'ready', is_paid: true, at })).data;
+    assertTrue(close(moved.ready_at, before) && close(moved.paid_at, before), `${what}: ready and paid now`);
+    const made = (await s.client.post('/api/orders', minimalOrder(s, { is_paid: true, at }))).data;
+    assertTrue(close(made.created_at, before) && close(made.paid_at, before), `${what}: made and paid now`);
+  }
+  const order = (await s.client.post('/api/orders', minimalOrder(s))).data;
+  const before = Date.now();
+  const moved = (await s.client.patch(`/api/orders/${order.id}`, { status: 'in_progress' })).data;
+  assertTrue(close(moved.started_at, before), 'no moment at all: now');
+  const longAgo = stamp(-89 * DAY);
+  const old = (await s.client.patch(`/api/orders/${order.id}`, { status: 'ready', at: longAgo })).data;
+  assertEq(new Date(old.ready_at).getTime(), new Date(longAgo).getTime(), 'but 89 days ago is believed');
+});
+test('Offline time', 'a moment that is not an ISO 8601 date and time is a 400 naming the field', async (ctx) => {
+  const s = await shop(ctx);
+  const order = (await s.client.post('/api/orders', minimalOrder(s))).data;
+  for (const at of ['yesterday', '2026-11-05', '2026-11-05T10:00:00', '2026-13-05T10:00:00Z', 12345, '']) {
+    const patched = await s.client.patch(`/api/orders/${order.id}`, { status: 'ready', at });
+    assertStatus(patched, 400);
+    assertTrue(patched.data.fields.at, `${JSON.stringify(at)}: the field is named on a change`);
+    const made = await s.client.post('/api/orders', minimalOrder(s, { at }));
+    assertStatus(made, 400);
+    assertTrue(made.data.fields.at, `${JSON.stringify(at)}: and on a new order`);
+  }
+  assertEq((await s.client.get(`/api/orders/${order.id}`)).data.status, 'received', 'a refused change changes nothing');
+  assertEq((await s.client.get('/api/orders')).data.items.length, 1, 'and makes nothing');
+  assertStatus(await s.client.patch(`/api/orders/${order.id}`, { status: 'ready', at: '2026-11-05T12:30:00+02:00' }), 200);
+});
+test('Offline time', 'an order made with a moment is made then; one that is paid when made is paid then', async (ctx) => {
+  const s = await shop(ctx);
+  const at = stamp(-2 * DAY);
+  const made = await s.client.post('/api/orders', minimalOrder(s, { at, is_paid: true }));
+  assertStatus(made, 201);
+  assertEq([new Date(made.data.created_at).getTime(), new Date(made.data.paid_at).getTime()], [new Date(at).getTime(), new Date(at).getTime()], 'made and paid then');
+  assertTrue(Date.now() - new Date(made.data.updated_at).getTime() < 60_000, 'though it was saved now');
+  const unpaid = (await s.client.post('/api/orders', minimalOrder(s, { at }))).data;
+  assertEq([new Date(unpaid.created_at).getTime(), unpaid.paid_at], [new Date(at).getTime(), null], 'an unpaid one has no payment time');
+  const plain = (await s.client.post('/api/orders', minimalOrder(s))).data;
+  assertTrue(Math.abs(new Date(plain.created_at).getTime() - Date.now()) < 60_000, 'without a moment: now');
+  // Orders are still numbered in the order they arrive.
+  assertEq([made.data.number, unpaid.number, plain.number], [1, 2, 3], 'numbers');
+});
+
+test('Offline details', 'the list of orders can carry the service lines and the photos of each, as the order itself has them', async (ctx) => {
+  const s = await shop(ctx);
+  const first = (await s.client.post('/api/orders', minimalOrder(s, {
+    labor_price: 20, services: [{ name: 'Grip', price: 5 }, { name: 'Dampener', price: 3 }],
+  }))).data;
+  const second = (await s.client.post('/api/orders', minimalOrder(s, { services: [{ name: 'Overgrip', price: 2 }] }))).data;
+  const bare = (await s.client.post('/api/orders', minimalOrder(s))).data;
+  for (let i = 0; i < 2; i++) assertStatus(await s.client.rawRequest('POST', `/api/orders/${first.id}/photos`, JPEG, 'image/jpeg'), 201);
+  assertStatus(await s.client.rawRequest('POST', `/api/orders/${second.id}/photos`, JPEG, 'image/jpeg'), 201);
+
+  const list = await s.client.get('/api/orders?details=1');
+  assertStatus(list, 200);
+  assertEq(list.data.items.length, 3, 'all the orders');
+  for (const item of list.data.items) {
+    const own = (await s.client.get(`/api/orders/${item.id}`)).data;
+    assertEq(item, own, `order ${item.number}: the same as the order itself`);
+  }
+  const byNumber = Object.fromEntries(list.data.items.map((item) => [item.number, item]));
+  assertEq([byNumber[1].services.length, byNumber[1].photos.length], [2, 2], 'the first has two lines and two photos');
+  assertEq([byNumber[2].services.map((line) => line.name), byNumber[2].photos.length], [['Overgrip'], 1], 'the second');
+  assertEq([byNumber[3].services, byNumber[3].photos], [[], []], 'and one with none has empty lists');
+  assertEq(Object.keys(byNumber[1].photos[0]), ['id', 'content_type', 'size', 'created_at'], 'a photo has no more than the order shows');
+
+  assertEq((await s.client.get('/api/orders?details=true')).data.items[0].services !== undefined, true, 'true works too');
+  const page = (await s.client.get('/api/orders?details=1&limit=1&offset=1')).data;
+  assertEq([page.items.length, page.has_more, page.items[0].id], [1, true, second.id], 'paged');
+  assertEq(page.items[0].services !== undefined && page.items[0].photos !== undefined, true, 'a page has them too');
+  assertEq((await s.client.get('/api/orders?details=1&status=completed')).data, { items: [], has_more: false }, 'nothing to detail');
+  assertEq((await s.client.get('/api/orders?details=1&q=nothing-here')).data.items, [], 'and a search that finds nothing');
+  assertStatus(await s.client.get('/api/orders?details=yes'), 400);
+
+  // Without the flag the list is what it was.
+  const plain = (await s.client.get('/api/orders')).data.items;
+  assertEq(plain.map((item) => item.id), list.data.items.map((item) => item.id), 'the same orders');
+  assertTrue(plain.every((item) => !('services' in item) && !('photos' in item)), 'with no lines or photos');
+  const detailed = { ...list.data.items.find((item) => item.id === bare.id) };
+  delete detailed.services;
+  delete detailed.photos;
+  assertEq(plain.find((item) => item.id === bare.id), detailed, 'and nothing else different');
+  assertEq((await s.client.get('/api/orders?details=0')).status, 400, 'only 1 and true are flags');
+
+  // Another stringer sees none of it.
+  const { client: other } = await register(ctx);
+  assertEq((await other.get('/api/orders?details=1')).data, { items: [], has_more: false }, 'nothing of this stringer\'s');
+});
+
+// A change whose answer never reached the phone is sent again, and may be sent while the first copy is still being made.
+test('Offline races', 'copies of one change of an order, at the same moment, move the stock once', async (ctx) => {
+  const s = await stocked(ctx, { racketStock: 5, stringStock: 3 });
+  const other = (await s.client.post('/api/strings', { brand: 'Babolat', model: 'RPM', track_stock: true, stock: 4 })).data;
+  const order = (await s.client.post('/api/orders', catalogOrder(s, { main_string_id: s.string.id }))).data;
+  const levels = async () => [await racketStock(s, s.catalogRacket.id), await stringStock(s, s.string.id), await stringStock(s, other.id)];
+  assertEq(await levels(), [4, 2, 4], 'taken once');
+
+  const copies = await Promise.all([1, 2, 3, 4, 5, 6].map(() => s.client.patch(`/api/orders/${order.id}`, { main_string_id: other.id })));
+  assertEq(copies.map((res) => res.status), [200, 200, 200, 200, 200, 200], 'all answered');
+  assertEq(await levels(), [4, 3, 3], 'the old string is back once and the new one taken once');
+  assertEq((await s.client.get(`/api/orders/${order.id}`)).data.main_string_id, other.id, 'and the order has it');
+
+  // Moving the order on, at the same moment as a change of what it takes, loses nothing either.
+  const mixed = await Promise.all([
+    s.client.patch(`/api/orders/${order.id}`, { main_string_id: s.string.id }),
+    s.client.patch(`/api/orders/${order.id}`, { main_string_id: s.string.id }),
+    s.client.patch(`/api/orders/${order.id}`, { status: 'in_progress' }),
+  ]);
+  assertEq(mixed.map((res) => res.status), [200, 200, 200], 'answered');
+  assertEq(await levels(), [4, 2, 4], 'one string back, the other taken, once');
+  assertEq((await s.client.get(`/api/orders/${order.id}`)).data.status, 'in_progress', 'and moved on');
+});
+test('Offline races', 'copies of one delete of an order, at the same moment, give the stock back once', async (ctx) => {
+  const s = await stocked(ctx, { racketStock: 5, stringStock: 3 });
+  const order = (await s.client.post('/api/orders', catalogOrder(s, { main_string_id: s.string.id }))).data;
+  assertEq([await racketStock(s, s.catalogRacket.id), await stringStock(s, s.string.id)], [4, 2], 'taken once');
+
+  const copies = await Promise.all([1, 2, 3, 4].map(() => s.client.delete(`/api/orders/${order.id}`)));
+  assertEq(copies.map((res) => res.status).sort(), [200, 404, 404, 404], 'one deletes it, the others find it gone');
+  assertEq([await racketStock(s, s.catalogRacket.id), await stringStock(s, s.string.id)], [5, 3], 'given back once');
+});
+test('Offline races', 'copies of one change that names a racket make the racket once and are all answered', async (ctx) => {
+  const s = await shop(ctx);
+  const order = (await s.client.post('/api/orders', minimalOrder(s))).data;
+  const racketId = idOf();
+  const body = { client_id: s.customer.id, new_racket: { id: racketId, brand: 'Babolat', model: 'Pure Drive' } };
+  const copies = await Promise.all([1, 2, 3, 4].map(() => s.client.patch(`/api/orders/${order.id}`, body)));
+  assertEq(copies.map((res) => res.status), [200, 200, 200, 200], 'none is told the id is in use');
+  const detail = (await s.client.get(`/api/orders/${order.id}`)).data;
+  assertEq([detail.racket.id, detail.racket.model], [racketId, 'Pure Drive'], 'the order has the racket');
+  assertEq(Number(dbScalar(`SELECT count(*) FROM rackets WHERE client_id='${s.customer.id}' AND model='Pure Drive'`)), 1, 'made once');
 });
 
 // ---------------------------------------------------------------------------
