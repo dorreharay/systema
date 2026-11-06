@@ -61,6 +61,7 @@ export default function ServicesAndPricing() {
           {service.kind === 'labor' ? <Badge label={t('service_labor')} tone="success" /> : null}
         </View>
       </View>
+      {/* (On a wide web screen this is the iOS switch drawn by app-switch.web.tsx.) */}
       <AppSwitch
         accessibilityLabel={t('service_active_toggle', { name: service.name })}
         value={service.active}

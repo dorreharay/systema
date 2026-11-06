@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { View, type LayoutChangeEvent } from 'react-native';
 
+import { NumberInput } from '@/components/ui/input';
 import { SCALE_HEIGHT, ScaleRuler } from '@/components/ui/scale-ruler';
 import { Text } from '@/components/ui/text';
 import { formatNumber, parseDecimal } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
+import { useIsWide } from '@/lib/layout';
 
 type ScalePickerProps = {
   label?: string;
@@ -16,7 +18,35 @@ type ScalePickerProps = {
   unit?: string;
   error?: string;
   hint?: string;
+  // For the field of a wide screen: it has the cursor from the start (once the sheet it is in has come up).
+  autoFocus?: boolean;
 };
+
+/**
+ * A count to set. On the phone it is a scale to scroll under a mark, like a weight. Where there is a mouse and a keyboard (the web from
+ * 768 px, which the scale is no good for: it scrolls sideways) it is a field to type in, with the unit after the number; what a count
+ * may be (whole, or halves) is not said by the field but by the form when it is saved, as it is with the scale's ticks.
+ */
+export function ScalePicker(props: ScalePickerProps) {
+  const wide = useIsWide();
+  return wide ? <CountField {...props} /> : <ScaleCount {...props} />;
+}
+
+/** The count as a field: digits with a point (or a comma), the whole text selected when it is entered, so that a new count is typed over it. */
+function CountField({ label, value, onChange, unit, error, hint, autoFocus }: ScalePickerProps) {
+  return (
+    <NumberInput
+      label={label}
+      value={value}
+      onChangeText={onChange}
+      suffix={unit ? <Text className="text-base text-muted">{unit}</Text> : undefined}
+      error={error}
+      hint={hint}
+      autoFocus={autoFocus}
+      selectTextOnFocus
+    />
+  );
+}
 
 // The scale is this long at least, and reaches past what is there when it starts, so there is room to add.
 const MIN_SPAN = 100;
@@ -24,10 +54,10 @@ const MIN_SPAN = 100;
 const spanFor = (value: number) => Math.max(MIN_SPAN, Math.ceil((value + MIN_SPAN / 2) / 10) * 10);
 
 /**
- * A count to set by scrolling a scale under a mark, like a weight: the number is read above it. It never goes
- * below nothing, and the scale is a hundred long (longer when there is more than that to start with).
+ * The count as a scale under a mark: the number is read above it. It never goes below nothing, and the scale is a hundred long
+ * (longer when there is more than that to start with).
  */
-export function ScalePicker({ label, value, onChange, step = 1, unit, error, hint }: ScalePickerProps) {
+function ScaleCount({ label, value, onChange, step = 1, unit, error, hint }: ScalePickerProps) {
   const { t } = useI18n();
   const [width, setWidth] = useState(0);
   const current = parseDecimal(value) ?? 0;

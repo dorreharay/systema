@@ -38,6 +38,7 @@
   /* From `md:` up a white surface is lifted off the page by a ring and soft shadows, and no button has a gradient: src/components/ui/paper.ts. */
   /* From `md:` up a page has p-12 round it (48 px at its sides, above its header and under its content) and its widest column has no limit: src/components/ui/page.tsx, screen.tsx. A search field has the text of the page: src/components/ui/field-text.ts. */
   /* From `md:` up the sign-in screens are drawn at 85% of the phone's sizes (less in a short window, so that none of them scrolls), and the back button of a form hangs above its left edge: src/components/auth-layout.tsx. */
+  /* From `md:` up a stock count is typed in a field, not set on a scale (scale-picker.tsx), a tick is a round one (checkbox.tsx), and a switch is an iOS one (app-switch.web.tsx). */
 }
 
 :root {

@@ -4,6 +4,7 @@ import { Pressable, View } from 'react-native';
 import { Check } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { colors } from '@/components/ui/colors';
+import EnterSubmits from '@/components/ui/enter-submits';
 import { FormError } from '@/components/ui/input';
 import { ScalePicker } from '@/components/ui/scale-picker';
 import Sheet from '@/components/ui/sheet';
@@ -163,7 +164,12 @@ function StockForm({ kind, item, onClose }: Omit<StockSheetProps, 'visible' | 'i
 
   return (
     <>
-      <View className="gap-3 pt-2">
+      {/* On a wide screen the count is a field (see ScalePicker): it has the cursor at once, and Enter saves. */}
+      <EnterSubmits
+        className="gap-3 pt-2"
+        onSubmit={() => {
+          if (!saving) void save();
+        }}>
         <ScalePicker
           label={t('field_stock')}
           value={stock}
@@ -175,9 +181,10 @@ function StockForm({ kind, item, onClose }: Omit<StockSheetProps, 'visible' | 'i
           unit={t(unitKey(kind))}
           error={error}
           hint={kind === 'string' ? t('stock_edit_hint_string') : undefined}
+          autoFocus
         />
         {formError ? <FormError message={formError} /> : null}
-      </View>
+      </EnterSubmits>
       <View className="pt-4">
         <Shortcut
           compact

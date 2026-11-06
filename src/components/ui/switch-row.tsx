@@ -11,7 +11,8 @@ type SwitchRowProps = {
 };
 
 // The switch is on the line of the label, and stays there when there is a hint under it: the first line of the
-// text and the switch have the same middle, 24 pt from the top of the row.
+// text and the switch have the same middle, 24 pt from the top of the row. (On a wide web screen the switch is an iOS one drawn by
+// app-switch.web.tsx, 51 by 31: it fits the row as the system's own does on the phone.)
 export default function SwitchRow({ label, description, value, onValueChange }: SwitchRowProps) {
   return (
     <View className="flex-row items-start justify-between gap-4">
