@@ -1,0 +1,77 @@
+# Caddy config for the web app on Railway (see README.md and docs/web-deploy.md). Railway ends TLS at its edge, so this server only
+# speaks http, on the port Railway gives it.
+{
+	admin off
+	auto_https off
+}
+
+# What the page may load and talk to, and the other headers of a safe page. The one inline script is the one Expo puts in every page (a
+# hash, so no other inline script can run); styles are inline because React Native for web writes them so. Google's script and its
+# window are for "Continue with Google"; the API is the address the app was built with (EXPO_PUBLIC_API_URL: a different one needs a
+# different line here, and a rebuild). Nothing else third-party: no analytics, no fonts, no frames. A snippet, because the page of an
+# error (the app's "not found") is made by another route, which does not have the headers of this one.
+(hardening) {
+	header {
+		Content-Security-Policy "default-src 'self'; script-src 'self' 'sha256-67fhrP0+BkBqmgGGXTtgiVO/9EQs3QruYNU/7fnRkI8=' https://accounts.google.com/gsi/client; style-src 'self' 'unsafe-inline' https://accounts.google.com/gsi/style; img-src 'self' data: blob: https://api.myrestring.com; font-src 'self' data:; connect-src 'self' https://api.myrestring.com https://accounts.google.com/gsi/; frame-src https://accounts.google.com/gsi/; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+		Strict-Transport-Security "max-age=31536000"
+		# The app is not for search engines: the site is tryrestring.com.
+		X-Robots-Tag "noindex, nofollow"
+		-Server
+	}
+}
+
+:{$PORT:8080} {
+	root * /srv
+	encode zstd gzip
+	import hardening
+
+	# Railway's edge sends http to https itself; this is only a guard in case a request arrives that way.
+	@http header X-Forwarded-Proto http
+	redir @http https://{host}{uri} 308
+
+	# www goes to the one address of the app.
+	@www host www.myrestring.com
+	redir @www https://myrestring.com{uri} 301
+
+	# What the build names by a hash of its contents never changes: the browser keeps it for good. The pages are asked for again each
+	# time (a new deploy is a new set of hashes, and only the pages say which).
+	@hashed path /_expo/static/* /assets/*
+	header @hashed Cache-Control "public, max-age=31536000, immutable"
+	@pages not path /_expo/static/* /assets/*
+	header @pages Cache-Control "no-cache"
+
+	# The order matters, so it is a route.
+	route {
+		# A page that exists as it is asked for, as a .html file ("/login" is login.html), or as a folder's index.html ("/clients").
+		try_files {path} {path}.html {path}/index.html
+
+		# The pages with an id in the address (an order, a client, a racket) are one file each, [id].html; the app reads the id from the
+		# address. A name with a dot ("new.html", after try_files) is not an id. A new route with an id in it needs its line here.
+		@order_edit path_regexp ^/orders/[^/.]+/edit/?$
+		rewrite @order_edit /orders/[id]/edit.html
+		@order path_regexp ^/orders/[^/.]+/?$
+		rewrite @order /orders/[id].html
+		@client path_regexp ^/clients/[^/.]+/?$
+		rewrite @client /clients/[id].html
+		@racket path_regexp ^/rackets/[^/.]+/?$
+		rewrite @racket /rackets/[id].html
+
+		file_server
+	}
+
+	# What is not there is the app's own "not found" page, with the code 404.
+	handle_errors {
+		import hardening
+		# Not the year a missing hashed file would otherwise be remembered for.
+		header Cache-Control "no-store"
+		@notfound expression {err.status_code} == 404
+		handle @notfound {
+			rewrite * /+not-found.html
+			file_server
+		}
+	}
+}

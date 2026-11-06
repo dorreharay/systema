@@ -1,0 +1,2 @@
+# The build of the web app (scripts/deploy-web.sh makes it, and uploads it to Railway with --no-gitignore).
+dist/
