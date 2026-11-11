@@ -110,6 +110,22 @@ summary::after { content: "+"; font-size: 1.4rem; font-weight: 400; line-height:
 details[open] summary::after { content: "\2013"; }
 details > :not(summary) { margin-bottom: .9rem; }
 
+/* The Studio page: a tag, an intro and a plain HTML form (no script: the page posts to the API, see Caddyfile and README.md) */
+.tag { display: inline-block; padding: .25rem .85rem; border-radius: 999px; background: var(--yellow); color: var(--ink); font-size: .9rem; font-weight: 700; }
+.intro { max-width: 40rem; font-size: 1.15rem; }
+.form { display: grid; gap: 1rem; max-width: 34rem; margin: 1rem 0 0; }
+.form label { display: grid; gap: .35rem; font-weight: 600; }
+.form input[type="email"], .form select, .form textarea { width: 100%; padding: .8rem 1rem; border: 1px solid var(--line); border-radius: 14px; background: var(--bg); color: var(--ink); font: inherit; font-weight: 400; }
+.form textarea { min-height: 5.5rem; resize: vertical; }
+.form .check { display: flex; align-items: flex-start; gap: .7rem; font-weight: 400; }
+.form .check input { flex: none; width: 1.25rem; height: 1.25rem; margin-top: .25rem; accent-color: var(--brand); }
+.form button { justify-self: start; padding: .9rem 1.5rem; border: 0; border-radius: 14px; background: var(--brand); color: var(--bg); font: inherit; font-size: 1.1rem; font-weight: 700; cursor: pointer; }
+.form button:hover { text-decoration: underline; }
+.hp { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; } /* the field only a robot fills in */
+.form-error { display: none; max-width: 34rem; padding: 1rem 1.2rem; border-radius: 14px; background: #fbe4e1; color: #b42318; font-weight: 600; }
+.form-error:target { display: block; } /* the API sends a visitor back to /studio/#error when the form was not accepted */
+@media (prefers-color-scheme: dark) { .form-error { background: #3a1d1a; color: #ffb4a8; } }
+
 /* Footer */
 .foot { margin-top: 3rem; padding: 1.5rem 0 2.5rem; border-top: 1px solid var(--line); color: var(--muted); font-size: .95rem; }
 .foot nav { display: flex; flex-wrap: wrap; gap: .4rem 1.2rem; margin-bottom: .8rem; }

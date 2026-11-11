@@ -1,5 +1,8 @@
 # Read by Netlify and Cloudflare Pages (same format); other hosts ignore it. The CSP is what keeps "no third-party anything" true:
 # scripts, fonts, frames and inline styles are not allowed, so none can slip in unnoticed.
+# The Studio pages (/studio/ and /en/studio/) hold a form that posts to the API: there `form-action 'none'` has to be
+# `form-action 'self' https://api.myrestring.com`. Caddyfile does that for the Railway deployment; on a host that reads this file,
+# give those two paths the same policy with that one change.
 /*
   Content-Security-Policy: default-src 'none'; img-src 'self'; style-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
   Referrer-Policy: no-referrer

@@ -7,8 +7,10 @@
  *
  * Exits with a non-zero code if any test fails.
  */
+import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { setTimeout as sleep } from 'node:timers/promises';
+import { fileURLToPath } from 'node:url';
 import {
   CONFIG, Client, assertEq, assertStatus, assertTrue,
   dbExec, dbScalar, resetDatabase, startFakeApple, startFakeGoogle, startFakeResend, startFakeRevenueCat, startServer,
@@ -4193,6 +4195,119 @@ test('Store', 'only RevenueCat is heard: its header is needed, and with none set
     const s = await stringerOn(server);
     assertStatus(await sendNotice(server, noticeFor(s), HOOK), 404);
   });
+});
+
+// ---------------------------------------------------------------------------
+// Studio interest: the form on the website (a plain HTML form, no script) that puts a visitor on the list
+// ---------------------------------------------------------------------------
+const interestRow = (email) =>
+  dbScalar(`select coalesce(role,'-') || '/' || coalesce(team_size,'-') || '/' || coalesce(note,'-') || '/' || coalesce(language,'-') || '/' || wants_call from studio_interest where email = '${email}'`);
+const interestCount = (email) => Number(dbScalar(`select count(*) from studio_interest where email = '${email}'`));
+const postForm = (base, fields) =>
+  fetch(`${base}/api/studio-interest`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams(fields),
+    redirect: 'manual',
+  });
+
+test('Studio interest', 'an address is put on the list once however many times it is sent, and the answers are kept', async (ctx) => {
+  const email = `Visitor${++counter}@Test.Local`;
+  const lower = email.toLowerCase();
+  const first = await ctx.anon.post('/api/studio-interest', { email, role: 'owner', team_size: '4-6', note: '  We string for a club  ', lang: 'en', talk: true });
+  assertStatus(first, 200);
+  assertEq(first.data, { ok: true }, 'the answer');
+  assertEq(interestCount(lower), 1, 'one row, the address in lower case');
+  assertEq(interestRow(lower), 'owner/4-6/We string for a club/en/true', 'what was said, trimmed');
+  // Again, with a different role and nothing else: the role changes, the rest stays, and the ticked box stays ticked.
+  assertStatus(await ctx.anon.post('/api/studio-interest', { email: lower, role: 'master' }), 200);
+  assertEq(interestCount(lower), 1, 'still one row');
+  assertEq(interestRow(lower), 'master/4-6/We string for a club/uk/true', 'the new answer replaced the old, the rest stayed');
+});
+
+test('Studio interest', 'an address that is not one is refused, a choice that is not one is dropped', async (ctx) => {
+  for (const bad of [{}, { email: '' }, { email: 'nobody' }, { email: 'a@b' }, { email: 'x'.repeat(250) + '@test.local' }]) {
+    const res = await ctx.anon.post('/api/studio-interest', bad);
+    assertStatus(res, 400);
+    assertEq(res.data.code, 'validation_error', `the reason for ${JSON.stringify(bad).slice(0, 30)}`);
+  }
+  assertStatus(await ctx.anon.post('/api/studio-interest', { email: 'ok@test.local', note: 'x'.repeat(1001) }), 400);
+  const email = `visitor${++counter}@test.local`;
+  assertStatus(await ctx.anon.post('/api/studio-interest', { email, role: 'king', team_size: 'many' }), 200);
+  assertEq(interestRow(email), '-/-/-/uk/false', 'unknown choices were not kept, the address was');
+});
+
+test('Studio interest', 'the form of the website is answered with a redirect back to its page, in its language', async (ctx) => {
+  const ok = `form${++counter}@test.local`;
+  const done = await postForm(ctx.server.base, { email: ok, role: 'club', team_size: '7+', talk: '1', lang: 'uk' });
+  assertStatus(done, 303);
+  assertEq(done.headers.get('location'), 'https://tryrestring.com/studio/thanks/', 'thanks, in Ukrainian');
+  assertEq(interestRow(ok), 'club/7+/-/uk/true', 'kept');
+
+  const english = await postForm(ctx.server.base, { email: `form${++counter}@test.local`, lang: 'en' });
+  assertStatus(english, 303);
+  assertEq(english.headers.get('location'), 'https://tryrestring.com/en/studio/thanks/', 'thanks, in English');
+
+  const bad = await postForm(ctx.server.base, { email: 'nobody', lang: 'en' });
+  assertStatus(bad, 303);
+  assertEq(bad.headers.get('location'), 'https://tryrestring.com/en/studio/#error', 'the page with the error box waiting');
+  const unknownLanguage = await postForm(ctx.server.base, { email: 'nobody', lang: 'https://evil.example/' });
+  assertEq(unknownLanguage.headers.get('location'), 'https://tryrestring.com/studio/#error', 'a visitor is never sent anywhere else');
+});
+
+test('Studio interest', 'a robot that fills the hidden field is told it worked and nothing is kept', async (ctx) => {
+  const email = `robot${++counter}@test.local`;
+  const res = await postForm(ctx.server.base, { email, website: 'https://spam.example/', lang: 'uk' });
+  assertStatus(res, 303);
+  assertEq(res.headers.get('location'), 'https://tryrestring.com/studio/thanks/', 'it is thanked');
+  assertEq(interestCount(email), 0, 'and not kept');
+  const json = await ctx.anon.post('/api/studio-interest', { email, website: 'x' });
+  assertEq(json.data, { ok: true }, 'the same in JSON');
+  assertEq(interestCount(email), 0, 'not kept either');
+});
+
+test('Studio interest', 'a few an hour from one address, and the form is sent back to its page when it is over', async () => {
+  const server = await startServer({ port: CONFIG.port + 1, env: { STUDIO_INTEREST_RATE_LIMIT_MAX: '2' } });
+  try {
+    const a = new Client(server.base);
+    assertStatus(await a.post('/api/studio-interest', { email: `limit${++counter}@test.local` }), 200);
+    assertStatus(await a.post('/api/studio-interest', { email: `limit${++counter}@test.local` }), 200);
+    const third = await a.post('/api/studio-interest', { email: `limit${++counter}@test.local` });
+    assertStatus(third, 429);
+    assertEq(third.data.code, 'rate_limited', 'the reason');
+    const form = await postForm(server.base, { email: `limit${++counter}@test.local`, lang: 'en' });
+    assertStatus(form, 303);
+    assertEq(form.headers.get('location'), 'https://tryrestring.com/en/studio/#error', 'a form is sent to the error box');
+  } finally {
+    await server.stop();
+  }
+});
+
+test('Studio interest', 'the script that reads the list counts it, keeps those ready to talk, and prints CSV nobody can run as a formula', async (ctx) => {
+  const talker = `reader${++counter}@test.local`;
+  const quiet = `reader${++counter}@test.local`;
+  assertStatus(await ctx.anon.post('/api/studio-interest', { email: talker, role: 'owner', team_size: '3', talk: true, note: '=1+1, "quoted"\nsecond line' }), 200);
+  assertStatus(await ctx.anon.post('/api/studio-interest', { email: quiet, role: 'master' }), 200);
+
+  const run = (...args) =>
+    spawnSync('node', ['src/scripts/studio-interest.js', ...args], {
+      cwd: fileURLToPath(new URL('../..', import.meta.url)),
+      env: { ...process.env, NODE_ENV: 'test', DATABASE_URL: CONFIG.dbUrl, JWT_SECRET: CONFIG.jwtSecret },
+      encoding: 'utf8',
+    });
+
+  const all = run();
+  assertEq(all.status, 0, `the script ran: ${all.stderr}`);
+  assertTrue(all.stdout.includes('by role:') && all.stdout.includes(talker) && all.stdout.includes(quiet), 'it counts and lists everybody');
+
+  const ready = run('--call');
+  assertTrue(ready.stdout.includes(talker) && !ready.stdout.includes(quiet), '--call keeps only the one who ticked the box');
+
+  const csv = run('--csv').stdout.split('\n');
+  assertEq(csv[0], 'created_at (UTC),email,role,team_size,wants_call,language,note', 'the header');
+  const line = csv.find((row) => row.includes(talker));
+  assertTrue(line.endsWith(`,owner,3,yes,uk,"'=1+1, ""quoted"" second line"`), `the note is one line, quoted, and not a formula: ${line}`);
+  assertTrue(csv.find((row) => row.includes(quiet)).includes(',master,,,uk,'), 'what was not said is empty');
 });
 
 // ---------------------------------------------------------------------------

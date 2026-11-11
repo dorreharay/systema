@@ -16,6 +16,7 @@ import racketsRouter from './routes/rackets.js';
 import referenceRouter from './routes/reference.js';
 import servicesRouter from './routes/services.js';
 import stringsRouter from './routes/strings.js';
+import studioRouter from './routes/studio.js';
 
 export function createApp() {
   const app = express();
@@ -36,6 +37,7 @@ export function createApp() {
 
   app.use('/api/auth', authRouter);
   app.use('/api/billing', billingRouter);
+  app.use('/api/studio-interest', studioRouter);
   app.use('/api/dashboard', dashboardRouter);
   app.use('/api/insights', insightsRouter);
   app.use('/api/clients', clientsRouter);

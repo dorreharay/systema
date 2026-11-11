@@ -1,6 +1,7 @@
 import { ipKeyGenerator, rateLimit } from 'express-rate-limit';
 import { isIP } from 'node:net';
 import { config } from '../config.js';
+import { studioPageUrl } from '../utils/pages.js';
 
 /**
  * The address a request is counted under. A host that cannot say how many proxies are in front of the server (Railway) sets
@@ -26,6 +27,22 @@ export const authLimiter = rateLimit({
   standardHeaders: 'draft-7',
   legacyHeaders: false,
   handler: (req, res) => {
+    res.status(429).json({ error: 'Too many attempts. Try again later.', code: 'rate_limited' });
+  },
+});
+
+/**
+ * For the form of the Studio waiting list on the website, which anyone can post: a few an hour from one address. A browser's form is
+ * answered with a redirect back to the page, where an error box is waiting (it has no script to show a message), anything else with a 429.
+ */
+export const studioInterestLimiter = rateLimit({
+  windowMs: config.studioInterestRateLimit.windowMs,
+  limit: config.studioInterestRateLimit.max,
+  keyGenerator: (req) => ipKeyGenerator(clientIp(req) ?? ''),
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  handler: (req, res) => {
+    if (req.is('application/x-www-form-urlencoded')) return res.redirect(303, studioPageUrl(req.body?.lang === 'en' ? 'en' : 'uk', '#error'));
     res.status(429).json({ error: 'Too many attempts. Try again later.', code: 'rate_limited' });
   },
 });

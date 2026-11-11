@@ -8,6 +8,12 @@ const TOKEN = /^[\w-]{16,128}$/;
 /** Where a visitor who typed the domain of the server (myrestring.com) is sent: the website. */
 export const SITE_URL = 'https://tryrestring.com/';
 
+/**
+ * A page of the website's Studio section, in the language of the page the form was on: Ukrainian at the root, English under /en/. The
+ * form posts here (routes/studio.js) and the visitor is sent back with a redirect. `tail` is 'thanks/' or '#error'.
+ */
+export const studioPageUrl = (language, tail = '') => `${SITE_URL}${language === 'en' ? 'en/' : ''}studio/${tail}`;
+
 const escapeHtml = (text) =>
   text
     .replace(/&/g, '&amp;')

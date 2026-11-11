@@ -238,6 +238,17 @@ unless `BILLING_ENABLED=true`: every account then has everything, nothing is cou
   is on it, and both are a `404` where `BILLING_ENABLED` is off. The list is `users.studio_waitlist_at` (migration 0010) and nothing sends
   the news by itself: whoever launches Studio reads it by hand,
   `SELECT email FROM users WHERE studio_waitlist_at IS NOT NULL ORDER BY studio_waitlist_at`.
+- **The Studio list from the website.** The website has a page about Studio with a form (`site/studio/`, see `site/README.md`) for people
+  who may have no account. `POST /api/studio-interest` is public: a plain HTML form posts it (`application/x-www-form-urlencoded`) and is
+  answered with a `303` to a page of the site (`/studio/thanks/`, or `/studio/#error` when the address is not one or the visitor is over the
+  limit); anything else sends JSON and gets `{ ok: true }` or a `400`. The fields are `email` (the only one that is needed), `role`,
+  `team_size`, `note`, `talk` (ready for a conversation) and `lang` (`uk` or `en`: the page the visitor goes back to); a `website` that is
+  filled in is a robot, which is told it worked and kept nowhere. An address is one row of `studio_interest` (migration 0011, lower case),
+  and asking again updates its answers. `STUDIO_INTEREST_RATE_LIMIT_MAX` (5) is how many an hour one IP address may send. Read it with
+  `npm run studio:interest` (`src/scripts/studio-interest.js`: the count by role and team size, then who they are; `--call` keeps those who
+  ticked "ready for a conversation", `--csv` prints CSV for a spreadsheet, formulas defused). Production has no public database address, so
+  the script runs inside the server's container, from your own terminal:
+  `railway ssh -s api -e production -p 33a80cc2-f8f3-4160-b722-dfe37d8104ff -- node /app/src/scripts/studio-interest.js --csv`.
 
 ### Stringing: clients, rackets, strings, services, orders
 

@@ -10,4 +10,8 @@ RUN rm -f /srv/Dockerfile /srv/Caddyfile /srv/README.md /srv/_headers /srv/_redi
  && chmod +x /usr/local/bin/docker-entrypoint.sh \
  && mkdir -p /etc/caddy/auth
 
+# A Caddyfile that does not parse fails the build here, and the site that is running stays as it is, instead of a container that
+# starts and dies.
+RUN caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+
 CMD ["/usr/local/bin/docker-entrypoint.sh"]

@@ -12,13 +12,20 @@
 	# Same headers as _headers. The CSP is what keeps "no third-party anything" true: scripts, fonts, frames and inline
 	# styles are not allowed, so none can slip in unnoticed.
 	header {
-		Content-Security-Policy "default-src 'none'; img-src 'self'; style-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
 		Referrer-Policy "no-referrer"
 		X-Content-Type-Options "nosniff"
 		X-Frame-Options "DENY"
 		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
 		-Server
 	}
+
+	# The policy is the same everywhere but for one word. The Studio form is a plain HTML form (the site has no scripts) that posts to
+	# the API, so on its two pages, and only there, `form-action` names the API; everywhere else it is 'none'. They are two rules that
+	# exclude each other, so that the order Caddy runs them in does not matter. (_headers, which this server does not read, has a note.)
+	@studio path /studio /studio/ /en/studio /en/studio/
+	@notstudio not path /studio /studio/ /en/studio /en/studio/
+	header @studio Content-Security-Policy "default-src 'none'; img-src 'self'; style-src 'self'; base-uri 'none'; form-action 'self' https://api.myrestring.com; frame-ancestors 'none'"
+	header @notstudio Content-Security-Policy "default-src 'none'; img-src 'self'; style-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
 
 	# Railway's edge sends http to https itself; this is only a guard in case a request arrives that way.
 	@http header X-Forwarded-Proto http

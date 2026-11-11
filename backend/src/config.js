@@ -90,6 +90,9 @@ export function loadConfig(env = process.env) {
     // Attempts per IP and 15 minutes at the endpoints that take a password or send an email.
     authRateLimit: { windowMs: 15 * 60 * 1000, max: integer(env.AUTH_RATE_LIMIT_MAX, 20) },
 
+    // Sign-ups for the Studio waiting list from the website, a form that anyone can post: per IP and hour.
+    studioInterestRateLimit: { windowMs: 60 * 60 * 1000, max: integer(env.STUDIO_INTEREST_RATE_LIMIT_MAX, 5) },
+
     smtp,
     // Resend, over HTTPS: where the host lets a server open no SMTP connection (Railway's Hobby plan does not), a key is all
     // it takes. `apiUrl` is only changed by a test, which stands in for Resend.

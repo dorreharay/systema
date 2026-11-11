@@ -137,6 +137,7 @@ export async function startServer({ port = CONFIG.port, env = {} } = {}) {
       JWT_SECRET: CONFIG.jwtSecret,
       BCRYPT_ROUNDS: '4', // the real cost makes every test wait for a quarter of a second
       AUTH_RATE_LIMIT_MAX: '1000',
+      STUDIO_INTEREST_RATE_LIMIT_MAX: '1000',
       APP_URL: 'http://app.test',
       SMTP_HOST: '',
       SMTP_USER: '',

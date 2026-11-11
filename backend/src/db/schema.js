@@ -304,3 +304,21 @@ export const emailCodes = pgTable(
   },
   (table) => [index('email_codes_user_idx').on(table.user_id, table.created_at)]
 );
+
+// Someone who asked, on the website, to be told when Studio is ready (routes/studio.js). It is not an account: a visitor may have none,
+// so it is a table of its own, one row per address (lower case). Read by hand:
+//   SELECT * FROM studio_interest ORDER BY created_at;
+export const studioInterest = pgTable(
+  'studio_interest',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    email: text('email').notNull(),
+    role: text('role'), // who the person is: one of STUDIO_ROLES (routes/studio.js)
+    team_size: text('team_size'), // how many people work there: one of STUDIO_TEAM_SIZES
+    note: text('note'), // what matters most to them, in their own words
+    language: text('language'), // 'uk' or 'en': the page the form was on
+    wants_call: boolean('wants_call').notNull().default(false), // ticked "ready for a short conversation"
+    ...timestamps,
+  },
+  (table) => [uniqueIndex('studio_interest_email_idx').on(table.email)]
+);
