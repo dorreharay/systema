@@ -6,6 +6,7 @@ import { BLOCK_ROOM_X } from '@/components/ui/card';
 import { colors } from '@/components/ui/colors';
 import { SURFACE_EDGE } from '@/components/ui/paper';
 import { Text } from '@/components/ui/text';
+import { SELLS_PLANS } from '@/lib/billing';
 import { useI18n } from '@/lib/i18n';
 import { useIsWide } from '@/lib/layout';
 
@@ -52,7 +53,8 @@ export default function LockedInsights() {
         </Text>
         <Text className="text-center text-[13.5px] leading-[18px] text-secondary">{t('overview_locked_text')}</Text>
         <View className="mt-3 h-[42px] items-center justify-center rounded-[14px] bg-primary px-5">
-          <Text className="text-[14.5px] font-bold text-white">{t('strip_try')}</Text>
+          {/* (Where Pro cannot be bought, the page this opens only compares the plans.) */}
+          <Text className="text-[14.5px] font-bold text-white">{SELLS_PLANS ? t('strip_try') : t('subscription_compare')}</Text>
         </View>
       </View>
     </Pressable>

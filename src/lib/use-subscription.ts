@@ -19,6 +19,21 @@ export function useEntitlements() {
 }
 
 /**
+ * Which plan the account holds, as this phone counts it, or `null` where the server has no plans: cheap, nothing is counted, for what is
+ * always on the screen (the sidebar of a wide page).
+ */
+export function usePlanName() {
+  const { user } = useAuth();
+  const subscription = user?.subscription;
+  const timeZone = user?.timezone;
+  const now = useNow(60 * 60_000);
+  return useMemo(() => {
+    const state = planStateOf(subscription, [], timeZone, now);
+    return state.enabled ? state.plan : null;
+  }, [subscription, timeZone, now]);
+}
+
+/**
  * The plan of the account, what it allows and how much of the month's orders is used, as this phone can tell it. Drawn again when
  * an order is made or deleted, and every minute (the month turns, a trial ends). With the server's plans off it says so (`enabled`).
  */

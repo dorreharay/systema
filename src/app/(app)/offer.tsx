@@ -83,7 +83,7 @@ export default function Offer() {
                     ? { label: t('plan_badge_default'), tone: 'neutral' }
                     : def.plan === 'pro'
                       ? { label: t('plan_badge_recommended'), tone: 'success' }
-                      : { label: t('plan_soon'), tone: 'neutral' }
+                      : { label: t('plan_soon'), tone: 'warning' }
                 }
                 onPress={def.plan === 'studio' ? undefined : () => setSelected(def.plan as Choice)}>
                 {def.plan === 'pro' && selected === 'pro' ? (

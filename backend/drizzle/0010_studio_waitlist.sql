@@ -1,0 +1,1 @@
+ALTER TABLE "users" ADD COLUMN "studio_waitlist_at" timestamp with time zone;

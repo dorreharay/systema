@@ -3936,6 +3936,48 @@ test('Plans', 'on Free a request cannot switch the counting on or off, but a cou
 });
 
 // ---------------------------------------------------------------------------
+// The Studio waiting list: a person asks to be told when the plan for several stringers exists. It is a date on the account, and the
+// account says whether it is set (`subscription.studio_waitlist`). Nothing is sent by itself.
+// ---------------------------------------------------------------------------
+const waitlistDate = (email) => dbScalar(`SELECT studio_waitlist_at::text FROM users WHERE email = '${email}'`);
+
+test('Plans', 'a person can ask to be told when Studio is there, and take it back; the account says so', async () => {
+  await withPlans(async (server) => {
+    const s = await stringerOn(server);
+    assertEq(s.user.subscription.studio_waitlist, false, 'not on the list to begin with');
+    assertEq(await waitlistDate(s.email), '', 'no date');
+
+    const joined = await s.client.post('/api/billing/studio-waitlist');
+    assertStatus(joined, 200);
+    assertEq([joined.data.id, joined.data.subscription.studio_waitlist], [s.user.id, true], 'on the list, and the account is the answer');
+    assertEq((await subscriptionOfMe(s)).studio_waitlist, true, '/me says so too');
+    const first = await waitlistDate(s.email);
+    assertTrue(first !== '', 'there is a date');
+
+    // Asking again keeps the first date.
+    assertStatus(await s.client.post('/api/billing/studio-waitlist'), 200);
+    assertEq(await waitlistDate(s.email), first, 'the first date stays');
+
+    const left = await s.client.delete('/api/billing/studio-waitlist');
+    assertStatus(left, 200);
+    assertEq(left.data.subscription.studio_waitlist, false, 'off the list');
+    assertEq(await waitlistDate(s.email), '', 'the date is gone');
+    // Taking it back when it is not there is no error.
+    assertStatus(await s.client.delete('/api/billing/studio-waitlist'), 200);
+  });
+});
+test('Plans', 'the Studio waiting list needs a signed-in account, and does not exist where the plans are off', async (ctx) => {
+  await withPlans(async (server) => {
+    assertStatus(await new Client(server.base).post('/api/billing/studio-waitlist'), 401);
+    assertStatus(await new Client(server.base).delete('/api/billing/studio-waitlist'), 401);
+  });
+  const s = await shop(ctx);
+  assertStatus(await s.client.post('/api/billing/studio-waitlist'), 404);
+  assertStatus(await s.client.delete('/api/billing/studio-waitlist'), 404);
+  assertEq((await s.client.get('/api/auth/me')).data.subscription.studio_waitlist, false, 'and the account says it is not on the list');
+});
+
+// ---------------------------------------------------------------------------
 // The store: what RevenueCat says an account holds is written to its plan, once the app has bought or restored something (it asks the
 // server to read it) and whenever RevenueCat sends a notice. A fake RevenueCat stands in for it. The server of these tests has its
 // secret key, the header of its notices and the plans on (the port of the rate limit tests, as the Plans tests above).

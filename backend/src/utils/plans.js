@@ -76,6 +76,8 @@ export function subscriptionOf(user, now = new Date(), billing = config.billing)
     entitlements: entitlementsOf(plan, billing),
     // What the account falls back to when the phone has not heard from the server for too long.
     free: entitlementsOf('free', billing),
+    // The person asked to be told when Studio is there (POST /api/billing/studio-waitlist).
+    studio_waitlist: Boolean(user.studio_waitlist_at),
   };
 }
 

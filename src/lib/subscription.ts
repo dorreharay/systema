@@ -36,6 +36,8 @@ export type Subscription = {
   entitlements: Entitlements;
   // What the account falls back to.
   free: Entitlements;
+  // The person asked to be told when Studio is there (the server before this was added does not say: not on the list).
+  studio_waitlist?: boolean;
 };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -72,6 +74,8 @@ export type PlanState = {
   expired: boolean;
   /** The limit of orders of the month and what is used of it. `null` while nothing limits the orders. */
   usage: Usage | null;
+  /** On the list of those who want to hear when Studio is there. */
+  studioWaitlist: boolean;
 };
 
 const OFF: PlanState = {
@@ -85,6 +89,7 @@ const OFF: PlanState = {
   daysLeft: null,
   expired: false,
   usage: null,
+  studioWaitlist: false,
 };
 
 /**
@@ -142,6 +147,7 @@ export function planStateOf(
     daysLeft: endsAt === null ? null : Math.max(0, Math.ceil((endsAt - now) / DAY_MS)),
     expired: sub.expired || (!trusted && sub.plan !== 'free'),
     usage: limit === null ? null : usageOf(orders, limit, timeZone, now),
+    studioWaitlist: sub.studio_waitlist === true,
   };
 }
 

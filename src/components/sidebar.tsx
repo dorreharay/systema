@@ -18,6 +18,7 @@ import { useI18n, type TKey } from '@/lib/i18n';
 import { SIDEBAR_LOGO_SLOT, SIDEBAR_WIDTH, type LayoutMode } from '@/lib/layout';
 import { useSyncSummary } from '@/lib/offline/react';
 import { useDashboard } from '@/lib/queries';
+import { usePlanName } from '@/lib/use-subscription';
 
 const NAV_ICON = 22;
 
@@ -115,6 +116,7 @@ function Profile() {
   const { t } = useI18n();
   const router = useRouter();
   const path = usePathname();
+  const planName = usePlanName();
   const name = user?.full_name?.trim().split(/\s+/)[0] || user?.email.split('@')[0] || '';
   // The queue of the sync is a page of the settings.
   const active = under(path, '/settings') || path === '/sync';
@@ -124,9 +126,17 @@ function Profile() {
       <View className="size-[34px] items-center justify-center rounded-full" style={{ backgroundColor: colors.catalog }}>
         <Text className="text-[14px] font-semibold text-primary">{name.charAt(0).toUpperCase()}</Text>
       </View>
-      <Text className="min-w-0 flex-1 text-[14px] font-medium text-white" numberOfLines={1}>
-        {name}
-      </Text>
+      <View className="min-w-0 flex-1">
+        <Text className="text-[14px] font-medium text-white" numberOfLines={1}>
+          {name}
+        </Text>
+        {/* The plan of the account, where the server has plans on. */}
+        {planName ? (
+          <Text className="text-[12.5px] leading-4 text-white/60" numberOfLines={1}>
+            {t(planName === 'studio' ? 'plan_studio' : planName === 'pro' ? 'plan_pro' : 'plan_free')}
+          </Text>
+        ) : null}
+      </View>
       <Pressable
         accessibilityRole="link"
         accessibilityLabel={t('tab_settings')}

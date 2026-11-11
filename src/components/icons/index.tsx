@@ -46,6 +46,9 @@ export {
   Undo2,
 } from 'lucide-react-native';
 
+// A phone: where a plan is bought when it is not bought here (the card of Pro on the web).
+export { Smartphone } from 'lucide-react-native';
+
 // The magnifier of a search field (ui/search-field.tsx) is a thin outline one, like the field it was drawn for: not the heavy
 // filled `Search` below.
 export { Search as SearchOutline } from 'lucide-react-native';

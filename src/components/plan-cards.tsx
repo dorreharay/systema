@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { Pressable, View } from 'react-native';
 
-import { Check } from '@/components/icons';
+import { Check, type IconComponent } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { colors } from '@/components/ui/colors';
 import { Text } from '@/components/ui/text';
@@ -115,21 +115,42 @@ export function PlanBullets({ items, tight }: { items: string[]; tight?: boolean
 
 type PlanCardProps = {
   def: PlanCardDef;
-  badge?: { label: string; tone: 'success' | 'neutral' };
+  badge?: { label: string; tone: 'success' | 'neutral' | 'warning' };
   // The card can be chosen (the offer): it shows a round mark, and the chosen one is framed.
   selectable?: boolean;
   selected?: boolean;
+  // The card is touched: it picks the plan (the offer), or opens a page about it (Studio, which is not there yet but has a page).
   onPress?: () => void;
+  // One of a row of cards on a wide page: the price stands under the name, large, and the card is as tall as the tallest of its row,
+  // with its `footer` at the foot.
+  stacked?: boolean;
+  // At the foot of the card (see CardNote).
+  footer?: ReactNode;
   // Under the list of what the plan has: the choice of the period, a button.
   children?: ReactNode;
 };
 
 /** One plan: its name, its price, what it has. */
-export function PlanCard({ def, badge, selectable, selected, onPress, children }: PlanCardProps) {
+export function PlanCard({ def, badge, selectable, selected, onPress, stacked, footer, children }: PlanCardProps) {
   const { t } = useI18n();
-  const inactive = def.soon;
+  // Not there yet, and nothing to open: shown, and not to be touched.
+  const inactive = def.soon && !onPress;
 
-  const body = (
+  const body = stacked ? (
+    <View className={`gap-2 ${inactive ? 'opacity-60' : ''}`}>
+      <View className="flex-row items-center justify-between gap-2.5">
+        <Text className="text-[22px] font-bold">{def.name}</Text>
+        {badge ? <Badge label={badge.label} tone={badge.tone} /> : null}
+      </View>
+      <View>
+        <Text className="text-[26px] font-bold leading-8">{def.price}</Text>
+        <Text className="text-[13.5px] text-muted">{def.sub}</Text>
+      </View>
+      <View className="mt-2">
+        <PlanBullets items={def.bullets} />
+      </View>
+    </View>
+  ) : (
     <View className={`gap-2 ${inactive ? 'opacity-60' : ''}`}>
       <View className="flex-row flex-wrap items-center gap-x-2.5 gap-y-1">
         {selectable ? (
@@ -149,25 +170,53 @@ export function PlanCard({ def, badge, selectable, selected, onPress, children }
     </View>
   );
 
-  const frame = `rounded-[19px] border-2 ${selected ? 'border-primary' : 'border-transparent'}`;
+  const frame = `rounded-[19px] border-2 ${selected ? 'border-primary' : 'border-transparent'} ${stacked ? 'flex-1' : ''}`;
 
   return (
     <View className={frame}>
-      <View className="rounded-[17px] border border-line bg-white px-5 py-4">
+      <View className={`rounded-[17px] border border-line bg-white ${stacked ? 'flex-1 px-5 py-5' : 'px-5 py-4'}`}>
         {onPress && !inactive ? (
           <Pressable
-            accessibilityRole="radio"
-            accessibilityState={{ selected: !!selected }}
+            accessibilityRole={selectable ? 'radio' : 'button'}
+            accessibilityState={selectable ? { selected: !!selected } : undefined}
             accessibilityLabel={`${def.name}, ${def.price}`}
             onPress={onPress}
-            className="active:opacity-70">
+            className="hover:opacity-90 active:opacity-70">
             {body}
           </Pressable>
         ) : (
           <View accessibilityLabel={inactive ? `${def.name}, ${t('plan_soon')}` : undefined}>{body}</View>
         )}
         {children ? <View className="mt-3">{children}</View> : null}
+        {footer ? <View className="mt-auto pt-4">{footer}</View> : null}
       </View>
+    </View>
+  );
+}
+
+/**
+ * A line in a box at the foot of a plan card: where the card leads, or why the plan cannot be had here. `info` is the green one (it says
+ * something the person may need), `quiet` the grey one.
+ */
+export function CardNote({
+  label,
+  icon: Icon,
+  tone,
+  after,
+}: {
+  label: string;
+  icon?: IconComponent;
+  tone: 'quiet' | 'info';
+  // The icon stands after the words (an arrow to a page), not before them.
+  after?: boolean;
+}) {
+  const info = tone === 'info';
+  const icon = Icon ? <Icon size={18} color={info ? colors.primary : colors.muted} /> : null;
+  return (
+    <View className={`min-h-[46px] flex-row items-center justify-center gap-2 rounded-[14px] px-3 py-2 ${info ? 'bg-primary-soft' : 'bg-surface'}`}>
+      {after ? null : icon}
+      <Text className={`shrink text-center text-[14px] font-semibold leading-[18px] ${info ? 'text-primary' : 'text-muted'}`}>{label}</Text>
+      {after ? icon : null}
     </View>
   );
 }

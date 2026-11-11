@@ -1,4 +1,4 @@
-import { eq, inArray } from 'drizzle-orm';
+import { eq, inArray, sql } from 'drizzle-orm';
 import express from 'express';
 import { timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
@@ -49,6 +49,27 @@ router.post('/revenuecat', webhookOnly, async (req, res) => {
   const known = ids.length > 0 ? await db.select({ id: users.id }).from(users).where(inArray(users.id, ids)) : [];
   for (const { id } of known) await syncPlan(id);
   res.json({ ok: true, synced: known.length });
+});
+
+// Studio (several stringers in one workshop) does not exist yet; a person can ask to be told when it does. The list is a column of
+// the user (`studio_waitlist_at`, see db/schema.js) and nothing is sent by itself: whoever launches Studio reads it by hand. Both routes
+// answer with the account, as /api/auth/me does, and exist only where the plans are on, like the screens that use them.
+const plansOnly = (req, res, next) => (config.billing.enabled ? next() : next(notFound()));
+
+// POST /api/billing/studio-waitlist: puts the signed-in account on the list. Asking twice keeps the first date.
+router.post('/studio-waitlist', plansOnly, requireAuth, async (req, res) => {
+  const [user] = await db
+    .update(users)
+    .set({ studio_waitlist_at: sql`coalesce(${users.studio_waitlist_at}, now())` })
+    .where(eq(users.id, req.user.id))
+    .returning();
+  res.json(toPublicUser(user));
+});
+
+// DELETE /api/billing/studio-waitlist: takes it off the list again (nothing happens if it was not on it).
+router.delete('/studio-waitlist', plansOnly, requireAuth, async (req, res) => {
+  const [user] = await db.update(users).set({ studio_waitlist_at: null }).where(eq(users.id, req.user.id)).returning();
+  res.json(toPublicUser(user));
 });
 
 // Where the plan comes from at a real server is the store (see ../../docs/subscriptions.md). Until it is connected, and on a

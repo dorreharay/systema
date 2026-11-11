@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { Platform, Pressable, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
 import { Check } from '@/components/icons';
 import { tidy, UsageBar, useResetDate } from '@/components/plan-usage';
@@ -8,7 +8,7 @@ import { FormError } from '@/components/ui/input';
 import Sheet from '@/components/ui/sheet';
 import Shortcut from '@/components/ui/shortcut';
 import { Text } from '@/components/ui/text';
-import { TRIAL_DAYS } from '@/lib/billing';
+import { SELLS_PLANS, TRIAL_DAYS } from '@/lib/billing';
 import { useI18n } from '@/lib/i18n';
 import { usePurchase } from '@/lib/use-purchase';
 import { useSubscription } from '@/lib/use-subscription';
@@ -39,7 +39,6 @@ export default function PlanLimitSheet({ visible, onClose, onDecline, used: know
   const limit = knownLimit ?? plan.usage?.limit;
   const used = Math.max(knownUsed ?? 0, plan.usage?.used ?? 0);
   const decline = onDecline ?? onClose;
-  const web = Platform.OS === 'web';
 
   return (
     <Sheet visible={visible} onClose={onClose}>
@@ -76,7 +75,8 @@ export default function PlanLimitSheet({ visible, onClose, onDecline, used: know
           {purchase.error ? <FormError message={purchase.error} /> : null}
 
           <View className="gap-2 pt-1">
-            {web ? null : (
+            {/* (Where Pro cannot be bought, the web and Android, there is only the page that compares the plans.) */}
+            {SELLS_PLANS ? (
               <Shortcut
                 compact
                 color={colors.primary}
@@ -87,7 +87,7 @@ export default function PlanLimitSheet({ visible, onClose, onDecline, used: know
                   if (await purchase.buy('year')) onClose();
                 }}
               />
-            )}
+            ) : null}
             <Shortcut
               compact
               color={colors.surface}

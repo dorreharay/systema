@@ -1,6 +1,5 @@
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { Platform } from 'react-native';
 
 import AppShell from '@/components/app-shell';
 import DueReminders from '@/components/due-reminders';
@@ -8,6 +7,7 @@ import StoreIdentity from '@/components/store-identity';
 import { colors } from '@/components/ui/colors';
 import KeyboardWarmUp from '@/components/ui/keyboard-warm-up';
 import { useAuth } from '@/lib/auth';
+import { SELLS_PLANS } from '@/lib/billing';
 import { useIsWide } from '@/lib/layout';
 import { useOfferSeen } from '@/lib/offer';
 
@@ -18,13 +18,13 @@ export default function AppLayout() {
   const { user } = useAuth();
   const setupDone = !!user?.setup_completed;
   const wide = useIsWide();
-  // The offer is a phone's (the store is the phone's), and is shown once to an account that the plans apply to and that has no plan yet
-  // (not one that holds Pro, or that had it and lost it: that has its own page in Settings).
+  // The offer is for a platform where a plan is bought (the iPhone: SELLS_PLANS), and is shown once to an account that the plans apply to and
+  // that has no plan yet (not one that holds Pro, or that had it and lost it: that has its own page in Settings).
   const offer = useOfferSeen(user?.id);
   const subscription = user?.subscription;
   const offerNeeded =
     setupDone &&
-    Platform.OS !== 'web' &&
+    SELLS_PLANS &&
     !!subscription?.enabled &&
     subscription.plan === 'free' &&
     !subscription.expired &&
@@ -66,6 +66,8 @@ export default function AppLayout() {
         <Stack.Screen name="settings/services" />
         {/* The plan of the account: opened from Settings, from the strip on the home page and from the sheet of the limit. */}
         <Stack.Screen name="subscription" options={{ animation: 'default', gestureEnabled: true }} />
+        {/* What Studio will be, and the list to hear when it is there: opened from the card of Studio on the page of the subscription. */}
+        <Stack.Screen name="studio" options={{ animation: 'default', gestureEnabled: true }} />
         {/* The changes that have not reached the server: opened from the mark in the headers and from Settings. */}
         <Stack.Screen name="sync" options={{ animation: 'default', gestureEnabled: true }} />
       </Stack.Protected>

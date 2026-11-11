@@ -5,6 +5,8 @@
  * by hand, so that every state of the screens can be tried, and any other build says that the store is not available.
  * docs/subscriptions.md says what has to be set up in the store first.
  */
+import { Platform } from 'react-native';
+
 import { api } from '@/lib/api';
 import { ApiError } from '@/lib/api-error';
 import type { User } from '@/lib/auth-api';
@@ -14,6 +16,14 @@ import { PurchaseNotSyncedError, StoreUnavailableError } from '@/lib/store-error
 import type { Period } from '@/lib/subscription';
 
 export { StoreUnavailableError };
+
+/**
+ * Whether a plan can be bought on this platform. Only the iPhone app can: Apple's in-app purchase is the one store that is connected, and
+ * Apple's rules keep the purchase in that app, so the web page only shows the plan the account holds. Android gets it with Google Play
+ * Billing, and this becomes true there then. Where it is false the screens show the plan and say where it is bought, with no way to buy
+ * it, no offer after the setup and none of Apple's own words (restoring, managing, cancelling).
+ */
+export const SELLS_PLANS = Platform.OS === 'ios';
 
 /** The days of Pro that a first subscription costs nothing for. */
 export const TRIAL_DAYS = 14;
@@ -83,6 +93,12 @@ export async function restorePurchases(token: string, userId: string): Promise<U
 
 /** Opens Apple's page of the person's subscriptions. */
 export const openManageSubscriptions = () => openUrl(MANAGE_SUBSCRIPTIONS_URL);
+
+/** Puts the account on the list of those who want to hear when Studio is there. Answers with the profile as the server now has it. */
+export const joinStudioWaitlist = (token: string) => api<User>('/api/billing/studio-waitlist', { method: 'POST', token });
+
+/** Takes the account off that list again. */
+export const leaveStudioWaitlist = (token: string) => api<User>('/api/billing/studio-waitlist', { method: 'DELETE', token });
 
 /**
  * Development builds only: gives the account a plan in a state of the screens' choosing, so that every one of them can be looked at.

@@ -74,6 +74,10 @@ export const users = pgTable(
     plan_expires_at: timestamp('plan_expires_at', { withTimezone: true }),
     plan_trial: boolean('plan_trial').notNull().default(false),
     plan_renews: boolean('plan_renews').notNull().default(false),
+    // When the person asked to be told once the Studio plan (several stringers in one workshop) exists; empty if they did not, or took it
+    // back. Nothing sends the news by itself: whoever launches Studio reads the list by hand,
+    // `SELECT email FROM users WHERE studio_waitlist_at IS NOT NULL ORDER BY studio_waitlist_at`.
+    studio_waitlist_at: timestamp('studio_waitlist_at', { withTimezone: true }),
     // When the person showed that the address is theirs: by typing the code that was sent to it (see utils/emailVerification.js), by
     // signing in with Google or Apple, which say that the address is verified, or by opening a password reset link that was sent to it.
     // Empty until then. Where confirming is not required (a local server) nothing is written here: the API says the address is confirmed.

@@ -3,6 +3,7 @@ import { Pressable, View } from 'react-native';
 
 import { tidy, UsageBar, useResetDate } from '@/components/plan-usage';
 import { Text } from '@/components/ui/text';
+import { SELLS_PLANS } from '@/lib/billing';
 import { useI18n } from '@/lib/i18n';
 import { useSubscription } from '@/lib/use-subscription';
 
@@ -26,7 +27,8 @@ export default function PlanStrip({ framed }: { framed?: boolean }) {
       className={`gap-1.5 px-5 pb-3.5 pt-4 active:bg-surface ${framed ? '' : 'border-b border-line'}`}>
       <View className="flex-row items-baseline justify-between gap-3">
         <Text className="text-[13.5px] text-muted">{t('strip_label', { plan: t('plan_free') })}</Text>
-        <Text className="text-sm font-bold text-primary">{t('strip_try')}</Text>
+        {/* (Where Pro cannot be bought, the page it leads to only shows the plans.) */}
+        <Text className="text-sm font-bold text-primary">{SELLS_PLANS ? t('strip_try') : t('subscription_compare')}</Text>
       </View>
       <Text className="text-base font-semibold">{t('usage_line', { used: usage.used, limit: usage.limit })}</Text>
       <UsageBar used={usage.used} limit={usage.limit} />

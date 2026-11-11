@@ -77,7 +77,9 @@ assert.deepEqual(free, {
   checked_at: now.toISOString(),
   entitlements: FREE,
   free: FREE,
+  studio_waitlist: false,
 });
+assert.equal(subscriptionOf(account({ studio_waitlist_at: ago(DAY) }), now, on).studio_waitlist, true, 'on the Studio list once there is a date');
 
 const trial = subscriptionOf(
   account({ plan: 'pro', plan_period: 'year', plan_expires_at: ahead(9 * DAY), plan_trial: true, plan_renews: true }),

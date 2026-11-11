@@ -1,10 +1,10 @@
 import { Redirect, useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Platform, Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Check, ClipboardList, Eye, RotateCcw, Store } from '@/components/icons';
-import { PlanBullets, PlanCard, usePlanCards, usePrices } from '@/components/plan-cards';
+import { Check, ChevronRight, ClipboardList, Eye, RotateCcw, Smartphone, Store } from '@/components/icons';
+import { CardNote, PlanBullets, PlanCard, usePlanCards, usePrices, type PlanCardDef } from '@/components/plan-cards';
 import { tidy, UsageBar, useResetDate } from '@/components/plan-usage';
 import { Badge } from '@/components/ui/badge';
 import { Segmented } from '@/components/ui/chips';
@@ -20,12 +20,14 @@ import { useAuth } from '@/lib/auth';
 import {
   grantForDevelopment,
   openManageSubscriptions,
+  SELLS_PLANS,
   TRIAL_DAYS,
   type DevState,
 } from '@/lib/billing';
 import { describeError } from '@/lib/errors';
 import { formatTimestamp } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
+import { useGridColumns } from '@/lib/layout';
 import { openLegalPage, type LegalPage } from '@/lib/legal';
 import type { Period } from '@/lib/subscription';
 import { usePurchase } from '@/lib/use-purchase';
@@ -34,9 +36,14 @@ import { useSubscription } from '@/lib/use-subscription';
 
 const DEV_STATES: DevState[] = ['free', 'trial', 'active', 'cancelled', 'expired'];
 
+// The least a card of a plan is wide in a row of them, and how many stand side by side at most (the three plans).
+const CARD_MIN_WIDTH = 270;
+
 /**
  * Settings, Subscription: the plan the account holds, how much of the month is used, a way to Pro, and what each plan has. The plan is
- * bought through the store (lib/billing.ts); the store also turns it off, which is Apple's page and not ours.
+ * bought through the store (lib/billing.ts); the store also turns it off, which is Apple's page and not ours. Where plans are not
+ * bought (the web, Android: SELLS_PLANS), the page shows the plan and says where it is bought. On a wide screen the three plans stand in a
+ * row, each as tall as the others, with what it leads to at its foot.
  */
 export default function Subscription() {
   const { t, language } = useI18n();
@@ -50,9 +57,9 @@ export default function Subscription() {
   const purchase = usePurchase();
   const yearSaving = useYearSaving();
   const resetDate = useResetDate();
+  const columns = useGridColumns(CARD_MIN_WIDTH, 3, 'medium');
   const [period, setPeriod] = useState<Period>('year');
-  // The store is the phone's: on the web the page shows the plan and says where to change it.
-  const web = Platform.OS === 'web';
+  const android = Platform.OS === 'android';
 
   // A server with the plans off has nothing to show (a link to this page, kept from a time when it had).
   if (!user || !plan.enabled) return <Redirect href="/home" />;
@@ -127,44 +134,81 @@ export default function Subscription() {
   );
 
   // --- The way to Pro: Free, and a Pro that has run out ----------------------------------------
+  // Only where Pro is bought. Elsewhere the card of Pro says where it is bought (below), so there is nothing to say twice.
 
-  const promo = paid ? null : (
-    <View className="gap-3 rounded-[18px] border border-[#cfe0d8] bg-primary-soft p-5">
-      <Text accessibilityRole="header" className="text-[17.5px] font-bold leading-[23px] text-primary">
-        {plan.expired ? t('subscription_return_pro') : t('plan_try_pro', { days: TRIAL_DAYS })}
-      </Text>
-      <PlanBullets items={[t('plan_bullet_unlimited'), t('plan_bullet_stock'), t('plan_bullet_overview')]} tight />
-      {web ? (
-        <Text className="text-[13.5px] leading-[18px] text-secondary">{t('subscription_web_note')}</Text>
+  const promo =
+    paid || !SELLS_PLANS ? null : (
+      <View className="gap-3 rounded-[18px] border border-[#cfe0d8] bg-primary-soft p-5">
+        <Text accessibilityRole="header" className="text-[17.5px] font-bold leading-[23px] text-primary">
+          {plan.expired ? t('subscription_return_pro') : t('plan_try_pro', { days: TRIAL_DAYS })}
+        </Text>
+        <PlanBullets items={[t('plan_bullet_unlimited'), t('plan_bullet_stock'), t('plan_bullet_overview')]} tight />
+        <Segmented<Period>
+          options={[
+            { value: 'year', label: t('period_year_saving', { percent: yearSaving }) },
+            { value: 'month', label: t('period_month') },
+          ]}
+          value={period}
+          onChange={setPeriod}
+        />
+        <Text className="text-[13.5px] leading-[18px] text-secondary">
+          {t('plan_then_price', { yearly: prices.proYear, monthly: prices.proMonth })}
+        </Text>
+        {purchase.error ? <FormError message={purchase.error} /> : null}
+        <Shortcut
+          compact
+          color={colors.primary}
+          contentColor={colors.white}
+          label={plan.expired ? t('subscription_return_pro') : t('strip_try')}
+          loading={purchase.busy === 'buy'}
+          onPress={() => void purchase.buy(period)}
+        />
+      </View>
+    );
+
+  // --- The plans ---------------------------------------------------------------------------------
+
+  // Several in a row (a wide screen): the price under the name, and the foot of each card says what it leads to.
+  const stacked = columns > 1;
+
+  const renderCard = (def: PlanCardDef) => {
+    const current = def.plan === plan.plan;
+    let footer: ReactNode;
+    if (def.plan === 'studio') {
+      footer = plan.studioWaitlist ? (
+        <CardNote tone="info" icon={Check} label={t('studio_card_listed')} />
       ) : (
-        <>
-          <Segmented<Period>
-            options={[
-              { value: 'year', label: t('period_year_saving', { percent: yearSaving }) },
-              { value: 'month', label: t('period_month') },
-            ]}
-            value={period}
-            onChange={setPeriod}
-          />
-          <Text className="text-[13.5px] leading-[18px] text-secondary">
-            {t('plan_then_price', { yearly: prices.proYear, monthly: prices.proMonth })}
-          </Text>
-          {purchase.error ? <FormError message={purchase.error} /> : null}
-          <Shortcut
-            compact
-            color={colors.primary}
-            contentColor={colors.white}
-            label={plan.expired ? t('subscription_return_pro') : t('strip_try')}
-            loading={purchase.busy === 'buy'}
-            onPress={() => void purchase.buy(period)}
-          />
-        </>
-      )}
-    </View>
-  );
+        <CardNote tone="quiet" icon={ChevronRight} after label={t('studio_card_more')} />
+      );
+    } else if (def.plan === 'pro' && !SELLS_PLANS && !current) {
+      // The web points to the iPhone app; on Android, which may be all the person has, it is said straight that there is no purchase yet.
+      footer = <CardNote tone="info" icon={Smartphone} label={android ? t('plan_buy_android') : t('plan_buy_in_app')} />;
+    }
+    return (
+      <PlanCard
+        def={def}
+        stacked={stacked}
+        badge={
+          current
+            ? { label: t('plan_badge_current'), tone: 'success' }
+            : def.soon
+              ? { label: t('plan_soon'), tone: 'warning' }
+              : def.plan === 'pro' && !paid
+                ? { label: t('plan_badge_recommended'), tone: 'success' }
+                : undefined
+        }
+        selected={current}
+        onPress={def.plan === 'studio' ? () => router.push('/studio') : undefined}
+        footer={footer}
+      />
+    );
+  };
+
+  const rows: PlanCardDef[][] = [];
+  for (let at = 0; at < cards.length; at += columns) rows.push(cards.slice(at, at + columns));
 
   return (
-    <Screen flush footer={<View style={{ height: Math.max(insets.bottom, 12) + 24 }} />}>
+    <Screen flush width="medium" footer={<View style={{ height: Math.max(insets.bottom, 12) + 24 }} />}>
       <DetailHeader floating title={t('subscription_title')} />
       <DetailScroll contentContainerClassName="gap-page p-page pb-12" showsVerticalScrollIndicator={false}>
         <View className="rounded-[18px] border border-line bg-white p-5">{status}</View>
@@ -172,32 +216,33 @@ export default function Subscription() {
 
         <Section title={t('subscription_compare')}>
           <View className="gap-3">
-            {cards.map((def) => (
-              <PlanCard
-                key={def.plan}
-                def={def}
-                badge={
-                  def.plan === plan.plan
-                    ? { label: t('plan_badge_current'), tone: 'success' }
-                    : def.soon
-                      ? { label: t('plan_soon'), tone: 'neutral' }
-                      : undefined
-                }
-                selected={def.plan === plan.plan}
-              />
+            {rows.map((row) => (
+              <View key={row[0].plan} className="flex-row gap-3">
+                {row.map((def) => (
+                  <View key={def.plan} className="min-w-0 flex-1">
+                    {renderCard(def)}
+                  </View>
+                ))}
+                {/* The last row has fewer cards than the others: empty cells keep them the width of the rest. */}
+                {Array.from({ length: columns - row.length }, (_, cell) => (
+                  <View key={`empty-${cell}`} className="min-w-0 flex-1" />
+                ))}
+              </View>
             ))}
           </View>
         </Section>
 
         <ListGroup>
-          {web ? null : <ListRow icon={RotateCcw} label={t('subscription_restore')} onPress={() => void restore()} />}
-          {web ? null : <ListRow icon={Store} label={t('subscription_manage')} onPress={() => void openManageSubscriptions()} />}
+          {SELLS_PLANS ? <ListRow icon={RotateCcw} label={t('subscription_restore')} onPress={() => void restore()} /> : null}
+          {SELLS_PLANS ? <ListRow icon={Store} label={t('subscription_manage')} onPress={() => void openManageSubscriptions()} /> : null}
           <ListRow icon={ClipboardList} label={t('settings_terms')} onPress={() => void openLegal('terms')} />
           <ListRow icon={Eye} label={t('settings_privacy_policy')} onPress={() => void openLegal('privacy')} />
         </ListGroup>
-        {web || !purchase.error || !paid ? null : <FormError message={purchase.error} />}
+        {!SELLS_PLANS || !purchase.error || !paid ? null : <FormError message={purchase.error} />}
 
-        <Text className="px-1 text-[12.5px] leading-[17px] text-muted">{t('subscription_footer')}</Text>
+        <Text className="px-1 text-[12.5px] leading-[17px] text-muted">
+          {SELLS_PLANS ? t('subscription_footer') : android ? t('subscription_android_note') : t('subscription_web_note')}
+        </Text>
 
         {/* Development builds only: every state of this page can be looked at. (Not in the texts of the app: nobody else sees it.) */}
         {__DEV__ ? (

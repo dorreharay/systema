@@ -232,6 +232,12 @@ unless `BILLING_ENABLED=true`: every account then has everything, nothing is cou
   asks RevenueCat for the state of those accounts. A notice about nobody here, and a `TEST`, are answered `200`; one the server could not deal
   with because RevenueCat could not be asked is answered `502`, so that RevenueCat sends it again. The entitlements are `REVENUECAT_PRO_ENTITLEMENT`
   and `REVENUECAT_STUDIO_ENTITLEMENT` (`pro` and `studio`).
+- **The Studio waiting list.** Studio (several stringers in one workshop) does not exist yet; a person can ask to hear when it does.
+  `POST /api/billing/studio-waitlist` puts the signed-in account on the list (a second call keeps the first date) and
+  `DELETE /api/billing/studio-waitlist` takes it off; both answer with the user, whose `subscription.studio_waitlist` says whether the account
+  is on it, and both are a `404` where `BILLING_ENABLED` is off. The list is `users.studio_waitlist_at` (migration 0010) and nothing sends
+  the news by itself: whoever launches Studio reads it by hand,
+  `SELECT email FROM users WHERE studio_waitlist_at IS NOT NULL ORDER BY studio_waitlist_at`.
 
 ### Stringing: clients, rackets, strings, services, orders
 
