@@ -4,7 +4,7 @@ import { Pressable, View } from 'react-native';
 import { Check, Trash2 } from '@/components/icons';
 import PlusIcon from '@/components/icons/plus-icon';
 import { SUGGESTIONS_SHOWN, SUGGEST_DELAY_MS, Suggestions } from '@/components/reference-suggestions';
-import { StockFields, readStock } from '@/components/stock';
+import { StockFields, StockLocked, readStock, useStockOn } from '@/components/stock';
 import { BUTTON_RADIUS } from '@/components/ui/button-radius';
 import { colors } from '@/components/ui/colors';
 import { useConfirm } from '@/components/ui/confirm';
@@ -16,7 +16,7 @@ import { Text } from '@/components/ui/text';
 import { useToast } from '@/components/ui/toast';
 import { useAuth } from '@/lib/auth';
 import { describeError } from '@/lib/errors';
-import { currencySymbol, formatNumber, parseDecimal } from '@/lib/format';
+import { currencySymbol, formatNumber, optionalLabel, parseDecimal } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import {
   useCreateString,
@@ -51,7 +51,9 @@ function StringForm({ string, initialModel, onClose, onSaved }: Omit<StringFormS
   const [gauge, setGauge] = useState(string?.gauge ?? '');
   const [type, setType] = useState<StringType>(string?.type ?? 'polyester');
   const [price, setPrice] = useState(string?.default_price == null ? '' : formatNumber(string.default_price, 2));
-  // A new string is counted, with one set in stock: what was just bought, or is about to be used.
+  // A new string is counted, with one set in stock: what was just bought, or is about to be used. Where the plan does not count the stock
+  // (Free) none of it is asked and nothing of it is sent: a string made there is not counted, and the count of one that was is left alone.
+  const stockOn = useStockOn();
   const [track, setTrack] = useState(string?.track_stock ?? true);
   const [stock, setStock] = useState(string ? formatNumber(string.stock, 1) : '1');
   const [errors, setErrors] = useState<{ brand?: string; model?: string; price?: string; stock?: string }>({});
@@ -96,7 +98,7 @@ function StringForm({ string, initialModel, onClose, onSaved }: Omit<StringFormS
   const save = async () => {
     if (saving) return;
     const amount = parseDecimal(price);
-    const counted = track ? readStock('string', stock) : null;
+    const counted = stockOn && track ? readStock('string', stock) : null;
     const next = {
       brand: brand.trim() ? undefined : t('error_brand_required'),
       model: model.trim() ? undefined : t('error_model_required'),
@@ -115,7 +117,7 @@ function StringForm({ string, initialModel, onClose, onSaved }: Omit<StringFormS
         gauge: gauge || null,
         type,
         default_price: amount,
-        track_stock: track,
+        track_stock: stockOn && track,
         ...(counted && 'value' in counted ? { stock: counted.value } : {}),
       };
       const saved = string
@@ -226,7 +228,7 @@ function StringForm({ string, initialModel, onClose, onSaved }: Omit<StringFormS
           <Input
             ref={gaugeRef}
             className="flex-1"
-            label={`${t('field_gauge')} · ${t('optional')}`}
+            label={optionalLabel(t('field_gauge'), t('optional'))}
             value={gauge}
             onChangeText={setGauge}
             placeholder="1.25 mm"
@@ -234,7 +236,7 @@ function StringForm({ string, initialModel, onClose, onSaved }: Omit<StringFormS
           />
           <NumberInput
             className="flex-1"
-            label={`${t('field_default_price')} · ${t('optional')}`}
+            label={optionalLabel(t('field_default_price'), t('optional'))}
             value={price}
             onChangeText={(value) => {
               setPrice(value);
@@ -273,17 +275,21 @@ function StringForm({ string, initialModel, onClose, onSaved }: Omit<StringFormS
             </View>
           </View>
         ) : null}
-        <StockFields
-          kind="string"
-          track={track}
-          onTrack={setTrack}
-          stock={stock}
-          onStock={(value) => {
-            setStock(value);
-            setErrors((current) => ({ ...current, stock: undefined }));
-          }}
-          error={errors.stock}
-        />
+        {stockOn ? (
+          <StockFields
+            kind="string"
+            track={track}
+            onTrack={setTrack}
+            stock={stock}
+            onStock={(value) => {
+              setStock(value);
+              setErrors((current) => ({ ...current, stock: undefined }));
+            }}
+            error={errors.stock}
+          />
+        ) : (
+          <StockLocked onClose={onClose} />
+        )}
         {formError ? <FormError message={formError} /> : null}
       </EnterSubmits>
       <View className="gap-2 pt-4">

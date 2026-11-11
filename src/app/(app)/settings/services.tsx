@@ -9,11 +9,13 @@ import AppSwitch from '@/components/ui/app-switch';
 import { Badge } from '@/components/ui/badge';
 import Card from '@/components/ui/card';
 import { colors } from '@/components/ui/colors';
+import { CARD_GAP } from '@/components/ui/page';
 import Section from '@/components/ui/section';
 import { DetailHeader, DetailScroll, Screen } from '@/components/ui/screen';
+import SearchField from '@/components/ui/search-field';
 import Shortcut from '@/components/ui/shortcut';
 import { ListSkeleton } from '@/components/ui/skeleton';
-import { EmptyState, ErrorState } from '@/components/ui/states';
+import { EmptyState, ErrorState, NoResults } from '@/components/ui/states';
 import { Text } from '@/components/ui/text';
 import { useToast } from '@/components/ui/toast';
 import { useAuth } from '@/lib/auth';
@@ -22,13 +24,16 @@ import { formatMoney } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import { useServices, useUpdateService } from '@/lib/queries';
 import type { Service } from '@/lib/types';
+import { useSearch } from '@/lib/use-search';
 
 export default function ServicesAndPricing() {
   const { user } = useAuth();
   const { t, language } = useI18n();
   const toast = useToast();
   const insets = useSafeAreaInsets();
-  const services = useServices();
+  const search = useSearch();
+  const { query } = search;
+  const services = useServices(query);
   const update = useUpdateService();
   const [editing, setEditing] = useState<Service | 'new' | null>(null);
 
@@ -52,7 +57,8 @@ export default function ServicesAndPricing() {
         <Text className="text-base font-semibold" numberOfLines={1}>
           {service.name}
         </Text>
-        <View className="flex-row items-center gap-2">
+        {/* (The badge of the main service says in words that every order gets it: on a narrow screen, or beside a long price, it goes under the price.) */}
+        <View className="flex-row flex-wrap items-center gap-x-2 gap-y-1">
           <Text className="text-[16.5px] text-muted">
             {service.price === null
               ? t('service_no_price')
@@ -72,6 +78,8 @@ export default function ServicesAndPricing() {
 
   const active = services.data?.filter((service) => service.active) ?? [];
   const archived = services.data?.filter((service) => !service.active) ?? [];
+  // There is something to search in, or something is being searched for (the field stays when the words match nothing).
+  const searchShown = !!services.data && (services.data.length > 0 || search.text !== '');
 
   return (
     <Screen
@@ -88,28 +96,49 @@ export default function ServicesAndPricing() {
       }
       footer={<View style={{ height: Math.max(insets.bottom, 12) + 24 }} />}>
       <DetailHeader floating title={t('settings_services')} />
-      <DetailScroll contentContainerClassName="gap-page p-page pb-28 md:pb-12" showsVerticalScrollIndicator={false}>
+      <DetailScroll
+        contentContainerClassName="gap-page p-page pb-28 md:pb-12"
+        showsVerticalScrollIndicator={false}
+        // A tap on the clear button of the field, or on a service, does not stop at the keyboard.
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag">
         <Text className="text-[16.5px] text-muted">{t('services_hint')}</Text>
+        {searchShown ? (
+          // The group under the field comes at half the usual gap of the page (16 px).
+          <SearchField
+            className="-mb-2"
+            value={search.text}
+            onChangeText={search.setText}
+            placeholder={t('services_search_placeholder')}
+          />
+        ) : null}
         {services.isLoading ? (
           <ListSkeleton variant="row" />
         ) : services.isError ? (
           <ErrorState error={services.error} onRetry={() => services.refetch()} />
         ) : services.data && services.data.length === 0 ? (
-          <EmptyState
-            icon={Tags}
-            title={t('services_empty_title')}
-            message={t('services_empty_message')}
-            actionLabel={t('add_service')}
-            onAction={() => setEditing('new')}
-          />
+          query ? (
+            <NoResults query={query} />
+          ) : (
+            <EmptyState
+              icon={Tags}
+              title={t('services_empty_title')}
+              message={t('services_empty_message')}
+              actionLabel={t('add_service')}
+              onAction={() => setEditing('new')}
+            />
+          )
         ) : (
           <>
-            <Section title={t('services_active')}>
-              <View className="gap-3">{active.map(row)}</View>
-            </Section>
+            {/* While something is searched for, a group with nothing found in it is not shown. */}
+            {active.length > 0 || !query ? (
+              <Section title={t('services_active')}>
+                <View className={CARD_GAP}>{active.map(row)}</View>
+              </Section>
+            ) : null}
             {archived.length > 0 ? (
               <Section title={t('services_archived')}>
-                <View className="gap-3">{archived.map(row)}</View>
+                <View className={CARD_GAP}>{archived.map(row)}</View>
               </Section>
             ) : null}
           </>

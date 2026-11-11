@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { users } from '../db/schema.js';
+import { needsConfirmation } from '../utils/emailVerified.js';
 import { HttpError, isUuid } from '../utils/http.js';
 import { SESSION_COOKIE, verifyToken } from '../utils/session.js';
 
@@ -10,7 +11,19 @@ export function readToken(req) {
   return req.cookies?.[SESSION_COOKIE] ?? header?.[1];
 }
 
-/** Sets `req.user` to the signed-in user, or answers 401. */
+/**
+ * Put before `requireAuth` on a route that an account that has not confirmed its email address may use (to ask for the code, to type it
+ * in, to see the profile, to delete the account). Every other route turns such an account away.
+ */
+export const allowUnverified = (req, res, next) => {
+  req.allowUnverified = true;
+  next();
+};
+
+/**
+ * Sets `req.user` to the signed-in user, or answers 401. Where the email address has to be confirmed (config.emailVerification) an account
+ * that has not confirmed it is answered 403 `email_not_verified`, unless the route allows it (see `allowUnverified`).
+ */
 export async function requireAuth(req, res, next) {
   const token = readToken(req);
   if (!token) throw new HttpError(401, 'Not authenticated', { code: 'unauthenticated' });
@@ -33,6 +46,10 @@ export async function requireAuth(req, res, next) {
   // change is accepted.
   if (user.password_changed_at && payload.iat < Math.floor(user.password_changed_at.getTime() / 1000)) {
     throw new HttpError(401, 'The password was changed. Sign in again.', { code: 'invalid_token' });
+  }
+
+  if (!req.allowUnverified && needsConfirmation(user)) {
+    throw new HttpError(403, 'Confirm your email address first', { code: 'email_not_verified' });
   }
 
   req.user = user;

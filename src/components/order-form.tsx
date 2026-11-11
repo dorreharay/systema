@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { useRef, useState, type ComponentRef, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ComponentRef, type ReactNode } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -13,6 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import ClientFormSheet from '@/components/client-form-sheet';
 import { Calendar, Check, ChevronDown, ChevronUp, Clock, Plus, RotateCcw } from '@/components/icons';
 import UserIcon from '@/components/icons/user-icon';
+import PlanLimitSheet from '@/components/plan-limit-sheet';
 import RacketFormSheet from '@/components/racket-form-sheet';
 import { StockLine } from '@/components/stock';
 import StringFormSheet from '@/components/string-form-sheet';
@@ -27,7 +28,8 @@ import { FormError, Input, NumberInput } from '@/components/ui/input';
 import { ServerPhoto } from '@/components/ui/photo';
 import PickerField from '@/components/ui/picker-field';
 import { TwoColumns } from '@/components/ui/page';
-import { DetailHeader, DetailScroll, Screen, useDetailContentTop } from '@/components/ui/screen';
+import { RevealContext, usePageReveal } from '@/components/ui/reveal';
+import { DetailHeader, DetailScroll, Screen, useDetailContentTop, useDetailHeaderHeight } from '@/components/ui/screen';
 import SearchPicker, { PickerHeading } from '@/components/ui/search-picker';
 import { afterSheetsClosed } from '@/components/ui/sheet';
 import Shortcut from '@/components/ui/shortcut';
@@ -42,6 +44,7 @@ import {
   formatDate,
   formatMoney,
   formatNumber,
+  optionalLabel,
   orderNumber,
   racketName,
   todayIso,
@@ -79,6 +82,7 @@ import {
 } from '@/lib/queries';
 import { nameKey, withoutOwnedRackets } from '@/lib/reference';
 import type { CatalogString, Client, OrderDetail, Racket, ReferenceRacket } from '@/lib/types';
+import { useSubscription } from '@/lib/use-subscription';
 
 type SectionKey = 'customer' | 'strings' | 'pricing';
 
@@ -177,6 +181,18 @@ export default function OrderForm({ initial, order }: OrderFormProps) {
   const [timeOpen, setTimeOpen] = useState(false);
   const [removedPhotos, setRemovedPhotos] = useState<string[]>([]);
 
+  // The plan's limit of new orders in a month. A form that opens for a new order when the month is used up shows the sheet at once,
+  // over the empty form; an order that the server turns away for the same reason (its count is newer than the phone's) shows it too.
+  const plan = useSubscription();
+  const [limit, setLimit] = useState<{ open: boolean; used?: number; limit?: number }>({ open: false });
+  const limitAsked = useRef(false);
+  const limitReached = !!plan.usage?.reached;
+  useEffect(() => {
+    if (editing || !limitReached || limitAsked.current) return;
+    limitAsked.current = true;
+    setLimit({ open: true });
+  }, [editing, limitReached]);
+
   const [clientQuery, setClientQuery] = useState('');
   const [racketQuery, setRacketQuery] = useState('');
   const [stringQuery, setStringQuery] = useState('');
@@ -206,6 +222,9 @@ export default function OrderForm({ initial, order }: OrderFormProps) {
 
   const contentTop = useDetailContentTop();
   const scroll = useRef<ComponentRef<typeof ScrollView>>(null);
+  // On Android the keyboard covers the foot of the page (see the `KeyboardAvoidingView` below): the field that has the cursor is brought
+  // into sight above it, the notes of several lines too, which the system leaves under it. (Nothing on iOS and the web.)
+  const pageReveal = usePageReveal(scroll, useDetailHeaderHeight());
   // Where each section starts, to scroll to the first one with a mistake.
   const [sectionY, setSectionY] = useState<Partial<Record<SectionKey, number>>>({});
   const trackSection = (key: SectionKey) => (event: LayoutChangeEvent) => {
@@ -353,7 +372,10 @@ export default function OrderForm({ initial, order }: OrderFormProps) {
       else router.replace({ pathname: '/orders/[id]', params: { id: saved.id } });
     } catch (error) {
       // What was typed stays. What has run out, or is gone, is named under its field; the rest is said in general.
-      if (isApiError(error, 'out_of_stock')) {
+      if (isApiError(error, 'order_limit_reached')) {
+        // The plan has no more orders this month: the way to Pro, not an error.
+        setLimit({ open: true, used: error.data?.used, limit: error.data?.limit });
+      } else if (isApiError(error, 'out_of_stock')) {
         // The lists said there was enough: they show what is left now, in the pickers too.
         refreshCatalog();
         const outOfStock = { key: 'order_error_out_of_stock' as const };
@@ -429,15 +451,18 @@ export default function OrderForm({ initial, order }: OrderFormProps) {
         floating
         title={editing ? t('order_edit_title', { number: orderNumber(order.number) }) : t('new_order_title')}
       />
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1">
+      {/* The keyboard covers the foot of the page on Android as well (the window is edge to edge and does not shrink for it). */}
+      <KeyboardAvoidingView behavior={Platform.OS === 'web' ? undefined : 'padding'} className="flex-1">
         {/* Enter in a field of one line creates the order, on the web (the dock's button is in the header there). */}
         <EnterSubmits
           className="flex-1"
           onSubmit={() => {
             if (!submitting) void submit();
           }}>
+        <RevealContext value={pageReveal.reveal}>
         <DetailScroll
           ref={scroll}
+          {...pageReveal.scrollProps}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
           contentContainerClassName="gap-4 p-page pb-28 md:pb-12">
@@ -518,7 +543,7 @@ export default function OrderForm({ initial, order }: OrderFormProps) {
             />
             {draft.customerStrings ? (
               <Input
-                label={`${t('field_strings')} · ${t('optional')}`}
+                label={optionalLabel(t('field_strings'), t('optional'))}
                 value={draft.customerStringName}
                 onChangeText={(customerStringName) => update({ customerStringName })}
                 placeholder={t('order_customer_strings_placeholder')}
@@ -620,7 +645,7 @@ export default function OrderForm({ initial, order }: OrderFormProps) {
                   />
                 </View>
                 <Input
-                  label={`${t('order_stringing_notes')} · ${t('optional')}`}
+                  label={optionalLabel(t('order_stringing_notes'), t('optional'))}
                   value={draft.stringingNotes}
                   onChangeText={(stringingNotes) => update({ stringingNotes })}
                   placeholder={t('order_stringing_notes_placeholder')}
@@ -718,7 +743,7 @@ export default function OrderForm({ initial, order }: OrderFormProps) {
               onPress={() => setDateTarget('received')}
             />
             <PickerField
-              label={`${t('order_due_date')} · ${t('optional')}`}
+              label={optionalLabel(t('order_due_date'), t('optional'))}
               value={draft.dueDate ? formatDate(draft.dueDate, language, today) : undefined}
               placeholder={t('order_no_due_date')}
               icon={<Calendar size={18} color={colors.muted} />}
@@ -726,7 +751,7 @@ export default function OrderForm({ initial, order }: OrderFormProps) {
             />
             {draft.dueDate ? (
               <PickerField
-                label={`${t('order_due_time')} · ${t('optional')}`}
+                label={optionalLabel(t('order_due_time'), t('optional'))}
                 value={draft.dueTime ?? undefined}
                 placeholder={t('order_no_due_time')}
                 icon={<Clock size={18} color={colors.muted} />}
@@ -738,7 +763,7 @@ export default function OrderForm({ initial, order }: OrderFormProps) {
           {/* Notes */}
           <FormSection title={t('order_notes')}>
             <Input
-              label={`${t('order_notes')} · ${t('optional')}`}
+              label={optionalLabel(t('order_notes'), t('optional'))}
               value={draft.notes}
               onChangeText={(notes) => update({ notes })}
               placeholder={t('order_notes_placeholder')}
@@ -766,6 +791,7 @@ export default function OrderForm({ initial, order }: OrderFormProps) {
 
           {formError ? <FormError message={formError} /> : null}
         </DetailScroll>
+        </RevealContext>
         </EnterSubmits>
       </KeyboardAvoidingView>
 
@@ -798,7 +824,7 @@ export default function OrderForm({ initial, order }: OrderFormProps) {
             <Text className="text-[14.3px] text-muted">
               {[client.phone, t('rackets_count', { count: client.rackets_count })]
                 .filter(Boolean)
-                .join(' · ')}
+                .join(', ')}
             </Text>
           </>
         )}
@@ -842,7 +868,7 @@ export default function OrderForm({ initial, order }: OrderFormProps) {
             : undefined
         }
         // A racket of the catalog that has run out is shown, but is not to be chosen: its stock is set in the catalog.
-        isDisabled={(row) => fromStock && row.kind === 'own' && !row.racket.available}
+        isDisabled={(row) => plan.entitlements.stock && fromStock && row.kind === 'own' && !row.racket.available}
         renderItem={(row) => {
           if (row.kind === 'heading') {
             return (
@@ -862,7 +888,7 @@ export default function OrderForm({ initial, order }: OrderFormProps) {
               ) : (
                 <Text className="text-[14.3px] text-muted" numberOfLines={1}>
                   {row.racket.client_name}
-                  {row.racket.last_setup ? ` · ${describeSetup(row.racket.last_setup, draft.unit, t)}` : ''}
+                  {row.racket.last_setup ? `, ${describeSetup(row.racket.last_setup, draft.unit, t)}` : ''}
                 </Text>
               )}
             </>
@@ -896,7 +922,7 @@ export default function OrderForm({ initial, order }: OrderFormProps) {
           afterSheetsClosed(() => setCreating({ kind: 'string', name, target }));
         }}
         // A string that has run out is shown, but is not to be chosen: its stock is set in the catalog.
-        isDisabled={(string) => !string.available}
+        isDisabled={(string) => plan.entitlements.stock && !string.available}
         renderItem={(string) => (
           <>
             <Text className="text-base font-medium">{stringLabel(string)}</Text>
@@ -906,7 +932,7 @@ export default function OrderForm({ initial, order }: OrderFormProps) {
                 string.default_price === null ? null : formatMoney(string.default_price, currency, language),
               ]
                 .filter(Boolean)
-                .join(' · ')}
+                .join(', ')}
             </Text>
             <StockLine kind="string" item={string} />
           </>
@@ -966,6 +992,17 @@ export default function OrderForm({ initial, order }: OrderFormProps) {
         onClose={() => setTimeOpen(false)}
         value={draft.dueTime}
         onChange={(dueTime) => update({ dueTime })}
+      />
+      <PlanLimitSheet
+        visible={limit.open}
+        used={limit.used}
+        limit={limit.limit}
+        onClose={() => setLimit((current) => ({ ...current, open: false }))}
+        // "Not now" leaves the form: there is nothing to fill in for an order that cannot be made.
+        onDecline={() => {
+          setLimit((current) => ({ ...current, open: false }));
+          if (!editing) router.back();
+        }}
       />
     </Screen>
   );

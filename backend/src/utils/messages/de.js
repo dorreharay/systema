@@ -9,6 +9,12 @@ export default {
     expiry: 'Der Link ist {minutes} Min. gültig. Falls Sie keine Änderung Ihres Passworts angefordert haben, können Sie diese E-Mail einfach ignorieren.',
     subject: 'Passwort für {appName} zurücksetzen',
   },
+  verification: {
+    // The email with the code that confirms an address: {code} is the six digits, {minutes} how long the code works, {appName} the name of the app.
+    subject: 'Ihr Bestätigungscode für {appName}: {code}',
+    intro: 'Ihr Bestätigungscode:',
+    expiry: 'Der Code ist {minutes} Min. gültig. Falls Sie kein Konto erstellt haben, ignorieren Sie diese E-Mail einfach.',
+  },
   page: {
     opening: '{name} wird geöffnet',
     explain: 'Die App öffnet sich, damit Sie ein neues Passwort festlegen können.',
@@ -18,7 +24,7 @@ export default {
     broken: 'Der Link ist abgelaufen oder wurde bereits verwendet. Tippen Sie in der App auf „Passwort vergessen?“, um einen neuen anzufordern.',
   },
   services: {
-    labor: 'Bespannung',
+    labor: 'Hauptleistung',
     grip: 'Griffbandwechsel',
     overgrip: 'Overgrip anbringen',
   },

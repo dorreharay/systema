@@ -6,10 +6,12 @@ import { db } from '../db/index.js';
 import { users } from '../db/schema.js';
 import { isValidTimeZone } from '../utils/dates.js';
 import { createDefaultServices, createStarterCatalog } from '../utils/defaults.js';
-import { requireAuth } from '../middleware/auth.js';
+import { allowUnverified, requireAuth } from '../middleware/auth.js';
 import { authLimiter } from '../middleware/rateLimit.js';
 import { validateBody } from '../middleware/validate.js';
 import { sendEmailsBestEffort } from '../utils/email.js';
+import { confirmCode, ensureCode, sendCode } from '../utils/emailVerification.js';
+import { needsConfirmation } from '../utils/emailVerified.js';
 import { LANGUAGES } from '../utils/messages/index.js';
 import { passwordResetEmail } from '../utils/emailTemplates.js';
 import { exchangeAppleAuthorizationCode, revokeAppleToken, verifyAppleIdentityToken } from '../utils/apple.js';
@@ -94,6 +96,7 @@ const resetPasswordSchema = z.object({
   token: z.string({ error: 'Token is required' }).min(1, 'Token is required'),
   password: newPasswordSchema,
 });
+const verifyEmailSchema = z.object({ code: z.string({ error: 'The code is required' }).max(32) });
 
 /** What a sign-in or sign-up answers with: the user, and the token for a client that has no cookies. */
 function signIn(res, user, status = 200) {
@@ -129,6 +132,11 @@ router.post('/register', authLimiter, validateBody(registerSchema), async (req, 
     throw err;
   }
 
+  // Where the address has to be confirmed (production) the code goes to it now. Not waited for: the person asks again if it does not come.
+  if (needsConfirmation(user)) {
+    void sendCode(user, { limits: false }).catch((error) => console.error('[email] Could not make the confirmation code:', error.message));
+  }
+
   signIn(res, user, 201);
 });
 
@@ -149,6 +157,12 @@ router.post('/login', authLimiter, validateBody(loginSchema), async (req, res) =
   // Said only after the password is right, so it does not reveal which addresses have an account.
   if (!user.is_active) {
     throw new HttpError(403, 'Account is inactive. Contact support.', { code: 'account_inactive' });
+  }
+
+  // An account that has not confirmed its address is signed in all the same (the app asks it for the code); a code is sent now if the
+  // last one has run out.
+  if (needsConfirmation(user)) {
+    void ensureCode(user).catch((error) => console.error('[email] Could not make the confirmation code:', error.message));
   }
 
   signIn(res, user);
@@ -178,6 +192,8 @@ async function accountForGoogle({ sub, email, name }, language) {
       .update(users)
       .set({
         google_sub: sub,
+        // Google has shown whose address it is.
+        ...(!sameEmail.email_verified_at && { email_verified_at: new Date() }),
         ...(!sameEmail.full_name && { full_name: name }),
         ...(sameEmail.password_hash && { password_hash: null, password_changed_at: new Date() }),
       })
@@ -189,7 +205,7 @@ async function accountForGoogle({ sub, email, name }, language) {
   const user = await db.transaction(async (tx) => {
     const [created] = await tx
       .insert(users)
-      .values({ email, full_name: name, google_sub: sub, language: accountLanguage(language) })
+      .values({ email, full_name: name, google_sub: sub, email_verified_at: new Date(), language: accountLanguage(language) })
       .returning();
     await createDefaultServices(tx, created.id, created.language);
     await createStarterCatalog(tx, created.id);
@@ -257,6 +273,8 @@ async function accountForApple({ sub, email, emailVerified }, fullName, language
       .update(users)
       .set({
         apple_sub: sub,
+        // Apple calls the address verified (checked above).
+        ...(!sameEmail.email_verified_at && { email_verified_at: new Date() }),
         ...(sameEmail.password_hash && { password_hash: null, password_changed_at: new Date() }),
       })
       .where(eq(users.id, sameEmail.id))
@@ -267,7 +285,14 @@ async function accountForApple({ sub, email, emailVerified }, fullName, language
   const user = await db.transaction(async (tx) => {
     const [created] = await tx
       .insert(users)
-      .values({ email, full_name: fullName || null, apple_sub: sub, language: accountLanguage(language) })
+      .values({
+        email,
+        full_name: fullName || null,
+        apple_sub: sub,
+        // Confirmed when Apple calls the address verified; otherwise the person confirms it with a code like anyone who signs up.
+        email_verified_at: emailVerified ? new Date() : null,
+        language: accountLanguage(language),
+      })
       .returning();
     await createDefaultServices(tx, created.id, created.language);
     await createStarterCatalog(tx, created.id);
@@ -316,6 +341,10 @@ router.post('/apple', authLimiter, validateBody(appleSchema), async (req, res) =
     throw new HttpError(403, 'Account is inactive. Contact support.', { code: 'account_inactive' });
   }
   if (authorization_code) await rememberAppleRefreshToken(account.user.id, authorization_code, apple.audience);
+  // An address that Apple did not call verified is confirmed with a code, like one that came with a password.
+  if (needsConfirmation(account.user)) {
+    void ensureCode(account.user).catch((error) => console.error('[email] Could not make the confirmation code:', error.message));
+  }
   signIn(res, account.user, account.created ? 201 : 200);
 });
 
@@ -326,8 +355,26 @@ router.post('/logout', (req, res) => {
 });
 
 // GET /api/auth/me
-router.get('/me', requireAuth, (req, res) => {
+router.get('/me', allowUnverified, requireAuth, (req, res) => {
   res.json(toPublicUser(req.user));
+});
+
+// POST /api/auth/verify-email: the code that was sent to the address of the signed-in account. Answers with the user, whose address is
+// confirmed now. Where nothing has to be confirmed, or when it is done already, it only answers with the user.
+router.post('/verify-email', allowUnverified, requireAuth, authLimiter, validateBody(verifyEmailSchema), async (req, res) => {
+  if (!needsConfirmation(req.user)) return res.json(toPublicUser(req.user));
+  res.json(toPublicUser(await confirmCode(req.user, req.body.code)));
+});
+
+// POST /api/auth/resend-verification: sends a new code to the address of the signed-in account (the old one stops working). A code is
+// refused for a while after the last one (429 `code_cooldown`) and after too many in an hour (429 `code_limit`): both say `retry_after`.
+router.post('/resend-verification', allowUnverified, requireAuth, authLimiter, async (req, res) => {
+  if (!needsConfirmation(req.user)) return res.json({ ok: true, retry_after: 0 });
+  const { sent, reason, retryAfter } = await sendCode(req.user);
+  if (!sent) {
+    throw new HttpError(502, `The email could not be sent${reason ? `: ${reason}` : ''}`, { code: 'email_not_sent' });
+  }
+  res.json({ ok: true, retry_after: retryAfter });
 });
 
 // PATCH /api/auth/me
@@ -346,7 +393,7 @@ router.patch('/me', requireAuth, validateBody(profileSchema), async (req, res) =
 });
 
 // POST /api/auth/delete-account
-router.post('/delete-account', requireAuth, authLimiter, validateBody(deleteAccountSchema), async (req, res) => {
+router.post('/delete-account', allowUnverified, requireAuth, authLimiter, validateBody(deleteAccountSchema), async (req, res) => {
   const { password } = req.body;
   // A stolen session could change anything else in the account, but not end it: the password has to be given as well. An
   // account made with Google or Apple has none, and there the session is all there is to go by. It is a 403 and not a 401,
@@ -407,7 +454,7 @@ router.post('/reset-password', authLimiter, validateBody(resetPasswordSchema), a
   const { token, password } = req.body;
 
   const [user] = await db
-    .select({ id: users.id })
+    .select({ id: users.id, email_verified_at: users.email_verified_at })
     .from(users)
     .where(and(eq(users.reset_token_hash, hashToken(token)), gt(users.reset_token_expires, new Date())))
     .limit(1);
@@ -423,6 +470,8 @@ router.post('/reset-password', authLimiter, validateBody(resetPasswordSchema), a
       reset_token_hash: null,
       reset_token_expires: null,
       password_changed_at: new Date(),
+      // The link came to the address, so the address is the person's.
+      email_verified_at: user.email_verified_at ?? new Date(),
     })
     .where(eq(users.id, user.id));
 

@@ -14,6 +14,7 @@ import { detectImageType } from '../utils/images.js';
 import {
   orderColumns, orderTotal, serializeOrder, toNumber, withOrderJoins,
 } from '../utils/orders.js';
+import { assertCanMakeOrder, stockTracked } from '../utils/plans.js';
 import { nameKey } from '../utils/reference.js';
 import { giveBackStock, stockWanted, takeStock } from '../utils/stock.js';
 import {
@@ -460,12 +461,16 @@ router.post('/', validateBody(orderSchema), async (req, res) => {
         .where(eq(users.id, req.user.id))
         .returning({ order_counter: users.order_counter });
 
+      // The update above holds this stringer's row until the transaction ends, so two orders made at once are counted one after the
+      // other. An order the plan does not allow fails here, and the number it was given goes back with it.
+      await assertCanMakeOrder(tx, req.user, { at });
+
       // A racket that was named and is not the client's yet is made here, with the order: it only exists if the order does.
       const racketId = make ? await makeRacket(tx, req.user.id, values.client_id, make) : values.racket_id;
 
       // An order that finds too little in the stock fails here, and the number it was given goes back with it, and so
-      // does the racket that was made for it.
-      const taken = await takeStock(tx, req.user.id, wanted);
+      // does the racket that was made for it. Where the stock is not counted (Free) it takes nothing and finds nothing missing.
+      const taken = await takeStock(tx, req.user.id, stockTracked(req.user) ? wanted : []);
 
       const moment = eventTime(at);
       const [created] = await tx
@@ -541,7 +546,7 @@ router.patch('/:id', validateBody(updateSchema), async (req, res) => {
       const stockChange = {};
       if (STOCK_FIELDS.some((field) => previous[field] !== values[field])) {
         await giveBackStock(tx, req.user.id, previous.stock_used);
-        stockChange.stock_used = await takeStock(tx, req.user.id, wanted);
+        stockChange.stock_used = await takeStock(tx, req.user.id, stockTracked(req.user) ? wanted : []);
       }
 
       await tx

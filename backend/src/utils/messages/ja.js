@@ -9,6 +9,12 @@ export default {
     expiry: 'リンクの有効期限は{minutes}分です。パスワードの変更をリクエストしていない場合は、このメールを破棄してください。',
     subject: '{appName}のパスワード再設定',
   },
+  verification: {
+    // The email with the code that confirms an address: {code} is the six digits, {minutes} how long the code works, {appName} the name of the app.
+    subject: '{appName}の確認コード：{code}',
+    intro: '確認コード：',
+    expiry: 'このコードの有効期限は{minutes}分です。アカウントを作成していない場合は、このメールを無視してください。',
+  },
   page: {
     opening: '{name}を開いています',
     explain: 'アプリが開きますので、新しいパスワードを設定してください。',
@@ -18,7 +24,7 @@ export default {
     broken: '有効期限が切れているか、すでに使用されています。アプリの「パスワードをお忘れですか？」から、新しいリンクを発行してください。',
   },
   services: {
-    labor: 'ガット張り工賃',
+    labor: '基本サービス',
     grip: 'グリップ交換',
     overgrip: 'オーバーグリップ取り付け',
   },

@@ -3,7 +3,7 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { ScrollView, View } from 'react-native';
 
-import { Banknote, ClipboardList, Clock, Eye, Gauge, Globe, Languages, LogOut, RotateCcw, ShieldCheck, Tags } from '@/components/icons';
+import { Banknote, ClipboardList, Clock, Eye, Gauge, Globe, Languages, LogOut, RotateCcw, ShieldCheck, Tags, Wallet } from '@/components/icons';
 import {
   AccountSheet,
   CountrySettingsSheet,
@@ -27,6 +27,7 @@ import { LANGUAGES, useI18n } from '@/lib/i18n';
 import { openLegalPage, type LegalPage } from '@/lib/legal';
 import { useSyncSummary } from '@/lib/offline/react';
 import type { TensionUnit } from '@/lib/types';
+import { useSubscription } from '@/lib/use-subscription';
 
 type OpenSheet = 'profile' | 'currency' | 'country' | 'zone' | 'language' | 'account' | null;
 
@@ -37,6 +38,7 @@ export default function Settings() {
   const toast = useToast();
   const confirm = useConfirm();
   const sync = useSyncSummary();
+  const plan = useSubscription();
   const [sheet, setSheet] = useState<OpenSheet>(null);
   const [pageHeight, setPageHeight] = useState(0);
   const [contentHeight, setContentHeight] = useState(0);
@@ -82,6 +84,15 @@ export default function Settings() {
           first={
             <>
         <ListGroup>
+          {/* Where the server has plans on: the plan of the account, and the way to change it. */}
+          {plan.enabled ? (
+            <ListRow
+              icon={Wallet}
+              label={t('settings_subscription')}
+              value={t(plan.plan === 'studio' ? 'plan_studio' : plan.plan === 'pro' ? 'plan_pro' : 'plan_free')}
+              onPress={() => router.push('/subscription')}
+            />
+          ) : null}
           <ListRow icon={Tags} label={t('settings_services')} onPress={() => router.push('/settings/services')} />
           <ListRow
             icon={RotateCcw}

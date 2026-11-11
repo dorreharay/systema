@@ -6,6 +6,7 @@
  * queue played on top of it, so the queue is the only thing that has to be kept safe, and taking an operation out of it puts
  * everything back as it was. When the server has taken an operation, it moves into the copy.
  */
+import type { ErrorData } from '../api-error';
 import type {
   CatalogString,
   Client,
@@ -36,8 +37,8 @@ export type Failure = {
   code?: string;
   message: string;
   fields?: Record<string, string>;
-  // What more the server said: the client who already has the phone number.
-  data?: { client?: { id: string; name: string } };
+  // What more the server said: the client who already has the phone number; how the month's limit stands.
+  data?: ErrorData;
   at: string;
 };
 

@@ -15,6 +15,8 @@
   --color-secondary: #60646c;
   /* The signed-in app: a light page, white cards with a hairline border, one accent (primary). */
   --color-surface: #f4f5f6;
+  /* The background of the pages of the signed-in app, behind their content (`colors.page` in src/components/ui/colors.ts is the same). */
+  --color-page: #f4f5f6;
   --color-line: #e3e5e8;
   --color-ink: #12171c;
   --color-muted: #667085;
@@ -25,6 +27,13 @@
   --color-chrome-pill: #f1f1ee;
   /* The margin of a page: the space between its content and the edge of the screen (22 pt). */
   --spacing-page: 1rem;
+  /* The space between cards on the phone, the same in both directions: between the cards of a list, one under another (CARD_GAP in
+     src/components/ui/page.tsx), and between a card (or the search field) and the side of the screen. A card reaches past the margin of
+     the page by what is left of the margin once the gutter is taken off it (`-mx-bleed`, BLOCK_SHAPE in src/components/ui/card.tsx and
+     the search field in src/components/ui/search-field.tsx), so the bleed is the page margin less the gutter: node scripts/check-layout.mjs
+     checks that, and that the classes use them. The block of the home page has no gutter: it goes from edge to edge. */
+  --spacing-gutter: 0.25rem;
+  --spacing-bleed: 0.75rem;
   /* The sizes of text in use are 10% above Tailwind's (the line height follows the size). Buttons and
      headers have a size of their own, in px, in their classes. */
   --text-xs: 0.825rem;
@@ -35,7 +44,7 @@
   --breakpoint-md: 48rem;
   --breakpoint-lg: 64rem;
   /* From `md:` up every button is 15% less round than on the phone; its corners are written out in src/components/ui/button-radius.ts. */
-  /* From `md:` up a white surface is lifted off the page by a ring and soft shadows, and no button has a gradient: src/components/ui/paper.ts. */
+  /* A white card and a field are set apart from the page by a hairline border on every screen, never by a shadow; from `md:` up a pressed control is lifted by a ring and a close shadow, and no button has a gradient: src/components/ui/paper.ts. */
   /* From `md:` up a page has p-12 round it (48 px at its sides, above its header and under its content) and its widest column has no limit: src/components/ui/page.tsx, screen.tsx. A search field has the text of the page: src/components/ui/field-text.ts. */
   /* From `md:` up the sign-in screens are drawn at 85% of the phone's sizes (less in a short window, so that none of them scrolls), and the back button of a form hangs above its left edge: src/components/auth-layout.tsx. */
   /* From `md:` up a stock count is typed in a field, not set on a scale (scale-picker.tsx), a tick is a round one (checkbox.tsx), and a switch is an iOS one (app-switch.web.tsx). */

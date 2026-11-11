@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { Platform, Pressable, View, type StyleProp, type ViewStyle } from 'react-native';
 
-import { PAPER_CARD } from '@/components/ui/paper';
+import { SURFACE_EDGE } from '@/components/ui/paper';
 
 type CardProps = {
   children: ReactNode;
@@ -14,18 +14,24 @@ type CardProps = {
 };
 
 /**
- * The shape of a white block of a page: it runs out past the margin of the page to both edges of the screen, and is
- * rounded like the containers it sits among (see Screen). What is in it keeps its own room: the padding of the block.
- * On a wide page (`md:`) it does not: it stands inside the sides of the column, so that cards can stand in a grid.
+ * The shape of a white block of a page: it runs out past the margin of the page towards both edges of the screen, and stops a gutter
+ * short of them (`-mx-bleed`: the margin of the page less the gutter, see global.css), the same space as there is between the cards of a
+ * list, one under another (CARD_GAP in page.tsx); the search field above a list stands the same way (search-field.tsx), and the block of
+ * the home page is the one that goes from edge to edge. It is rounded like the containers it sits among (see Screen). What is in it
+ * keeps its own room: the padding of the block. On a wide page (`md:`) it does not reach out: it stands inside the sides of the column,
+ * so that cards can stand in a grid.
  */
-export const BLOCK_SHAPE = '-mx-page rounded-[18px] md:mx-0';
-// (On a wide page it is lifted off the page by a ring and soft shadows: see paper.ts.)
-export const BLOCK = `${BLOCK_SHAPE} bg-white ${PAPER_CARD}`;
+export const BLOCK_SHAPE = '-mx-bleed rounded-[18px] md:mx-0';
+// A block is plain white, not see-through: it stands on the colour of the page (`bg-page`, see Screen), which does not show through it.
+// The page is nearly white, so white alone does not tell a block from it: a hairline border does (SURFACE_EDGE, the same as the search
+// field's, on the phone and on a wide page), and no shadow.
+export const BLOCK = `${BLOCK_SHAPE} bg-white ${SURFACE_EDGE}`;
 
-// The room inside a block: more at the sides than above and below, and at the sides only for the rows of a list, which
-// have a height of their own.
-export const BLOCK_ROOM = 'px-7 py-4';
-export const BLOCK_ROOM_X = 'px-7';
+// The room inside a block: more at the sides than above and below (20 px against 16), and at the sides only for the rows of a list,
+// which have a height of their own. What lines up with the content of the blocks takes its side room from `BLOCK_ROOM_X`: the line under
+// the charts of the home page, the placeholder of the locked overview, the cards of the wide grid.
+export const BLOCK_ROOM = 'px-5 py-4';
+export const BLOCK_ROOM_X = 'px-5';
 
 type ClickEvent = { target: { closest?: (selector: string) => unknown } | null; currentTarget: unknown };
 type KeyEvent = { key?: string; target: unknown; currentTarget: unknown; preventDefault?: () => void };

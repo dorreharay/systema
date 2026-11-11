@@ -163,9 +163,14 @@ export function selectStrings(t: Tables, q = '', inStock = false): CatalogString
     .sort((a, b) => byName((string: CatalogString) => string.brand)(a, b) || byName((string: CatalogString) => string.model)(a, b));
 }
 
-/** Active ones first, labor before extras (the server's order; the server also keeps the order they were made in). */
-export function selectServices(t: Tables): Service[] {
+/**
+ * Active ones first, labor before extras (the server's order; the server also keeps the order they were made in). A search is by the
+ * name, and is the phone's own: the server lists them all (there are few).
+ */
+export function selectServices(t: Tables, q = ''): Service[] {
+  const search = q.trim();
   return Object.values(t.services)
+    .filter((service) => !search || matchesWords(service.name, search))
     .map((service, index) => ({ service, index }))
     .sort(
       (a, b) =>

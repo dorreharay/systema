@@ -11,7 +11,7 @@ import { randomUUID } from 'node:crypto';
 import { setTimeout as sleep } from 'node:timers/promises';
 import {
   CONFIG, Client, assertEq, assertStatus, assertTrue,
-  dbExec, dbScalar, resetDatabase, startFakeApple, startFakeGoogle, startFakeResend, startServer,
+  dbExec, dbScalar, resetDatabase, startFakeApple, startFakeGoogle, startFakeResend, startFakeRevenueCat, startServer,
 } from './harness.mjs';
 
 const tests = [];
@@ -1104,7 +1104,7 @@ test('Profile', 'rejects a bad currency, unit, time zone and language', async (c
 test('Profile', 'a new account starts with the usual services, without prices', async (ctx) => {
   const { client } = await register(ctx);
   const { data } = await client.get('/api/services');
-  assertEq(data.items.map((s) => s.name), ['Stringing Labor', 'Grip Replacement', 'Overgrip Installation'], 'names');
+  assertEq(data.items.map((s) => s.name), ['Main Service', 'Grip Replacement', 'Overgrip Installation'], 'names');
   assertEq(data.items[0].kind, 'labor', 'the first is the labor');
   assertTrue(data.items.every((s) => s.price === null && s.active), 'no prices, all active');
 });
@@ -1122,10 +1122,10 @@ test('Profile', 'the usual services of a new account are named in its language',
 
   const ukrainian = await register(ctx, newEmail(), { language: 'uk' });
   const names = (await ukrainian.client.get('/api/services')).data.items.map((s) => s.name);
-  assertEq(names.sort(), ['Заміна гріпа', 'Намотування овергріпа', 'Робота з перетяжки'].sort(), 'the Ukrainian names');
+  assertEq(names.sort(), ['Заміна гріпа', 'Намотування овергріпа', 'Основна послуга'].sort(), 'the Ukrainian names');
   // A language the server does not know is English, like the account.
   const unknown = await register(ctx, newEmail(), { language: 'xx' });
-  assertEq((await unknown.client.get('/api/services')).data.items[0].name, 'Stringing Labor', 'English for any other');
+  assertEq((await unknown.client.get('/api/services')).data.items[0].name, 'Main Service', 'English for any other');
 });
 
 // ---------------------------------------------------------------------------
@@ -3183,6 +3183,974 @@ test('Email', 'the reset page speaks the language of the browser, and the bare d
   const home = await fetch(`${ctx.server.base}/`, { redirect: 'manual' });
   assertEq(home.status, 302, 'the domain itself redirects');
   assertEq(home.headers.get('location'), 'https://tryrestring.com/', 'to the website');
+});
+
+// ---------------------------------------------------------------------------
+// Confirming the email address of an account made with an email and a password: a code of six digits goes to the address, and until it is
+// typed in the account is turned away from nearly everything. The server of the rest of these tests does not ask for it, as a local one does
+// not; the ones here start a server of their own that does, on the port the other extra servers use, with no wait between two codes unless
+// a test is about that.
+// ---------------------------------------------------------------------------
+async function withConfirmation(run, env = {}) {
+  const server = await startServer({
+    port: CONFIG.port + 1,
+    env: { EMAIL_VERIFICATION_REQUIRED: 'true', EMAIL_CODE_RESEND_SECONDS: '0', ...env },
+  });
+  try {
+    await run(server);
+  } finally {
+    await server.stop();
+  }
+}
+
+/** The emails the server printed instead of sending (it has no mail service here): the text of each, oldest first. */
+const printedEmails = (server) => server.logs().split('[email] Not sent').slice(1);
+
+/** The codes in the emails printed for this address, oldest first. */
+const printedCodes = (server, email) =>
+  printedEmails(server)
+    .filter((mail) => mail.includes(`To: ${email}\n`))
+    .map((mail) => mail.match(/\n(\d{6})\n/)?.[1])
+    .filter(Boolean);
+
+/** Waits until the server has printed `count` codes for the address (an email goes out after the answer), and returns all of them. */
+async function codesFor(server, email, count = 1) {
+  await until(() => printedCodes(server, email).length >= count, `${count} code(s) for ${email}`);
+  return printedCodes(server, email);
+}
+
+/** After the time an email takes to go out, checks that exactly `count` codes were printed for the address. */
+async function assertCodesPrinted(server, email, count, message) {
+  await sleep(400);
+  assertEq(printedCodes(server, email).length, count, message);
+}
+
+/** A new account on a server that asks for the code: signed in, not confirmed, with the code that was sent to it. */
+async function unconfirmed(server, extra = {}) {
+  const { client, email, res } = await register({ server }, newEmail(), extra);
+  const [code] = await codesFor(server, email);
+  return { client, email, res, code };
+}
+
+const verify = (client, code) => client.post('/api/auth/verify-email', { code });
+/** A code that is not `code`. */
+const wrongCode = (code) => (code === '000000' ? '111111' : '000000');
+const ofAccount = (email) => `user_id=(SELECT id FROM users WHERE email='${email}')`;
+const storedCodes = (email) => Number(dbScalar(`SELECT count(*) FROM email_codes WHERE ${ofAccount(email)}`));
+const verifiedAt = (email) => dbScalar(`SELECT email_verified_at FROM users WHERE email='${email}'`);
+/** Makes the codes of the account that old: when they were made and when they run out both move back (the waits are seconds and minutes). */
+const ageCodes = (email, seconds) =>
+  dbExec(`UPDATE email_codes SET created_at = created_at - interval '${seconds} seconds', expires_at = expires_at - interval '${seconds} seconds' WHERE ${ofAccount(email)}`);
+const runOutCodes = (email) => dbExec(`UPDATE email_codes SET expires_at = now() - interval '1 minute' WHERE ${ofAccount(email)}`);
+
+/** The words the subject of the email has in each language (not read from the server's own texts). */
+const CODE_SUBJECT_WORD = {
+  en: 'confirmation code',
+  de: 'Bestätigungscode',
+  fr: 'code de confirmation',
+  es: 'código de confirmación',
+  it: 'codice di conferma',
+  pt: 'código de confirmação',
+  ja: '確認コード',
+  uk: 'код підтвердження',
+  pl: 'kod potwierdzający',
+};
+
+test('Confirmation', 'a server that does not ask for it (a local one) makes accounts that are confirmed, and sends no code', async (ctx) => {
+  const { client, email, res } = await register(ctx);
+  assertEq(res.data.user.email_verified, true, 'confirmed from the start');
+  assertStatus(await client.get('/api/clients'), 200);
+  assertEq((await verify(client, '123456')).data.email_verified, true, 'no code is asked for');
+  assertEq((await client.post('/api/auth/resend-verification')).data, { ok: true, retry_after: 0 }, 'and none is sent');
+  await sleep(400);
+  assertTrue(!ctx.server.logs().includes(`To: ${email}`), 'no email was printed');
+  assertEq(storedCodes(email), 0, 'and none was made');
+});
+test('Confirmation', 'a sign-up sends a code to the address and signs in, but the address is not confirmed', () =>
+  withConfirmation(async (server) => {
+    const { client, email, res, code } = await unconfirmed(server);
+    assertEq(res.data.user.email_verified, false, 'not confirmed');
+    assertTrue(res.data.token && client.cookies.has('auth_token'), 'signed in all the same');
+    assertEq((await client.get('/api/auth/me')).data.email_verified, false, '/me says so too');
+    assertTrue(/^\d{6}$/.test(code), 'a code of six digits');
+    const mail = printedEmails(server).find((text) => text.includes(`To: ${email}\n`));
+    assertTrue(new RegExp(`Subject: Your .+ confirmation code: ${code}\\n`).test(mail), 'the code is in the subject too');
+    assertEq(verifiedAt(email), '', 'the address is not marked as confirmed');
+    assertEq(storedCodes(email), 1, 'one code is kept');
+    const stored = dbScalar(`SELECT code_hash FROM email_codes WHERE ${ofAccount(email)}`);
+    assertTrue(/^[0-9a-f]{64}$/.test(stored) && stored !== code, 'and only a hash of it');
+    const minutes = Number(dbScalar(`SELECT extract(epoch FROM expires_at - created_at) / 60 FROM email_codes WHERE ${ofAccount(email)}`));
+    assertTrue(Math.abs(minutes - 15) < 0.5, `it works for fifteen minutes (${minutes})`);
+  }));
+test('Confirmation', 'until the address is confirmed, everything but the few ways to confirm it is turned away', () =>
+  withConfirmation(async (server) => {
+    const { client } = await unconfirmed(server);
+    for (const path of ['/api/clients', '/api/rackets', '/api/strings', '/api/services', '/api/orders', '/api/dashboard', '/api/insights', '/api/reference']) {
+      const res = await client.get(path);
+      assertStatus(res, 403);
+      assertEq(res.data.code, 'email_not_verified', `code (${path})`);
+    }
+    const made = await client.post('/api/clients', { name: 'Maria Sharapova', phone: '+380501112233' });
+    assertStatus(made, 403);
+    assertEq(made.data.code, 'email_not_verified', 'nothing can be made');
+    assertStatus(await client.patch('/api/auth/me', { full_name: 'New Name' }), 403);
+    assertStatus(await client.post('/api/billing/sync'), 403);
+    // What is let through: seeing who it is, signing out. (Asking for a code and typing it in are the next tests.)
+    assertStatus(await client.get('/api/auth/me'), 200);
+    assertStatus(await client.post('/api/auth/logout'), 200);
+  }));
+test('Confirmation', 'the right code confirms the address, and the account works after that', () =>
+  withConfirmation(async (server) => {
+    const { client, email, code } = await unconfirmed(server);
+    const res = await verify(client, code);
+    assertStatus(res, 200);
+    assertEq(res.data.email_verified, true, 'confirmed');
+    assertTrue(verifiedAt(email) !== '', 'and marked in the database');
+    assertEq(storedCodes(email), 0, 'the codes are gone');
+    assertStatus(await client.get('/api/clients'), 200);
+    assertEq((await client.get('/api/auth/me')).data.email_verified, true, '/me says so');
+    assertEq((await client.patch('/api/auth/me', { full_name: 'New Name' })).data.full_name, 'New Name', 'and the profile can be changed');
+    // Once is enough: asking again only answers with the account, and sends nothing.
+    assertEq((await verify(client, wrongCode(code))).data.email_verified, true, 'a second time is not an error');
+    assertEq((await client.post('/api/auth/resend-verification')).data, { ok: true, retry_after: 0 }, 'and no code is sent');
+    // A later sign-in has nothing to confirm.
+    const login = await new Client(server.base).post('/api/auth/login', { email, password });
+    assertEq(login.data.user.email_verified, true, 'a later sign-in is confirmed');
+    await assertCodesPrinted(server, email, 1, 'and no second email');
+  }));
+test('Confirmation', 'a code copied as "123 456" or "123-456", or with spaces around it, works', () =>
+  withConfirmation(async (server) => {
+    for (const format of [(c) => `${c.slice(0, 3)} ${c.slice(3)}`, (c) => `${c.slice(0, 3)}-${c.slice(3)}`, (c) => ` ${c} `]) {
+      const { client, code } = await unconfirmed(server);
+      assertStatus(await verify(client, format(code)), 200);
+    }
+  }));
+test('Confirmation', 'a wrong code is refused with the guesses that are left, and the code is spent by the fifth', () =>
+  withConfirmation(async (server) => {
+    const { client, email, code } = await unconfirmed(server);
+    const left = [];
+    for (let i = 0; i < 4; i++) {
+      const res = await verify(client, wrongCode(code));
+      assertStatus(res, 400);
+      assertEq(res.data.code, 'invalid_code', 'code');
+      left.push(res.data.data.attempts_left);
+    }
+    assertEq(left, [4, 3, 2, 1], 'the guesses left, counting down');
+
+    const fifth = await verify(client, wrongCode(code));
+    assertStatus(fifth, 429);
+    assertEq(fifth.data.code, 'code_attempts_exceeded', 'the fifth is the last');
+    const right = await verify(client, code);
+    assertStatus(right, 429);
+    assertEq(right.data.code, 'code_attempts_exceeded', 'and the right one is no good any more');
+    assertEq(verifiedAt(email), '', 'the address is still not confirmed');
+    assertStatus(await client.get('/api/clients'), 403);
+
+    // A new code starts again.
+    assertStatus(await client.post('/api/auth/resend-verification'), 200);
+    const [, fresh] = await codesFor(server, email, 2);
+    assertStatus(await verify(client, fresh), 200);
+  }));
+test('Confirmation', 'the right code is still good on the last guess', () =>
+  withConfirmation(async (server) => {
+    const { client, code } = await unconfirmed(server);
+    for (let i = 0; i < 4; i++) assertStatus(await verify(client, wrongCode(code)), 400);
+    assertStatus(await verify(client, code), 200);
+  }));
+test('Confirmation', 'guesses sent at the same moment cannot get more looks at the code than it allows', () =>
+  withConfirmation(async (server) => {
+    const { client, email, code } = await unconfirmed(server);
+    // Ten wrong guesses at once: five are counted and looked at (four are told how many are left, the fifth that it is spent), and the other
+    // five are turned away without being looked at.
+    const results = await Promise.all(Array.from({ length: 10 }, () => verify(client, wrongCode(code))));
+    assertEq(results.filter((r) => r.status === 400).length, 4, 'four were looked at and counted down');
+    assertEq(results.filter((r) => r.status === 429).length, 6, 'the rest were turned away');
+    assertEq(dbScalar(`SELECT attempts FROM email_codes WHERE ${ofAccount(email)}`), '5', 'the count stops at five');
+    assertEq((await verify(client, code)).status, 429, 'and the code is spent');
+  }));
+test('Confirmation', 'something that is not six digits is refused, and costs no guess', () =>
+  withConfirmation(async (server) => {
+    const { client, email, code } = await unconfirmed(server);
+    for (const bad of ['', '12345', '1234567', 'abcdef', '12 34 5a', '١٢٣٤٥٦']) {
+      const res = await verify(client, bad);
+      assertStatus(res, 400);
+      assertEq(res.data.code, 'invalid_code', `${JSON.stringify(bad)} is not a code`);
+    }
+    assertStatus(await client.post('/api/auth/verify-email', {}), 400);
+    assertStatus(await verify(client, 'x'.repeat(33)), 400);
+    assertEq(dbScalar(`SELECT attempts FROM email_codes WHERE ${ofAccount(email)}`), '0', 'no guess was used');
+    assertStatus(await verify(client, code), 200);
+  }));
+test('Confirmation', 'a code that has run out, or was never sent, is refused; a new one works', () =>
+  withConfirmation(async (server) => {
+    const { client, email, code } = await unconfirmed(server);
+    runOutCodes(email);
+    const late = await verify(client, code);
+    assertStatus(late, 400);
+    assertEq(late.data.code, 'code_expired', 'the right code, too late');
+
+    dbExec(`DELETE FROM email_codes WHERE ${ofAccount(email)}`);
+    assertEq((await verify(client, code)).data.code, 'code_expired', 'and none at all');
+
+    assertStatus(await client.post('/api/auth/resend-verification'), 200);
+    const [, fresh] = await codesFor(server, email, 2);
+    assertStatus(await verify(client, fresh), 200);
+  }));
+test('Confirmation', 'only the newest code works: asking for another ends the one before', () =>
+  withConfirmation(async (server) => {
+    const { client, email, code: first } = await unconfirmed(server);
+    assertStatus(await client.post('/api/auth/resend-verification'), 200);
+    const [, second] = await codesFor(server, email, 2);
+    assertEq((await verify(client, first)).data.code, 'invalid_code', 'the first is no good any more');
+    assertStatus(await verify(client, second), 200);
+    assertEq(storedCodes(email), 0, 'and all are gone after');
+  }));
+test('Confirmation', 'a code is good for the account it was sent to and for no other', () =>
+  withConfirmation(async (server) => {
+    const a = await unconfirmed(server);
+    const b = await unconfirmed(server);
+    const res = await verify(b.client, a.code);
+    assertStatus(res, 400);
+    assertEq(res.data.code, 'invalid_code', "A's code does not work for B");
+    assertStatus(await verify(a.client, a.code), 200);
+    assertStatus(await verify(b.client, b.code), 200);
+  }));
+test('Confirmation', 'a code typed twice at once (a double tap) confirms the address and is no error the second time', () =>
+  withConfirmation(async (server) => {
+    const { client, code } = await unconfirmed(server);
+    const results = await Promise.all([verify(client, code), verify(client, code), verify(client, code)]);
+    assertEq(results.map((r) => r.status), [200, 200, 200], 'all answered with the account');
+    assertTrue(results.every((r) => r.data.email_verified === true), 'confirmed in every answer');
+  }));
+test('Confirmation', 'another code is refused for a minute after the last one, and the wait is said', () =>
+  withConfirmation(
+    async (server) => {
+      const { client, email } = await unconfirmed(server);
+      const soon = await client.post('/api/auth/resend-verification');
+      assertStatus(soon, 429);
+      assertEq(soon.data.code, 'code_cooldown', 'code');
+      const wait = soon.data.data.retry_after;
+      assertTrue(wait > 0 && wait <= 60, `the wait is said (${wait} s)`);
+      await assertCodesPrinted(server, email, 1, 'and nothing was sent');
+
+      ageCodes(email, 61);
+      const later = await client.post('/api/auth/resend-verification');
+      assertStatus(later, 200);
+      assertEq(later.data, { ok: true, retry_after: 60 }, 'a minute until the next');
+      await codesFor(server, email, 2);
+    },
+    { EMAIL_CODE_RESEND_SECONDS: '60' }
+  ));
+test('Confirmation', 'only a few codes an hour, and the wait for a place to free up is said', () =>
+  withConfirmation(
+    async (server) => {
+      const { client, email } = await unconfirmed(server);
+      assertStatus(await client.post('/api/auth/resend-verification'), 200);
+      assertStatus(await client.post('/api/auth/resend-verification'), 200);
+      const over = await client.post('/api/auth/resend-verification');
+      assertStatus(over, 429);
+      assertEq(over.data.code, 'code_limit', 'code');
+      const wait = over.data.data.retry_after;
+      assertTrue(wait > 3500 && wait <= 3600, `an hour from the first of the three (${wait} s)`);
+      await assertCodesPrinted(server, email, 3, 'and no fourth email');
+
+      ageCodes(email, 61 * 60);
+      assertStatus(await client.post('/api/auth/resend-verification'), 200);
+    },
+    { EMAIL_CODE_SENDS_PER_HOUR: '3' }
+  ));
+test('Confirmation', 'signing in without having confirmed sends a code only when none can still be typed', () =>
+  withConfirmation(async (server) => {
+    const { email } = await unconfirmed(server);
+    const signIn = () => new Client(server.base).post('/api/auth/login', { email, password });
+
+    const first = await signIn();
+    assertStatus(first, 200);
+    assertEq(first.data.user.email_verified, false, 'signed in, not confirmed');
+    await assertCodesPrinted(server, email, 1, 'the code of the sign-up still works, so there is no new one');
+
+    // One that has run out is made again.
+    runOutCodes(email);
+    assertStatus(await signIn(), 200);
+    const [, second] = await codesFor(server, email, 2);
+
+    // So is one that took all its wrong guesses.
+    const session = new Client(server.base);
+    session.token = first.data.token;
+    for (let i = 0; i < 5; i++) await verify(session, wrongCode(second));
+    assertStatus(await signIn(), 200);
+    const codes = await codesFor(server, email, 3);
+    assertStatus(await verify(session, codes[2]), 200);
+  }));
+test('Confirmation', 'a sign-in with the wrong password sends no code', () =>
+  withConfirmation(async (server) => {
+    const { email } = await unconfirmed(server);
+    runOutCodes(email);
+    assertStatus(await new Client(server.base).post('/api/auth/login', { email, password: 'not-the-password' }), 401);
+    await assertCodesPrinted(server, email, 1, 'nothing new went out');
+  }));
+test('Confirmation', 'asking for or typing a code needs a signed-in account', () =>
+  withConfirmation(async (server) => {
+    const anon = new Client(server.base);
+    assertStatus(await anon.post('/api/auth/verify-email', { code: '123456' }), 401);
+    assertStatus(await anon.post('/api/auth/resend-verification'), 401);
+  }));
+test('Confirmation', 'an account that has not confirmed can still be deleted', () =>
+  withConfirmation(async (server) => {
+    const { client, email } = await unconfirmed(server);
+    assertStatus(await client.post('/api/auth/delete-account', { password }), 200);
+    assertEq(dbScalar(`SELECT count(*) FROM users WHERE email='${email}'`), '0', 'the account is gone');
+    assertEq(storedCodes(email), 0, 'and its codes');
+    assertStatus(await new Client(server.base).post('/api/auth/login', { email, password }), 401);
+  }));
+test('Confirmation', 'the email is in the language of the account', () =>
+  withConfirmation(async (server) => {
+    assertEq(Object.keys(CODE_SUBJECT_WORD), LANGUAGES, 'every language is covered');
+    for (const language of LANGUAGES) {
+      const { email, code } = await unconfirmed(server, { language, full_name: 'Ann' });
+      const mail = printedEmails(server).find((text) => text.includes(`To: ${email}\n`));
+      const subject = mail.match(/Subject: (.*)\n/)[1];
+      assertTrue(subject.includes(CODE_SUBJECT_WORD[language]) && subject.includes(code), `${language}: "${subject}"`);
+    }
+  }));
+test('Confirmation', 'a password reset through the link in the email confirms the address too, and ends the sessions of the one who signed up', () =>
+  withConfirmation(async (server) => {
+    const { client: stranger, email } = await unconfirmed(server);
+    await new Client(server.base).post('/api/auth/forgot-password', { email });
+    await until(() => server.logs().includes('reset-password?token='), 'the reset email');
+    const token = resetTokenFor({ server }, email);
+    await sleep(1100);
+    assertStatus(await new Client(server.base).post('/api/auth/reset-password', { token, password: 'a-brand-new-pass-2' }), 200);
+    assertTrue(verifiedAt(email) !== '', 'confirmed');
+    assertStatus(await stranger.get('/api/auth/me'), 401);
+    const login = await new Client(server.base).post('/api/auth/login', { email, password: 'a-brand-new-pass-2' });
+    assertEq(login.data.user.email_verified, true, 'and the sign-in says so');
+  }));
+test('Confirmation', 'an account made with Google or Apple needs no code', (ctx) =>
+  withConfirmation(
+    async (server) => {
+      const c = { ...ctx, server };
+      const gina = googleUser();
+      const google = await googleLogin(c, gina);
+      assertStatus(google.res, 201);
+      assertEq(google.res.data.user.email_verified, true, 'Google: confirmed');
+      assertStatus(await google.client.get('/api/clients'), 200);
+
+      const annie = appleUser();
+      const apple = await appleLogin(c, annie);
+      assertStatus(apple.res, 201);
+      assertEq(apple.res.data.user.email_verified, true, 'Apple: confirmed');
+      assertStatus(await apple.client.get('/api/clients'), 200);
+
+      await assertCodesPrinted(server, gina.email, 0, 'no email to the Google address');
+      assertEq(printedCodes(server, annie.email).length, 0, 'nor to the Apple one');
+    },
+    { ...ctx.google.env, ...ctx.apple.env }
+  ));
+test('Confirmation', 'an address that Apple does not call verified is confirmed with a code, like one that came with a password', (ctx) =>
+  withConfirmation(
+    async (server) => {
+      const user = appleUser({ email_verified: 'false' });
+      const { client, res } = await appleLogin({ ...ctx, server }, user);
+      assertStatus(res, 201);
+      assertEq(res.data.user.email_verified, false, 'not confirmed');
+      assertStatus(await client.get('/api/clients'), 403);
+      const [code] = await codesFor(server, user.email);
+      assertStatus(await verify(client, code), 200);
+      assertStatus(await client.get('/api/clients'), 200);
+    },
+    { ...ctx.google.env, ...ctx.apple.env }
+  ));
+test('Confirmation', 'Google showing that an address is the person\'s confirms the account that has it, and takes its password away', (ctx) =>
+  withConfirmation(
+    async (server) => {
+      const { client: stranger, email } = await unconfirmed(server);
+      await sleep(1100);
+      const { client, res } = await googleLogin({ ...ctx, server }, googleUser({ email }));
+      assertStatus(res, 200);
+      assertEq(res.data.user.email_verified, true, 'confirmed');
+      assertTrue(verifiedAt(email) !== '', 'in the database');
+      assertStatus(await client.get('/api/clients'), 200);
+      assertStatus(await stranger.get('/api/auth/me'), 401);
+      assertStatus(await new Client(server.base).post('/api/auth/login', { email, password }), 401);
+    },
+    { ...ctx.google.env, ...ctx.apple.env }
+  ));
+test('Confirmation', 'the code arrives through Resend with the code in the subject, the text and the page; an email that cannot be sent is said, and the code that never left is not kept', async () => {
+  const resend = await startFakeResend();
+  try {
+    await withConfirmation(
+      async (server) => {
+        const { client, email } = await register({ server });
+        await until(() => resend.sent.length === 1, 'the first email');
+        const [mail] = resend.sent;
+        const first = mail.body.text.match(/\n(\d{6})\n/)?.[1];
+        assertTrue(first, 'the code is in the text');
+        assertEq(mail.body.to, [email], 'to');
+        assertTrue(mail.body.subject.includes(first) && mail.body.html.includes(first), 'and in the subject and the page');
+        assertTrue(!server.logs().includes(`To: ${email}`), 'and the email is not printed');
+
+        resend.answer(500, { message: 'a failure that was asked for' });
+        const failed = await client.post('/api/auth/resend-verification');
+        assertStatus(failed, 502);
+        assertEq(failed.data.code, 'email_not_sent', 'code');
+        assertEq(storedCodes(email), 1, 'the code that was not sent is not kept');
+
+        // The code that was sent is still the newest, and works; and a person may ask again at once.
+        resend.answer(200, { id: 'fake-email-id' });
+        assertStatus(await client.post('/api/auth/resend-verification'), 200);
+        await until(() => resend.sent.length === 3, 'the email after the failed one');
+        const latest = resend.sent[2].body.text.match(/\n(\d{6})\n/)[1];
+        assertStatus(await verify(client, latest), 200);
+      },
+      { RESEND_API_KEY: 're_test_key_123', RESEND_API_URL: resend.apiUrl, EMAIL_FROM_NAME: 're:string', EMAIL_FROM_ADDRESS: 'noreply@mail.test' }
+    );
+  } finally {
+    await resend.stop();
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Plans: Free allows a number of new orders in a month, Pro does not. The server of the rest of these tests has the plans off; the ones
+// here start a server of their own with them on, a low limit and the dev grants (on the port the rate limit tests use: they run one after
+// the other, and never on 4000, which is the dev server's).
+// ---------------------------------------------------------------------------
+const PLANS_ENV = { BILLING_ENABLED: 'true', BILLING_DEV_GRANTS: 'true', FREE_ORDERS_PER_MONTH: '3' };
+
+async function withPlans(run, env = {}) {
+  const server = await startServer({ port: CONFIG.port + 1, env: { ...PLANS_ENV, ...env } });
+  try {
+    await run(server);
+  } finally {
+    await server.stop();
+  }
+}
+
+/** A stringer on that server, with a client and a racket, and `order()` for the body of a new order. */
+async function stringerOn(server, extra = {}) {
+  const client = new Client(server.base);
+  const email = newEmail();
+  const registered = await client.post('/api/auth/register', { email, password, ...extra });
+  assertStatus(registered, 201);
+  const customer = (await client.post('/api/clients', { name: 'Maria Sharapova', phone: '+380501112233' })).data;
+  const racket = (await client.post('/api/rackets', { client_id: customer.id, brand: 'Wilson', model: 'Pro Staff 97' })).data;
+  return {
+    client,
+    email,
+    user: registered.data.user,
+    order: (more = {}) => ({ client_id: customer.id, racket_id: racket.id, ...more }),
+  };
+}
+
+/** Makes `count` orders, each of which must be accepted. */
+async function makeOrders(s, count) {
+  const made = [];
+  for (let i = 0; i < count; i++) {
+    const res = await s.client.post('/api/orders', s.order());
+    assertStatus(res, 201);
+    made.push(res.data);
+  }
+  return made;
+}
+
+const subscriptionOfMe = async (s) => (await s.client.get('/api/auth/me')).data.subscription;
+
+test('Plans', 'a new account is on Free, and the user says what that allows', async () => {
+  await withPlans(async (server) => {
+    const s = await stringerOn(server);
+    const sub = s.user.subscription;
+    assertEq([sub.enabled, sub.plan, sub.trial, sub.renews, sub.period, sub.expires_at, sub.expired], [true, 'free', false, false, null, null, false], 'on Free');
+    assertEq(sub.entitlements, { orders_per_month: 3, stock: false, month_overview: false }, 'what Free allows');
+    assertEq(sub.free, sub.entitlements, 'and what it falls back to');
+    assertTrue(!Number.isNaN(Date.parse(sub.checked_at)), 'when it was worked out');
+    assertEq((await subscriptionOfMe(s)).entitlements, sub.entitlements, 'the same from /me');
+  });
+});
+test('Plans', 'with the plans off nothing is limited, and the user says so', async (ctx) => {
+  const s = await shop(ctx);
+  const sub = (await s.client.get('/api/auth/me')).data.subscription;
+  assertEq([sub.enabled, sub.plan, sub.entitlements], [false, 'free', { orders_per_month: null, stock: true, month_overview: true }], 'off');
+  for (let i = 0; i < 17; i++) assertStatus(await s.client.post('/api/orders', minimalOrder(s)), 201);
+});
+test('Plans', 'Free turns away the order after the limit, and says where it stands', async () => {
+  await withPlans(async (server) => {
+    const s = await stringerOn(server);
+    await makeOrders(s, 3);
+    const refused = await s.client.post('/api/orders', s.order());
+    assertStatus(refused, 402);
+    assertEq(refused.data.code, 'order_limit_reached', 'code');
+    assertEq([refused.data.data.limit, refused.data.data.used], [3, 3], 'the limit and what is used');
+    assertTrue(/^\d{4}-\d{2}-01$/.test(refused.data.data.resets_on), 'the day the month starts again is the first');
+    assertTrue(refused.data.data.resets_on > new Date().toISOString().slice(0, 10), 'and it is ahead');
+    assertEq((await s.client.get('/api/orders')).data.items.length, 3, 'nothing was made');
+  });
+});
+test('Plans', 'what is made can still be changed and finished at the limit, and deleting one gives its place back', async () => {
+  await withPlans(async (server) => {
+    const s = await stringerOn(server);
+    const made = await makeOrders(s, 3);
+    assertStatus(await s.client.post('/api/orders', s.order()), 402);
+    assertStatus(await s.client.patch(`/api/orders/${made[0].id}`, { status: 'completed', is_paid: true }), 200);
+    assertStatus(await s.client.patch(`/api/orders/${made[1].id}`, { notes: 'changed' }), 200);
+    assertStatus(await s.client.delete(`/api/orders/${made[2].id}`), 200);
+    assertStatus(await s.client.post('/api/orders', s.order()), 201);
+    assertStatus(await s.client.post('/api/orders', s.order()), 402);
+  });
+});
+test('Plans', 'an order that is sent again is answered and not counted', async () => {
+  await withPlans(async (server) => {
+    const s = await stringerOn(server);
+    const id = randomUUID();
+    const first = await s.client.post('/api/orders', s.order({ id }));
+    assertStatus(first, 201);
+    await makeOrders(s, 2);
+    assertStatus(await s.client.post('/api/orders', s.order()), 402);
+    const again = await s.client.post('/api/orders', s.order({ id }));
+    assertStatus(again, 200);
+    assertEq(again.data.id, id, 'the order it already had');
+    assertEq((await s.client.get('/api/orders')).data.items.length, 3, 'still three');
+  });
+});
+test('Plans', 'an order made without a connection is accepted over the limit, and counts afterwards', async () => {
+  await withPlans(async (server) => {
+    const s = await stringerOn(server);
+    await makeOrders(s, 3);
+    const minutesAgo = (minutes) => new Date(Date.now() - minutes * 60 * 1000).toISOString();
+
+    // Made a moment ago: it was made online, and the limit holds.
+    assertStatus(await s.client.post('/api/orders', s.order({ id: randomUUID(), at: minutesAgo(1) })), 402);
+    // Made a while ago: the phone checked the limit itself when it was made.
+    const late = await s.client.post('/api/orders', s.order({ id: randomUUID(), at: minutesAgo(12) }));
+    assertStatus(late, 201);
+
+    // It counts in the month it was made in (which is not this one in the first minutes of a month).
+    const sameMonth = new Date(minutesAgo(12)).getUTCMonth() === new Date().getUTCMonth();
+    assertEq(await dbScalar(`SELECT count(*) FROM orders WHERE user_id = '${s.user.id}'`), '4', 'four orders');
+    if (sameMonth) assertStatus(await s.client.post('/api/orders', s.order()), 402);
+  });
+});
+test('Plans', 'orders of earlier months are not counted', async () => {
+  await withPlans(async (server) => {
+    const s = await stringerOn(server);
+    await makeOrders(s, 3);
+    assertStatus(await s.client.post('/api/orders', s.order()), 402);
+    dbExec(`UPDATE orders SET created_at = created_at - interval '40 days' WHERE user_id = '${s.user.id}'`);
+    assertStatus(await s.client.post('/api/orders', s.order()), 201);
+    assertStatus(await s.client.post('/api/orders', s.order()), 201);
+    assertStatus(await s.client.post('/api/orders', s.order()), 201);
+    assertStatus(await s.client.post('/api/orders', s.order()), 402);
+  });
+});
+test('Plans', 'the month is the stringer’s own: it begins where their time zone says', async () => {
+  await withPlans(async (server) => {
+    const s = await stringerOn(server);
+    assertStatus(await s.client.patch('/api/auth/me', { timezone: 'Pacific/Auckland' }), 200);
+    const made = await makeOrders(s, 3);
+    // A second before this month began in Auckland (12 or 13 hours ahead of UTC), and the moment it began: the first two are of the month
+    // before there, the last is the first of this one. Counted in UTC, the answer would be another one, whatever day it is today.
+    const begins = "(date_trunc('month', now() at time zone 'Pacific/Auckland') at time zone 'Pacific/Auckland')";
+    dbExec(`UPDATE orders SET created_at = ${begins} - interval '1 second' WHERE id IN ('${made[0].id}', '${made[1].id}')`);
+    dbExec(`UPDATE orders SET created_at = ${begins} WHERE id = '${made[2].id}'`);
+    assertStatus(await s.client.post('/api/orders', s.order()), 201);
+    assertStatus(await s.client.post('/api/orders', s.order()), 201);
+    assertStatus(await s.client.post('/api/orders', s.order()), 402);
+  });
+});
+test('Plans', 'two orders made at once take only the places that are left', async () => {
+  await withPlans(async (server) => {
+    const s = await stringerOn(server);
+    await makeOrders(s, 1);
+    const results = await Promise.all([1, 2, 3, 4, 5].map(() => s.client.post('/api/orders', s.order())));
+    const statuses = results.map((res) => res.status).sort();
+    assertEq(statuses, [201, 201, 402, 402, 402], 'two places, five tries');
+    assertEq((await s.client.get('/api/orders')).data.items.length, 3, 'three orders');
+  });
+});
+test('Plans', 'the limit is each stringer’s own', async () => {
+  await withPlans(async (server) => {
+    const a = await stringerOn(server);
+    const b = await stringerOn(server);
+    await makeOrders(a, 3);
+    assertStatus(await a.client.post('/api/orders', a.order()), 402);
+    assertStatus(await b.client.post('/api/orders', b.order()), 201);
+  });
+});
+test('Plans', 'Pro has no limit, and the numbers go on without a gap', async () => {
+  await withPlans(async (server) => {
+    const s = await stringerOn(server);
+    await makeOrders(s, 3);
+    assertStatus(await s.client.post('/api/orders', s.order()), 402);
+
+    const granted = await s.client.post('/api/billing/dev-grant', { plan: 'pro', period: 'year', trial: true });
+    assertStatus(granted, 200);
+    const sub = granted.data.subscription;
+    assertEq([sub.plan, sub.trial, sub.renews, sub.period, sub.expired], ['pro', true, true, 'year', false], 'a trial of Pro');
+    assertEq(sub.entitlements, { orders_per_month: null, stock: true, month_overview: true }, 'everything');
+    assertEq(sub.free.orders_per_month, 3, 'and Free is what it falls back to');
+    const days = (Date.parse(sub.expires_at) - Date.now()) / (24 * 60 * 60 * 1000);
+    assertTrue(days > 13.9 && days < 14.1, `a trial lasts 14 days, not ${days}`);
+    assertEq((await subscriptionOfMe(s)).plan, 'pro', 'the same from /me');
+
+    const numbers = [];
+    for (let i = 0; i < 3; i++) numbers.push((await s.client.post('/api/orders', s.order())).data.number);
+    assertEq(numbers, [4, 5, 6], 'the refused order took no number');
+  });
+});
+test('Plans', 'a plan that has run out is Free again, after the days of grace', async () => {
+  await withPlans(async (server) => {
+    const s = await stringerOn(server);
+    await makeOrders(s, 3);
+
+    // A day past the end: still held (the store is slow with a renewal).
+    let sub = (await s.client.post('/api/billing/dev-grant', { plan: 'pro', period: 'month', days: -1 })).data.subscription;
+    assertEq([sub.plan, sub.expired], ['pro', false], 'within the grace');
+    assertStatus(await s.client.post('/api/orders', s.order()), 201);
+
+    // Long past it: Free, and the user says that it ran out.
+    sub = (await s.client.post('/api/billing/dev-grant', { plan: 'pro', period: 'month', days: -10 })).data.subscription;
+    assertEq([sub.plan, sub.expired, sub.trial, sub.renews, sub.period, sub.expires_at], ['free', true, false, false, null, null], 'ran out');
+    assertEq(sub.entitlements.orders_per_month, 3, 'the limit is back');
+    assertStatus(await s.client.post('/api/orders', s.order()), 402);
+
+    // Turned off but not yet over: held to the end.
+    sub = (await s.client.post('/api/billing/dev-grant', { plan: 'pro', days: 5, renews: false })).data.subscription;
+    assertEq([sub.plan, sub.renews], ['pro', false], 'cancelled, held to the end');
+
+    // For good, and then taken away.
+    sub = (await s.client.post('/api/billing/dev-grant', { plan: 'studio', days: null })).data.subscription;
+    assertEq([sub.plan, sub.expires_at], ['studio', null], 'no end date');
+    sub = (await s.client.post('/api/billing/dev-grant', { plan: 'free' })).data.subscription;
+    assertEq([sub.plan, sub.expired], ['free', false], 'taken away: not a plan that ran out');
+  });
+});
+test('Plans', 'the plan comes with every sign-in', async () => {
+  await withPlans(async (server) => {
+    const s = await stringerOn(server);
+    assertStatus(await s.client.post('/api/billing/dev-grant', { plan: 'pro' }), 200);
+    const again = new Client(server.base);
+    const login = await again.post('/api/auth/login', { email: s.email, password });
+    assertStatus(login, 200);
+    assertEq(login.data.user.subscription.plan, 'pro', 'in the answer to a sign-in');
+  });
+});
+test('Plans', 'giving a plan by hand needs a signed-in account and a body that makes sense', async () => {
+  await withPlans(async (server) => {
+    assertStatus(await new Client(server.base).post('/api/billing/dev-grant', { plan: 'pro' }), 401);
+    const s = await stringerOn(server);
+    assertStatus(await s.client.post('/api/billing/dev-grant', { plan: 'gold' }), 400);
+    assertStatus(await s.client.post('/api/billing/dev-grant', {}), 400);
+    assertStatus(await s.client.post('/api/billing/dev-grant', { plan: 'pro', period: 'week' }), 400);
+    assertStatus(await s.client.post('/api/billing/dev-grant', { plan: 'pro', days: 1.5 }), 400);
+  });
+});
+test('Plans', 'giving a plan by hand does not exist unless it is turned on', async (ctx) => {
+  const s = await shop(ctx);
+  assertStatus(await s.client.post('/api/billing/dev-grant', { plan: 'pro' }), 404);
+  assertStatus(await ctx.anon.post('/api/billing/dev-grant', { plan: 'pro' }), 404);
+  assertStatus(await s.client.post('/api/billing/dev-grant', { plan: 'gold' }), 404);
+  assertEq((await s.client.get('/api/auth/me')).data.subscription.plan, 'free', 'nothing changed');
+});
+
+/** A stringer who holds Pro for good, with a counted string (one set) and a counted catalog racket (one). */
+async function stockedOnPro(server) {
+  const s = await stringerOn(server);
+  assertStatus(await s.client.post('/api/billing/dev-grant', { plan: 'pro', days: null }), 200);
+  const string = (await s.client.post('/api/strings', { brand: 'Luxilon', model: 'ALU Power', track_stock: true, stock: 1 })).data;
+  const catalogRacket = (await s.client.post('/api/rackets', { brand: 'Wilson', model: 'Blade', track_stock: true, stock: 1 })).data;
+  assertEq([string.track_stock, string.stock, catalogRacket.track_stock, catalogRacket.stock], [true, 1, true, 1], 'counted on Pro');
+  return { ...s, string, catalogRacket };
+}
+const grant = async (s, plan) => assertStatus(await s.client.post('/api/billing/dev-grant', { plan, days: null }), 200);
+const stringRow = (id) => dbScalar(`SELECT track_stock::text || ' ' || stock::text FROM strings WHERE id = '${id}'`);
+const racketRow = (id) => dbScalar(`SELECT track_stock::text || ' ' || stock::text FROM rackets WHERE id = '${id}'`);
+
+test('Plans', 'on Free the stock is paused: orders take nothing and are never refused for it, and Pro finds the counts as they were', async () => {
+  await withPlans(async (server) => {
+    const s = await stockedOnPro(server);
+    const order = (extra = {}) => s.order({ main_string_id: s.string.id, ...extra });
+
+    // Pro counts: the only set goes, and the next order is refused.
+    assertStatus(await s.client.post('/api/orders', order()), 201);
+    assertEq((await s.client.get(`/api/strings/${s.string.id}`)).data.stock, 0, 'taken');
+    const refused = await s.client.post('/api/orders', order());
+    assertStatus(refused, 409);
+    assertEq(refused.data.code, 'out_of_stock', 'code');
+
+    // Free: nothing is counted, the string is there, and what was left is kept.
+    await grant(s, 'free');
+    const paused = (await s.client.get(`/api/strings/${s.string.id}`)).data;
+    assertEq([paused.track_stock, paused.available, paused.stock], [false, true, 0], 'the paused view of the string');
+    const pausedRacket = (await s.client.get(`/api/rackets/${s.catalogRacket.id}`)).data;
+    assertEq([pausedRacket.track_stock, pausedRacket.available, pausedRacket.stock], [false, true, 1], 'and of the racket');
+    const made = await s.client.post('/api/orders', order());
+    assertStatus(made, 201);
+    assertEq(await stringRow(s.string.id), 'true 0.0', 'nothing taken, still counted underneath');
+    assertEq(dbScalar(`SELECT stock_used::text FROM orders WHERE id = '${made.data.id}'`), '[]', 'the order took nothing');
+    // An order for the catalog racket is not refused either, with nothing to take it from.
+    assertStatus(await s.client.post('/api/orders', { client_id: s.order().client_id, racket_id: s.catalogRacket.id }), 201);
+    assertEq(await racketRow(s.catalogRacket.id), 'true 1', 'the racket was not taken');
+    assertEq((await s.client.get('/api/strings?in_stock=1')).data.items.length, 1, 'in stock is everything');
+    assertEq((await s.client.get('/api/rackets?in_stock=1&kind=catalog')).data.items.length, 1, 'for rackets too');
+
+    // Back on Pro: counted again, from what was left (none of the string).
+    await grant(s, 'pro');
+    const counted = (await s.client.get(`/api/strings/${s.string.id}`)).data;
+    assertEq([counted.track_stock, counted.available, counted.stock], [true, false, 0], 'counted again');
+    assertStatus(await s.client.post('/api/orders', order()), 409);
+  });
+});
+test('Plans', 'on Free a request cannot switch the counting on or off, but a count is still taken', async () => {
+  await withPlans(async (server) => {
+    const s = await stockedOnPro(server);
+    await grant(s, 'free');
+
+    // A new one that asks to be counted is not counted, with the count it brought.
+    const made = (await s.client.post('/api/strings', { brand: 'Babolat', model: 'RPM Blast', track_stock: true, stock: 2 })).data;
+    assertEq([made.track_stock, made.available, made.stock], [false, true, 2], 'a new string');
+    assertEq(await stringRow(made.id), 'false 2.0', 'not counted underneath either');
+    const madeRacket = (await s.client.post('/api/rackets', { brand: 'Head', model: 'Speed', track_stock: true, stock: 3 })).data;
+    assertEq([madeRacket.track_stock, madeRacket.stock], [false, 3], 'a new catalog racket');
+
+    // The form that was made for the paused view sends "not counted": it must not switch the counting off for good.
+    const patched = await s.client.patch(`/api/strings/${s.string.id}`, { track_stock: false, stock: 5, default_price: 12 });
+    assertStatus(patched, 200);
+    assertEq([patched.data.track_stock, patched.data.stock, patched.data.default_price], [false, 5, 12], 'the count and the price change');
+    assertEq(await stringRow(s.string.id), 'true 5.0', 'still counted underneath');
+    assertStatus(await s.client.patch(`/api/strings/${s.string.id}`, { track_stock: true }), 200);
+    assertEq(await stringRow(s.string.id), 'true 5.0', 'a body with only that changes nothing');
+    const racket = await s.client.patch(`/api/rackets/${s.catalogRacket.id}`, { track_stock: false, stock: 4 });
+    assertStatus(racket, 200);
+    assertEq([racket.data.track_stock, racket.data.stock], [false, 4], 'a catalog racket');
+    assertEq(await racketRow(s.catalogRacket.id), 'true 4', 'still counted underneath');
+
+    // A change of the count by an amount is still taken.
+    const added = await s.client.post(`/api/strings/${s.string.id}/stock`, { delta: 1, op_id: randomUUID() });
+    assertStatus(added, 200);
+    assertEq(added.data.stock, 6, 'added');
+
+    // On Pro the same request does what it says.
+    await grant(s, 'pro');
+    assertEq((await s.client.patch(`/api/strings/${s.string.id}`, { track_stock: false })).data.track_stock, false, 'switched off on Pro');
+    assertEq(await stringRow(s.string.id), 'false 6.0');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The store: what RevenueCat says an account holds is written to its plan, once the app has bought or restored something (it asks the
+// server to read it) and whenever RevenueCat sends a notice. A fake RevenueCat stands in for it. The server of these tests has its
+// secret key, the header of its notices and the plans on (the port of the rate limit tests, as the Plans tests above).
+// ---------------------------------------------------------------------------
+const HOOK = 'Bearer hook-secret-for-the-tests';
+const DAY_MS = 24 * 60 * 60 * 1000;
+const inDays = (days) => new Date(Date.now() + days * DAY_MS).toISOString();
+
+async function withStore(run, env = {}) {
+  const store = await startFakeRevenueCat();
+  try {
+    await withPlans((server) => run(server, store), {
+      REVENUECAT_SECRET_KEY: store.secretKey,
+      REVENUECAT_API_URL: store.apiUrl,
+      REVENUECAT_WEBHOOK_AUTH: HOOK,
+      ...env,
+    });
+  } finally {
+    await store.stop();
+  }
+}
+
+/** A customer of RevenueCat who holds an entitlement through a subscription, as its API gives one. */
+function holds({ entitlement = 'pro', product = 'restring_pro_monthly', days = 20, trial = false, unsubscribed = false } = {}) {
+  return {
+    entitlements: {
+      [entitlement]: { product_identifier: product, purchase_date: inDays(-10), expires_date: inDays(days), grace_period_expires_date: null },
+    },
+    subscriptions: {
+      [product]: {
+        store: 'app_store',
+        period_type: trial ? 'trial' : 'normal',
+        purchase_date: inDays(-10),
+        expires_date: inDays(days),
+        unsubscribe_detected_at: unsubscribed ? inDays(-1) : null,
+        billing_issues_detected_at: null,
+        refunded_at: null,
+      },
+    },
+  };
+}
+
+/** RevenueCat's notice about an account. */
+const noticeFor = (s, event = {}) => ({
+  api_version: '1.0',
+  event: { type: 'RENEWAL', app_user_id: s.user.id, original_app_user_id: s.user.id, aliases: [s.user.id], environment: 'SANDBOX', ...event },
+});
+/** What RevenueCat does: a POST with its header, from nobody who is signed in. */
+const sendNotice = (server, body, authorization = HOOK) =>
+  new Client(server.base).post('/api/billing/revenuecat', body, authorization ? { authorization } : {});
+const planInDb = (s) => dbScalar(`SELECT plan FROM users WHERE id = '${s.user.id}'`);
+
+test('Store', 'after a purchase the app asks the server to read the store, and the plan is what the store says', async () => {
+  await withStore(async (server, store) => {
+    const s = await stringerOn(server);
+    await makeOrders(s, 3);
+    assertStatus(await s.client.post('/api/orders', s.order()), 402);
+
+    store.customers.set(s.user.id, holds({ days: 20, trial: true }));
+    const synced = await s.client.post('/api/billing/sync');
+    assertStatus(synced, 200);
+    const sub = synced.data.subscription;
+    assertEq([sub.plan, sub.trial, sub.renews, sub.period], ['pro', true, true, 'month'], 'Pro, in its free days');
+    assertTrue(Math.abs(Date.parse(sub.expires_at) - (Date.now() + 20 * DAY_MS)) < 5000, 'to the end the store says');
+    assertEq((await subscriptionOfMe(s)).plan, 'pro', '/me says it too');
+    assertStatus(await s.client.post('/api/orders', s.order()), 201);
+
+    const asked = store.requests.at(-1);
+    assertEq([asked.method, asked.url, asked.authorization], ['GET', `/subscribers/${s.user.id}`, `Bearer ${store.secretKey}`], 'what RevenueCat was asked');
+  });
+});
+test('Store', 'a plan turned off in the store holds to its end, a year is a year, and a Studio entitlement is Studio', async () => {
+  await withStore(async (server, store) => {
+    const s = await stringerOn(server);
+    store.customers.set(s.user.id, holds({ product: 'restring_pro_yearly', days: 200, unsubscribed: true }));
+    let sub = (await s.client.post('/api/billing/sync')).data.subscription;
+    assertEq([sub.plan, sub.period, sub.renews, sub.trial], ['pro', 'year', false, false], 'cancelled, held');
+
+    store.customers.set(s.user.id, holds({ entitlement: 'studio', product: 'restring_studio_monthly' }));
+    sub = (await s.client.post('/api/billing/sync')).data.subscription;
+    assertEq([sub.plan, sub.period], ['studio', 'month'], 'Studio');
+  });
+});
+test('Store', 'a plan that ended is Free again after the days of grace, and one the store does not know is taken away', async () => {
+  await withStore(async (server, store) => {
+    const s = await stringerOn(server);
+    store.customers.set(s.user.id, holds({ days: -1 }));
+    let sub = (await s.client.post('/api/billing/sync')).data.subscription;
+    assertEq([sub.plan, sub.expired], ['pro', false], 'a day past the end: still held');
+
+    store.customers.set(s.user.id, holds({ days: -10 }));
+    sub = (await s.client.post('/api/billing/sync')).data.subscription;
+    assertEq([sub.plan, sub.expired], ['free', true], 'long past it: ran out');
+
+    // The store is the truth: an account given a plan by hand and unknown to it goes back to Free.
+    assertStatus(await s.client.post('/api/billing/dev-grant', { plan: 'pro', days: null }), 200);
+    store.customers.delete(s.user.id);
+    sub = (await s.client.post('/api/billing/sync')).data.subscription;
+    assertEq([sub.plan, sub.expired], ['free', false], 'nothing held');
+  });
+});
+test('Store', 'reading the store needs a signed-in account, and a key, and an answer from RevenueCat', async () => {
+  await withStore(async (server, store) => {
+    assertStatus(await new Client(server.base).post('/api/billing/sync'), 401);
+
+    const s = await stringerOn(server);
+    store.customers.set(s.user.id, holds());
+    store.answer(500);
+    const failed = await s.client.post('/api/billing/sync');
+    assertStatus(failed, 502);
+    assertEq(failed.data.code, 'billing_unreachable', 'RevenueCat could not give an answer');
+    assertEq(await planInDb(s), 'free', 'nothing was written');
+
+    store.answer(null);
+    assertStatus(await s.client.post('/api/billing/sync'), 200);
+    assertEq(await planInDb(s), 'pro', 'and when it can, it is');
+  });
+  // No key at this server.
+  await withPlans(async (server) => {
+    const s = await stringerOn(server);
+    const none = await s.client.post('/api/billing/sync');
+    assertStatus(none, 503);
+    assertEq(none.data.code, 'billing_unavailable', 'purchases are not connected');
+  });
+  // A wrong key: RevenueCat refuses it, the server says that it cannot reach it, and never says the key.
+  await withStore(async (server) => {
+    const s = await stringerOn(server);
+    const refused = await s.client.post('/api/billing/sync');
+    assertStatus(refused, 502);
+    assertTrue(!JSON.stringify(refused.data).includes('sk_'), 'the key is not in the answer');
+    assertTrue(!server.logs().includes('sk_'), 'nor in the logs');
+  }, { REVENUECAT_SECRET_KEY: 'sk_the_wrong_one' });
+});
+test('Store', 'the requests to read the store are limited, a few a minute from one address', async () => {
+  await withStore(async (server, store) => {
+    const s = await stringerOn(server);
+    store.customers.set(s.user.id, holds());
+    assertStatus(await s.client.post('/api/billing/sync'), 200);
+    assertStatus(await s.client.post('/api/billing/sync'), 200);
+    const third = await s.client.post('/api/billing/sync');
+    assertStatus(third, 429);
+    assertEq(third.data.code, 'rate_limited', 'code');
+  }, { BILLING_SYNC_RATE_LIMIT_MAX: '2' });
+});
+test('Store', 'a notice from RevenueCat makes the server read the store, and what the notice says is not used', async () => {
+  await withStore(async (server, store) => {
+    const s = await stringerOn(server);
+    store.customers.set(s.user.id, holds({ days: 20 }));
+    // The notice claims that the plan ended long ago; the store says that it runs.
+    const done = await sendNotice(server, noticeFor(s, { type: 'EXPIRATION', expiration_at_ms: Date.now() - 30 * DAY_MS }));
+    assertStatus(done, 200);
+    assertEq(done.data, { ok: true, synced: 1 }, 'one account read');
+    assertEq(await planInDb(s), 'pro', 'what the store says');
+
+    // The next notice finds it ended.
+    store.customers.set(s.user.id, holds({ days: -10 }));
+    assertStatus(await sendNotice(server, noticeFor(s, { type: 'EXPIRATION' })), 200);
+    assertEq((await subscriptionOfMe(s)).plan, 'free', 'and then what it says then');
+  });
+});
+test('Store', 'a notice is found by any id the customer had, and a transfer is about both accounts', async () => {
+  await withStore(async (server, store) => {
+    const a = await stringerOn(server);
+    const b = await stringerOn(server);
+    store.customers.set(a.user.id, holds());
+    // Made under an anonymous id, then the account's own: found by the first one it had.
+    const byOriginal = await sendNotice(server, noticeFor(a, { app_user_id: '$RCAnonymousID:abc123', aliases: ['$RCAnonymousID:abc123'] }));
+    assertEq(byOriginal.data, { ok: true, synced: 1 }, 'found by the original id');
+    assertEq(await planInDb(a), 'pro', 'a');
+
+    // A purchase moved from a to b.
+    store.customers.delete(a.user.id);
+    store.customers.set(b.user.id, holds({ entitlement: 'studio', product: 'restring_studio_yearly' }));
+    const moved = await sendNotice(server, noticeFor(a, { type: 'TRANSFER', app_user_id: b.user.id, transferred_from: [a.user.id], transferred_to: [b.user.id] }));
+    assertEq(moved.data, { ok: true, synced: 2 }, 'both read');
+    assertEq([await planInDb(a), await planInDb(b)], ['free', 'studio'], 'one lost it, the other has it');
+  });
+});
+test('Store', 'a notice about nobody here, a test notice and a notice with no event are answered, not asked about', async () => {
+  await withStore(async (server, store) => {
+    const asked = () => store.requests.length;
+    assertEq((await sendNotice(server, { api_version: '1.0', event: { type: 'TEST', app_user_id: randomUUID() } })).data, { ok: true, synced: 0 }, 'test');
+    assertEq((await sendNotice(server, { event: { type: 'RENEWAL', app_user_id: randomUUID() } })).data, { ok: true, synced: 0 }, 'an account that is not here');
+    assertEq((await sendNotice(server, { event: { type: 'RENEWAL', app_user_id: '$RCAnonymousID:xyz' } })).data, { ok: true, synced: 0 }, 'an anonymous customer');
+    assertStatus(await sendNotice(server, { api_version: '1.0' }), 400);
+    assertStatus(await sendNotice(server, 'nonsense'), 400);
+    assertEq(asked(), 0, 'RevenueCat was not asked about any of them');
+  });
+});
+test('Store', 'a notice that cannot be dealt with is answered with an error, so that RevenueCat sends it again', async () => {
+  await withStore(async (server, store) => {
+    const s = await stringerOn(server);
+    store.customers.set(s.user.id, holds());
+    store.answer(503);
+    assertStatus(await sendNotice(server, noticeFor(s)), 502);
+    assertEq(await planInDb(s), 'free', 'nothing was written');
+    store.answer(null);
+    assertStatus(await sendNotice(server, noticeFor(s)), 200);
+    assertEq(await planInDb(s), 'pro', 'the second time it was');
+  });
+});
+test('Store', 'only RevenueCat is heard: its header is needed, and with none set the route does not exist', async () => {
+  await withStore(async (server, store) => {
+    const s = await stringerOn(server);
+    store.customers.set(s.user.id, holds());
+    assertStatus(await sendNotice(server, noticeFor(s), null), 401);
+    assertStatus(await sendNotice(server, noticeFor(s), 'Bearer another-secret'), 401);
+    assertStatus(await sendNotice(server, noticeFor(s), HOOK.slice(0, -1)), 401);
+    assertEq(await planInDb(s), 'free', 'nothing happened');
+    assertEq(store.requests.length, 0, 'and RevenueCat was not asked');
+  });
+  await withPlans(async (server) => {
+    const s = await stringerOn(server);
+    assertStatus(await sendNotice(server, noticeFor(s), HOOK), 404);
+  });
 });
 
 // ---------------------------------------------------------------------------

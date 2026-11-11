@@ -4,7 +4,6 @@ import {
   FlatList,
   Platform,
   Pressable,
-  TextInput,
   View,
   type LayoutChangeEvent,
   type NativeScrollEvent,
@@ -12,16 +11,16 @@ import {
   type ViewStyle,
 } from 'react-native';
 
-import { Check, ClipboardList, Search, Wallet, X, type IconComponent } from '@/components/icons';
+import { Check, ClipboardList, Wallet, X, type IconComponent } from '@/components/icons';
 import ReadyMessageSheet from '@/components/ready-message-sheet';
 import { BUTTON_RADIUS } from '@/components/ui/button-radius';
 import { PressableBlock } from '@/components/ui/card';
 import Checkbox from '@/components/ui/checkbox';
 import { colors, statusColors } from '@/components/ui/colors';
-import { SEARCH_INPUT_TEXT } from '@/components/ui/field-text';
 import { PAGE_COLUMN, PAGE_X } from '@/components/ui/page';
-import { PAPER_CARD, PAPER_FIELD, PAPER_RAISED } from '@/components/ui/paper';
+import { PAPER_RAISED, SURFACE_EDGE } from '@/components/ui/paper';
 import { Screen, ScreenHeader } from '@/components/ui/screen';
+import SearchField, { type SearchFieldRef } from '@/components/ui/search-field';
 import { ListSkeleton } from '@/components/ui/skeleton';
 import { StatusChip, StatusMenu, type Anchor } from '@/components/ui/status-menu';
 import { EmptyState, ErrorState, NoResults } from '@/components/ui/states';
@@ -36,12 +35,12 @@ import { useMark } from '@/lib/offline/react';
 import { describeSetup, readyMessage } from '@/lib/order-text';
 import { useAllOrders, useUpdateOrder } from '@/lib/queries';
 import type { Order, OrderStatus, TensionUnit } from '@/lib/types';
+import { useSearch } from '@/lib/use-search';
 
 // The orders of a desktop as a table (docs/desktop-layout.md): a row to an order, the columns of what a stringer looks for, filters with
 // their counts above it, a box to tick on each row and a bar for what is done to the ticked ones, the status of a row changed from a
 // menu under it, and the keys (J and K up and down, Space to tick, Enter to open, S for the status, / for the search).
 
-const SEARCH_DEBOUNCE_MS = 250;
 // The widths of what is inside the column of the page (its p-12 padding is not in it) from which every column has room, and from which
 // the strings still have a column of their own (below that they go under the name). Each is 48 px less than when the sides of a page
 // were 24 px (1100 and 900), so the table changes at the same widths of the window.
@@ -169,13 +168,13 @@ const OrderRow = memo(function OrderRow({ order, ctx, variant, selected, cursor,
           <Checkbox
             checked={selected}
             onChange={() => onToggle(order.id)}
-            label={t('orders_select_row', { number: order.number ?? '—' })}
+            label={t('orders_select_row', { number: order.number ?? '-' })}
           />
         );
       case 'number':
         return (
           <Text className="text-[13.5px] text-muted" numberOfLines={1}>
-            {order.number ?? '—'}
+            {order.number ?? '-'}
           </Text>
         );
       case 'client':
@@ -194,7 +193,7 @@ const OrderRow = memo(function OrderRow({ order, ctx, variant, selected, cursor,
             </View>
             {variant === 'compact' ? (
               <Text className="text-[13px] text-muted" numberOfLines={1}>
-                {`${racketName(order.racket)} · ${describeSetup(order, ctx.unit, t)}`}
+                {`${racketName(order.racket)}, ${describeSetup(order, ctx.unit, t)}`}
               </Text>
             ) : null}
           </View>
@@ -253,7 +252,7 @@ const OrderRow = memo(function OrderRow({ order, ctx, variant, selected, cursor,
   return (
     <PressableBlock
       onPress={() => onOpen(order.id)}
-      accessibilityLabel={t('order_card_label', { number: order.number ?? '—', client: order.client.name })}
+      accessibilityLabel={t('order_card_label', { number: order.number ?? '-', client: order.client.name })}
       className={`flex-row items-center gap-3 border-t border-line/50 px-4 ${selected ? 'bg-[#EEF6E8]' : ''}`}
       style={{ height: ROW_HEIGHT[variant], ...(edge ? { boxShadow: edge } : null) }}>
       {COLUMNS[variant].map((id) => (
@@ -284,7 +283,7 @@ function TableHeader({
     number: t('orders_col_number'),
     client: t('field_client'),
     racket: t('field_racket'),
-    strings: `${t('field_strings')} · ${t('field_tension')}`,
+    strings: `${t('field_strings')} / ${t('field_tension')}`,
     due: t('orders_col_due'),
     status: t('orders_col_status'),
     total: t('order_total'),
@@ -430,12 +429,8 @@ export default function OrdersTablePage() {
   const { user } = useAuth();
   const update = useUpdateOrder();
 
-  const [text, setText] = useState('');
-  const [query, setQuery] = useState('');
-  useEffect(() => {
-    const timer = setTimeout(() => setQuery(text), SEARCH_DEBOUNCE_MS);
-    return () => clearTimeout(timer);
-  }, [text]);
+  const search = useSearch();
+  const { query } = search;
 
   const all = useAllOrders(query);
   const [filter, setFilter] = useState<Filter>('all');
@@ -553,7 +548,7 @@ export default function OrdersTablePage() {
 
   const listRef = useRef<FlatList<Order>>(null);
   const tableRef = useRef<ComponentRef<typeof View>>(null);
-  const searchRef = useRef<ComponentRef<typeof TextInput>>(null);
+  const searchRef = useRef<SearchFieldRef>(null);
   const scrollY = useRef(0);
   const viewport = useRef(0);
 
@@ -643,38 +638,14 @@ export default function OrdersTablePage() {
       <ScreenHeader
         title={t('tab_orders')}
         right={
-          <View
-            className={`h-11 w-[360px] flex-row items-center gap-2.5 rounded-lg border border-line bg-white px-3.5 ${PAPER_FIELD}`}>
-            <Search size={18} color={colors.muted} />
-            <TextInput
-              ref={searchRef}
-              value={text}
-              onChangeText={setText}
-              placeholder={t('orders_search_placeholder')}
-              placeholderTextColor={colors.placeholder}
-              selectionColor={colors.primary}
-              autoCapitalize="none"
-              autoCorrect={false}
-              returnKeyType="search"
-              accessibilityLabel={t('search')}
-              textAlignVertical="center"
-              className={`min-w-0 flex-1 font-normal text-ink outline-none ${SEARCH_INPUT_TEXT}`}
-            />
-            {text ? (
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={t('clear')}
-                hitSlop={8}
-                onPress={() => setText('')}
-                className="hover:opacity-70">
-                <X size={16} color={colors.muted} />
-              </Pressable>
-            ) : (
-              <View className="h-6 min-w-6 items-center justify-center rounded-md bg-surface px-1.5">
-                <Text className="text-[12px] font-medium text-muted">/</Text>
-              </View>
-            )}
-          </View>
+          <SearchField
+            ref={searchRef}
+            value={search.text}
+            onChangeText={search.setText}
+            placeholder={t('orders_search_placeholder')}
+            hint="/"
+            className="w-[360px]"
+          />
         }
       />
 
@@ -710,7 +681,7 @@ export default function OrdersTablePage() {
           accessibilityLabel={t('tab_orders')}
           {...({ dataSet: { noRing: 'true' } } as object)}
           {...(web as object)}
-          className={`min-h-0 flex-1 overflow-hidden rounded-[18px] bg-white ${PAPER_CARD}`}>
+          className={`min-h-0 flex-1 overflow-hidden rounded-[18px] bg-white ${SURFACE_EDGE}`}>
           <TableHeader
             variant={variant}
             t={t}

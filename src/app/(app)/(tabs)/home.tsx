@@ -3,13 +3,15 @@ import { Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import HomeInsights from '@/components/home-insights';
+import LockedInsights from '@/components/locked-insights';
 import CatalogIcon from '@/components/icons/catalog-icon';
 import PlusIcon from '@/components/icons/plus-icon';
+import PlanStrip from '@/components/plan-strip';
 import SyncPill from '@/components/sync-pill';
 import UserIcon from '@/components/icons/user-icon';
 import { colors } from '@/components/ui/colors';
 import { PAGE_CONTENT } from '@/components/ui/page';
-import { PAPER_CARD } from '@/components/ui/paper';
+import { SURFACE_EDGE } from '@/components/ui/paper';
 import { Screen, ScreenHeader } from '@/components/ui/screen';
 import Shortcut from '@/components/ui/shortcut';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -19,6 +21,7 @@ import { useAuth } from '@/lib/auth';
 import { useI18n, type TKey } from '@/lib/i18n';
 import { useIsWide } from '@/lib/layout';
 import { useDashboard } from '@/lib/queries';
+import { useSubscription } from '@/lib/use-subscription';
 
 /** The hour where the stringer is, so the greeting matches their morning and not the server's. */
 function hourIn(timeZone: string | undefined) {
@@ -59,7 +62,7 @@ function Stat({ value, failed, label, onPress, className = 'flex-1 px-3 py-3', i
       {value === undefined && !failed ? (
         <Skeleton className="my-1 h-7 w-10" />
       ) : (
-        <Text className="text-[28.6px] font-semibold text-primary">{value ?? '—'}</Text>
+        <Text className="text-[28.6px] font-semibold text-primary">{value ?? '-'}</Text>
       )}
       <Text className="text-center text-[13.2px] leading-4 text-muted" numberOfLines={2} maxFontSizeMultiplier={1.3}>
         {label}
@@ -99,6 +102,7 @@ export default function Home() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const dashboard = useDashboard();
+  const plan = useSubscription();
   const data = dashboard.data;
 
   const firstName = user?.full_name?.trim().split(/\s+/)[0];
@@ -125,9 +129,11 @@ export default function Home() {
             <ErrorState error={dashboard.error} onRetry={() => dashboard.refetch()} />
           ) : (
             <>
+              {/* Where the plan limits the orders: how much of the month is used. */}
+              <PlanStrip framed />
               <View className="flex-row gap-4">
                 {numbers.map((number) => (
-                  <View key={number.label} className={`min-w-0 flex-1 overflow-hidden rounded-[18px] bg-white ${PAPER_CARD}`}>
+                  <View key={number.label} className={`min-w-0 flex-1 overflow-hidden rounded-[18px] bg-white ${SURFACE_EDGE}`}>
                     <Stat
                       inert
                       value={number.value}
@@ -138,7 +144,8 @@ export default function Home() {
                   </View>
                 ))}
               </View>
-              <HomeInsights />
+              {/* The charts of the month are Pro's: Free has a place for them that says so. */}
+              {plan.entitlements.month_overview ? <HomeInsights /> : <LockedInsights />}
             </>
           )}
         </ScrollView>
@@ -185,22 +192,29 @@ export default function Home() {
       </View>
 
       {/* All of the page, from under the logo to the shortcuts, is in one white block, rounded at the top and at the
-          foot (the radius of the containers it sits among: see Screen). */}
-      <View className="flex-1 overflow-hidden rounded-[18px] bg-white">
+          foot (the radius of the containers it sits among: see Screen), on the colour of the page. It runs from edge to edge of
+          the screen, with no gutter at the sides (the cards of the other pages have one: BLOCK_SHAPE in card.tsx). */}
+      <View className={`flex-1 overflow-hidden rounded-[18px] bg-white ${SURFACE_EDGE}`}>
         {/* The numbers rest at the foot of the page, just above the shortcuts; the insights fill the room above them.
             On a screen too short for both, the page scrolls instead of squeezing the insights. */}
         <ScrollView
           bounces={false}
           overScrollMode="never"
           showsVerticalScrollIndicator={false}
-          contentContainerClassName="grow py-page">
+          // (With the strip of the plan at the top of the block, it is the block's own top and the page's gap is not added above it.)
+          contentContainerClassName={plan.usage ? 'grow pb-page' : 'grow py-page'}>
+          {/* Where the plan limits the orders: how much of the month is used, at the top of the block. */}
+          <PlanStrip />
           {/* When the numbers cannot be loaded, the retry takes the place of the insights: both need the same connection. */}
           {dashboard.isError && !data ? (
             <View className="flex-1 justify-center">
               <ErrorState error={dashboard.error} onRetry={() => dashboard.refetch()} />
             </View>
-          ) : (
+          ) : plan.entitlements.month_overview ? (
             <HomeInsights />
+          ) : (
+            // The charts of the month are Pro's: Free has a place for them that says so.
+            <LockedInsights />
           )}
 
           {/* The three thirds are equal. */}

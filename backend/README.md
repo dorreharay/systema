@@ -78,7 +78,9 @@ characters). The server refuses to start without them. In production also set `A
 this API, used in email links and as the only allowed browser origin). To send emails set `RESEND_API_KEY` and
 `EMAIL_FROM_ADDRESS` (see `../docs/email.md`). To offer sign-in with Google also set `GOOGLE_CLIENT_IDS`, and with Apple
 `APPLE_CLIENT_IDS` (and, to revoke an account's Apple token when it is deleted, `APPLE_TEAM_ID`, `APPLE_KEY_ID` and
-`APPLE_PRIVATE_KEY`): see below.
+`APPLE_PRIVATE_KEY`): see below. `BILLING_ENABLED`, `FREE_ORDERS_PER_MONTH`, `BILLING_GRACE_DAYS` and `BILLING_DEV_GRANTS` are about the
+subscription plans: see [Subscription plans](#subscription-plans). `EMAIL_VERIFICATION_REQUIRED` and the `EMAIL_CODE_*` variables are about
+confirming the email address of a new account: see [Confirming the email address](#confirming-the-email-address).
 
 ## API
 
@@ -93,6 +95,8 @@ Every error is `{ "error": "message", "code"?: "machine_reason", "fields"?: { "f
 | `POST` | `/api/auth/apple` | `{ identity_token, authorization_code?, full_name?, language? }`, from Sign in with Apple → `{ user, token }` (`201` for a new account); 400 `apple_email_missing`, 401 `apple_token_invalid`, 403 `account_inactive`, 409 `apple_account_mismatch` / `email_taken`, 503 `apple_not_configured` / `apple_unavailable` |
 | `POST` | `/api/auth/logout` | clears the cookie |
 | `GET` | `/api/auth/me` | the signed-in user |
+| `POST` | `/api/auth/verify-email` | `{ code }`, the code emailed on sign-up → the user, with `email_verified: true`; 400 `invalid_code` (`data.attempts_left`) / `code_expired`, 429 `code_attempts_exceeded`. See [Confirming the email address](#confirming-the-email-address) |
+| `POST` | `/api/auth/resend-verification` | → `{ ok: true, retry_after }`; emails a new code (the one before stops working); 429 `code_cooldown` / `code_limit` (`data.retry_after`, in seconds), 502 `email_not_sent` |
 | `PATCH` | `/api/auth/me` | any of `full_name`, `workshop_name`, `currency` (ISO code), `tension_unit` (`kg`/`lbs`), `timezone` (IANA), `language` (one of the nine above), `notifications_enabled`, `setup_completed: true` → the user |
 | `POST` | `/api/auth/delete-account` | `{ password }` → `{ ok: true }`; deletes the account and everything it owns (clients, rackets, strings, services, orders, photos) for good. The password is checked when the account has one (`403 invalid_password`), and `/me` says whether it does (`has_password`). An account made with Apple has its Apple token revoked first, when the server kept one |
 | `POST` | `/api/auth/forgot-password` | `{ email }` → always `{ ok: true }`; emails a link when the address has an account, in the language of the account |
@@ -103,7 +107,30 @@ A password is 8 to 72 bytes, as in the app. Sign-in answers with the cookie `aut
 and sends `Authorization: Bearer <token>`.
 
 Changing a password with a reset link ends every session opened before.
-Register, login, Google and Apple sign-in, delete-account, forgot-password and reset-password are limited to 20 attempts per IP and 15 minutes.
+Register, login, Google and Apple sign-in, verify-email, resend-verification, delete-account, forgot-password and reset-password are limited to 20 attempts per IP and 15 minutes.
+
+### Confirming the email address
+
+An account made with an email and a password has to show that the address is its own. A code of six digits is emailed when it signs up, and
+until it is typed in, every route but a few answers `403 { "code": "email_not_verified" }`: `GET /me`, `POST /logout`, `POST /delete-account`
+and the two routes above are let through, so the app can ask for a code, take it and leave. The user says `email_verified`.
+
+It is a setting of the server, `EMAIL_VERIFICATION_REQUIRED`: **on in production, off everywhere else**. A local server (and the tests) ask for
+nothing: `email_verified` is `true` from the start and no code is made. Set it to `true` to try it locally; with no email service set up the
+email, code and all, is printed to the console. Set it to `false` in production to switch it off.
+
+- A code works for 15 minutes (`EMAIL_CODE_MINUTES`) and takes 5 wrong guesses (`EMAIL_CODE_ATTEMPTS`); only the newest one counts. A guess
+  is counted before it is looked at, so guesses sent together get no more than 5 looks between them. Only a keyed hash of a code is stored
+  (table `email_codes`), and it is only good for the account it was made for.
+- Another code is refused for 60 seconds after the last (`EMAIL_CODE_RESEND_SECONDS`) and after 6 in an hour (`EMAIL_CODE_SENDS_PER_HOUR`).
+  A code whose email could not be sent is not kept.
+- Sign-up sends the first code without waiting for the email to go out. A sign-in of an account that has not confirmed sends one only when
+  none can still be typed in.
+- Accounts made with Google, and with Apple when Apple calls the address verified, are confirmed from the start (an address Apple does not
+  call verified is confirmed with a code). Choosing a new password through the emailed link confirms the address too, and so does linking the
+  account to Google or Apple.
+- Migration `0009` counts every account that exists as confirmed: they signed up before it was asked for. Before turning this on in production,
+  the app version with the screen that asks for the code has to be out, or an old version will be answered `email_not_verified` for a new account.
 
 ### Sign in with Google
 
@@ -176,6 +203,36 @@ that client in it; one key serves both, as the Services ID is grouped with the a
 whatever goes wrong is logged as `[apple] …` (nothing secret in it) and the sign-in or the deletion goes on. `APPLE_AUTH_URL` is the base of Apple's `/token` and `/revoke` endpoints and `APPLE_KEYS_URL`
 is where its keys are; only a test has a reason to change them.
 
+### Subscription plans
+
+An account is on Free, Pro or Studio (`plan`, `plan_period`, `plan_expires_at`, `plan_trial`, `plan_renews` of `users`). All of it is off
+unless `BILLING_ENABLED=true`: every account then has everything, nothing is counted and the app shows no plans. See
+`../docs/subscriptions.md` for what is built and what is left before a first payment.
+
+- **The user** (`/api/auth/me`, and the answers of the sign-ins) has a `subscription`: `enabled`, `plan` (what the account holds now: the
+  paid plan until `plan_expires_at` and `BILLING_GRACE_DAYS` after it, otherwise `free`), `trial`, `renews`, `period`, `expires_at`,
+  `holds_until`, `expired` (it had a plan that has run out), `checked_at`, `entitlements` (`orders_per_month`, `stock`, `month_overview`)
+  and `free` (what the account falls back to).
+- **The limit.** On Free, `POST /api/orders` answers `402 order_limit_reached` with `data: { limit, used, resets_on }` once the stringer has
+  made `FREE_ORDERS_PER_MONTH` orders in their calendar month (their time zone; a deleted order gives its place back). An order made without a
+  connection (an `at` more than five minutes old) and an order that is sent again with its `id` are never turned away.
+- **The stock** is paused on Free, not taken away. Where `entitlements.stock` is false the rackets and strings are answered as not counted
+  (`track_stock: false`, `available: true`, the count itself is still sent), `?in_stock=1` lists everything, an order takes nothing from the stock
+  and is never refused with `out_of_stock`, and a request cannot write `track_stock` (a form of the paused view sends `false`, which must not
+  switch the counting off for good), while a count (`stock`, or a change by an amount) is still written. On Pro the counting goes on from the
+  counts that were left.
+- `POST /api/billing/dev-grant` `{ plan, period?, trial?, renews?, days? }` → the user: gives the signed-in account a plan by hand. It is a
+  `404` unless `BILLING_DEV_GRANTS=true`, and that setting does nothing in production.
+- **The store** is RevenueCat (`utils/revenuecat.js`): the app buys through its SDK with the account's id as the customer id, and the server asks
+  it what the customer holds (`GET /v1/subscribers/{id}`, `REVENUECAT_SECRET_KEY`) and writes the `plan*` columns. `POST /api/billing/sync`
+  (signed in, rate limited by `BILLING_SYNC_RATE_LIMIT_MAX` a minute) does that for the signed-in account and answers with the user; it is
+  `503 billing_unavailable` without the key and `502 billing_unreachable` when RevenueCat cannot answer. `POST /api/billing/revenuecat` is
+  RevenueCat's webhook: its `Authorization` header must be `REVENUECAT_WEBHOOK_AUTH` (without that setting the route is a `404`), and what a
+  notice says is not used, only whom it is about (`app_user_id`, `original_app_user_id`, `aliases`, both sides of a `TRANSFER`): the server
+  asks RevenueCat for the state of those accounts. A notice about nobody here, and a `TEST`, are answered `200`; one the server could not deal
+  with because RevenueCat could not be asked is answered `502`, so that RevenueCat sends it again. The entitlements are `REVENUECAT_PRO_ENTITLEMENT`
+  and `REVENUECAT_STUDIO_ENTITLEMENT` (`pro` and `studio`).
+
 ### Stringing: clients, rackets, strings, services, orders
 
 Everything below needs a signed-in user and only ever shows that user's own data (another user's id is a
@@ -196,7 +253,7 @@ orders that used it (an old order never loses its history); an order is deleted 
 | `GET` | `/api/reference` | what the reference catalog holds: `updated`, and for `rackets` and `strings` the `count` and the `brands` |
 | `GET` | `/api/reference/rackets` | the rackets that exist, to find one by a part of its name. `?q=`, `?brand=`, `?limit=` (1 to 50, 20 by default), `?offset=` → `{ items, has_more }`, each item `{ id, brand, model }` |
 | `GET` | `/api/reference/strings` | the same for strings, and `?type=`. Each item is `{ id, brand, model, type, gauges }`: `gauges` are the sizes in mm, from the thinnest, empty when they are not known |
-| `GET` `POST` | `/api/services` | what the stringer charges for: `{ name, price?, kind: labor\|extra, active }`. New accounts start with Stringing Labor, Grip Replacement and Overgrip Installation (named in the language of the account), without prices |
+| `GET` `POST` | `/api/services` | what the stringer charges for: `{ name, price?, kind: labor\|extra, active }`. New accounts start with Main Service (the stringing itself, which every order gets), Grip Replacement and Overgrip Installation (named in the language of the account), without prices |
 | `PATCH` | `/api/services/:id` | `active: false` archives a service (it is no longer offered on new orders), `true` brings it back |
 | `GET` `POST` | `/api/orders` | `?status=` (`received`, `in_progress`, `ready`, `completed`, or `active` for the first three), `?q=` (customer, racket, string, `#number`), `?client_id=`, `?racket_id=`, `?limit=&offset=` → `{ items, has_more }`. The queue is by due date, then finished orders, newest first. `?details=1` adds each order's `services` and `photos`, as `GET /api/orders/:id` has them |
 | `GET` `PATCH` `DELETE` | `/api/orders/:id` | `GET` adds `services` and `photos`. `PATCH` takes any field of an order plus `status` and `is_paid`; `services` replaces the whole list. `POST` and `PATCH` take `at`, the moment of the tap on the phone (see [Working without a connection](#working-without-a-connection)); `POST` also an `id` |

@@ -65,6 +65,20 @@ export const users = pgTable(
     setup_completed_at: timestamp('setup_completed_at', { withTimezone: true }),
     // The last order number handed out; orders are numbered 1, 2, 3... for each stringer.
     order_counter: integer('order_counter').notNull().default(0),
+    // The plan the stringer pays for (see utils/plans.js). `plan` is what the store last said they hold, and it holds until
+    // `plan_expires_at` (no date: for good, a plan given by hand). Past that, and a few days of grace, the account is on Free again;
+    // the columns keep what it was, so that the app can say that it ran out. `plan_trial` is the first free days Apple gives, and
+    // `plan_renews` is false once the person turned the renewal off (the plan then holds to the end of what was paid for).
+    plan: text('plan').notNull().default('free'), // free, pro, studio
+    plan_period: text('plan_period'), // month, year
+    plan_expires_at: timestamp('plan_expires_at', { withTimezone: true }),
+    plan_trial: boolean('plan_trial').notNull().default(false),
+    plan_renews: boolean('plan_renews').notNull().default(false),
+    // When the person showed that the address is theirs: by typing the code that was sent to it (see utils/emailVerification.js), by
+    // signing in with Google or Apple, which say that the address is verified, or by opening a password reset link that was sent to it.
+    // Empty until then. Where confirming is not required (a local server) nothing is written here: the API says the address is confirmed.
+    // The accounts that existed when this was added were given the date they were made (migration 0009).
+    email_verified_at: timestamp('email_verified_at', { withTimezone: true }),
     ...timestamps,
   },
   (table) => [index('users_reset_token_hash_idx').on(table.reset_token_hash)]
@@ -267,4 +281,22 @@ export const appliedOperations = pgTable(
     primaryKey({ columns: [table.user_id, table.op_id] }),
     index('applied_operations_created_idx').on(table.created_at),
   ]
+);
+
+// The codes that were sent to an account to confirm its email address (see utils/emailVerification.js). Only a keyed hash of a code is
+// kept, so a copy of the database does not give the codes away. A row is one code that was sent: the newest of an account is the one
+// that counts, the older ones are never looked at again (they stay a day, to count how many were sent in an hour), and all of them go when
+// the address is confirmed.
+export const emailCodes = pgTable(
+  'email_codes',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    user_id: owner(),
+    code_hash: text('code_hash').notNull(),
+    expires_at: timestamp('expires_at', { withTimezone: true }).notNull(),
+    // How many wrong codes were tried against this one.
+    attempts: integer('attempts').notNull().default(0),
+    created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index('email_codes_user_idx').on(table.user_id, table.created_at)]
 );

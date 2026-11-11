@@ -1,4 +1,4 @@
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 
 import { NATIVE_NOTIFICATIONS, hasNativeModule } from '@/lib/native-modules';
 import type { Order } from '@/lib/types';
@@ -41,6 +41,19 @@ export async function requestReminderPermission() {
   } catch {
     return false;
   }
+}
+
+// From Android 13 a notification is shown only once the person has allowed notifications, and the system asks only when the
+// app does. The row in the settings that used to ask is gone, so the app asks by itself: the first time it has a reminder to
+// schedule (an order that is due), once in each run of the app and only while it is on the screen. The system stops showing
+// the question after the person has said no twice. (iOS is left as it was.)
+let askedOnAndroid = false;
+
+function askOnAndroid() {
+  if (Platform.OS !== 'android' || askedOnAndroid || AppState.currentState !== 'active') return;
+  askedOnAndroid = true;
+  // The schedule does not wait for the answer, which can take as long as the person likes: the reminders are made either way.
+  void requestReminderPermission();
 }
 
 /** Takes back every scheduled reminder: once the person is signed out, nothing about their orders may show up on the phone. */
@@ -90,6 +103,8 @@ export async function syncReminders(orders: Order[] | null, texts: Texts) {
       .filter(({ at }) => at.getTime() > now)
       .sort((a, b) => a.at.getTime() - b.at.getTime())
       .slice(0, MAX_REMINDERS);
+
+    if (upcoming.length > 0) askOnAndroid();
 
     for (const { order, at } of upcoming) {
       await Notifications.scheduleNotificationAsync({

@@ -72,7 +72,7 @@ export default function SyncScreen() {
   const waiting = outbox.filter((op) => !op.failure);
   const nameOf = (id: string) => {
     const op = outbox.find((candidate) => candidate.id === id);
-    return op ? describeOp(op, tables, t) : '—';
+    return op ? describeOp(op, tables, t) : '-';
   };
 
   const retry = async (op: Op) => {

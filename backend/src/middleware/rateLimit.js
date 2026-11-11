@@ -29,3 +29,18 @@ export const authLimiter = rateLimit({
     res.status(429).json({ error: 'Too many attempts. Try again later.', code: 'rate_limited' });
   },
 });
+
+/**
+ * For the request that makes the server read the purchases again (it asks RevenueCat, which has limits of its own): a few a minute
+ * from one address are far more than a person who has just bought something or restored it needs.
+ */
+export const syncLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: config.billing.syncRateLimitMax,
+  keyGenerator: (req) => ipKeyGenerator(clientIp(req) ?? ''),
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  handler: (req, res) => {
+    res.status(429).json({ error: 'Too many attempts. Try again later.', code: 'rate_limited' });
+  },
+});

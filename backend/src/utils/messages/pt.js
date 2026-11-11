@@ -9,6 +9,12 @@ export default {
     expiry: 'O link é válido por {minutes} min. Se você não solicitou a alteração da senha, basta ignorar este e-mail.',
     subject: 'Redefinição de senha do {appName}',
   },
+  verification: {
+    // The email with the code that confirms an address: {code} is the six digits, {minutes} how long the code works, {appName} the name of the app.
+    subject: 'Seu código de confirmação do {appName}: {code}',
+    intro: 'Seu código de confirmação:',
+    expiry: 'O código é válido por {minutes} min. Se você não criou uma conta, basta ignorar este e-mail.',
+  },
   page: {
     opening: 'Abrindo o {name}',
     explain: 'O app será aberto para que você escolha uma nova senha.',
@@ -18,7 +24,7 @@ export default {
     broken: 'Ele expirou ou já foi usado. Peça um novo no app: “Esqueceu a senha?”.',
   },
   services: {
-    labor: 'Encordoamento',
+    labor: 'Serviço principal',
     grip: 'Troca de grip',
     overgrip: 'Aplicação de overgrip',
   },

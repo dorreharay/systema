@@ -5,6 +5,7 @@ import helmet from 'helmet';
 import { config } from './config.js';
 import { errorHandler, notFoundHandler } from './middleware/error.js';
 import authRouter from './routes/auth.js';
+import billingRouter from './routes/billing.js';
 import clientsRouter from './routes/clients.js';
 import dashboardRouter from './routes/dashboard.js';
 import insightsRouter from './routes/insights.js';
@@ -34,6 +35,7 @@ export function createApp() {
   app.use(pagesRouter);
 
   app.use('/api/auth', authRouter);
+  app.use('/api/billing', billingRouter);
   app.use('/api/dashboard', dashboardRouter);
   app.use('/api/insights', insightsRouter);
   app.use('/api/clients', clientsRouter);

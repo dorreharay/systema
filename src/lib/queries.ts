@@ -174,7 +174,7 @@ export const useRacket = (id: string | undefined) =>
 export const useStrings = (q = '', { inStock, enabled = true }: { inStock?: boolean; enabled?: boolean } = {}) =>
   useRead((tables) => selectStrings(tables, q, inStock), `${q.trim()}|${inStock}`, { enabled });
 
-export const useServices = () => useRead((tables) => selectServices(tables), '');
+export const useServices = (q = '') => useRead((tables) => selectServices(tables, q), q.trim());
 
 /** Whether the server was reachable the last time it was asked: what only it can answer (the reference list) needs it. */
 export const useOnline = () => useSnapshot().net.online;

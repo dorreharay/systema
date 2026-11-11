@@ -6,7 +6,6 @@ import {
   useEffect,
   useRef,
   useState,
-  type ComponentRef,
   type ReactNode,
 } from 'react';
 import {
@@ -34,10 +33,11 @@ import { scheduleOnRN } from 'react-native-worklets';
 import { X } from '@/components/icons';
 import { ConfirmProvider } from '@/components/ui/confirm';
 import IconButton from '@/components/ui/icon-button';
+import { ANDROID_REVEAL_MS, REVEAL_MARGIN, RevealContext, type Reveal } from '@/components/ui/reveal';
 import { Text } from '@/components/ui/text';
 import { useI18n } from '@/lib/i18n';
 import { useIsWide } from '@/lib/layout';
-import { useLastKeyboardHeight } from '@/lib/use-keyboard';
+import { useKeyboardOverlap, useLastKeyboardHeight } from '@/lib/use-keyboard';
 
 type SheetProps = {
   visible: boolean;
@@ -156,8 +156,6 @@ const sheetFoot = (bottomInset: number) => Math.max(bottomInset, 16) * 2;
 export function useSheetFoot() {
   return sheetFoot(useSafeAreaInsets().bottom);
 }
-// The room left between a field that has the cursor and the keyboard, or the top of the scroll view.
-const REVEAL_MARGIN = 16;
 
 // What a sheet shows stays as it was while it slides away: the page behind it may change in the meantime (what was chosen,
 // what was asked for next), and a long list is slow to draw again for nobody to see.
@@ -167,10 +165,6 @@ const Settled = memo(
   },
   (_previous, next) => next.frozen
 );
-
-type Reveal = (node: ComponentRef<typeof View> | null) => void;
-
-const RevealContext = createContext<Reveal | null>(null);
 
 // Whether the sheet has finished sliding in. A field that is to have the cursor from the start waits for it (see
 // `useSheetOpened`).
@@ -188,7 +182,7 @@ export function useSheetOpened() {
 
 /**
  * For a field in a sheet: `reveal(its view)` when it gets the cursor scrolls the sheet so that the whole
- * field is in sight above the keyboard. Nothing, outside a sheet.
+ * field is in sight above the keyboard. Nothing, outside a sheet (a page can provide it too, on Android: see `usePageReveal`).
  */
 export function useRevealInSheet() {
   return use(RevealContext);
@@ -221,6 +215,14 @@ export default function Sheet({
   const [headerHeight, setHeaderHeight] = useState(0);
   const [contentHeight, setContentHeight] = useState(0);
   const [mounted, setMounted] = useState(visible);
+  // The sizes are in points on the phones. (Percentages are of the panel that is being sized: the wrapper of the panel is as
+  // tall as the panel, so on Android 92% of it is 92% of 92% of the page, and the page shows under the sheet.)
+  const ios = Platform.OS === 'ios';
+  const android = Platform.OS === 'android';
+  const phone = ios || android;
+  // On Android the keyboard covers the foot of the sheet and the window does not shrink for it: what the sheet shows leaves room
+  // for it, so that the scroll view is as tall as what is in sight above the keyboard.
+  const keyboardRoom = useKeyboardOverlap(android && mounted);
   // The modal has been presented (so its views exist, and are in a window), and the slide is over. Both start over each time
   // the sheet is mounted.
   const [presented, setPresented] = useState(false);
@@ -243,43 +245,54 @@ export default function Sheet({
 
   // Once the keyboard is up (at once, when it is), the field is measured against the top of the keyboard
   // and the scroll view, and the scroll view is moved by what is missing.
-  const reveal = useCallback<Reveal>((node) => {
-    if (Platform.OS !== 'ios' || !node) return;
+  const reveal = useCallback<Reveal>(
+    (node) => {
+      if (!node || !(Platform.OS === 'ios' || Platform.OS === 'android')) return;
+      const onAndroid = Platform.OS === 'android';
+      // The time Android needs to lay the sheet out above the keyboard (see ANDROID_REVEAL_MS); iOS does not shorten it.
+      const settle = onAndroid ? ANDROID_REVEAL_MS : 0;
 
-    const run = () => {
-      const scroll = scrollRef.current;
-      const keyboardTop = Keyboard.metrics()?.screenY;
-      if (!scroll || keyboardTop === undefined) return;
-      scroll.measureInWindow((_x, scrollTop) => {
-        node.measureInWindow((_fieldX, fieldTop, _width, fieldHeight) => {
-          const below = fieldTop + fieldHeight + REVEAL_MARGIN - keyboardTop;
-          const above = scrollTop + REVEAL_MARGIN - fieldTop;
-          if (below > 0) {
-            scroll.scrollTo({ y: scrollOffset.current + below, animated: true });
-          } else if (above > 0) {
-            scroll.scrollTo({ y: Math.max(0, scrollOffset.current - above), animated: true });
-          }
+      const run = () => {
+        const scroll = scrollRef.current;
+        const metrics = Keyboard.metrics();
+        if (!scroll || !metrics) return;
+        // iOS says where the keyboard begins. Android says how tall it is, leaving out the navigation bar that it covers too.
+        const keyboardTop = onAndroid ? height - (metrics.height + insets.bottom) : metrics.screenY;
+        scroll.measureInWindow((_x, scrollTop, _scrollWidth, scrollHeight) => {
+          // What is in sight ends where the keyboard does, or, on Android, where the scroll view does, once it has been
+          // made shorter for the keyboard, whichever is first.
+          const sightBottom = onAndroid ? Math.min(keyboardTop, scrollTop + scrollHeight) : keyboardTop;
+          node.measureInWindow((_fieldX, fieldTop, _width, fieldHeight) => {
+            const below = fieldTop + fieldHeight + REVEAL_MARGIN - sightBottom;
+            const above = scrollTop + REVEAL_MARGIN - fieldTop;
+            if (below > 0) {
+              scroll.scrollTo({ y: scrollOffset.current + below, animated: true });
+            } else if (above > 0) {
+              scroll.scrollTo({ y: Math.max(0, scrollOffset.current - above), animated: true });
+            }
+          });
         });
+      };
+
+      if (Keyboard.isVisible()) {
+        setTimeout(run, onAndroid ? settle : 50);
+        return;
+      }
+      const shown = Keyboard.addListener('keyboardDidShow', () => {
+        shown.remove();
+        if (settle) setTimeout(run, settle);
+        else run();
       });
-    };
+      // No keyboard came (a hardware one): there is nothing to wait for.
+      setTimeout(() => shown.remove(), 1000);
+    },
+    [height, insets.bottom]
+  );
 
-    if (Keyboard.isVisible()) {
-      setTimeout(run, 50);
-      return;
-    }
-    const shown = Keyboard.addListener('keyboardDidShow', () => {
-      shown.remove();
-      run();
-    });
-    // No keyboard came (a hardware one): there is nothing to wait for.
-    setTimeout(() => shown.remove(), 1000);
-  }, []);
-
-  // On iOS a form is as tall as its content and the keyboard below it, so until the content has been measured the height is
+  // On the phones a form is as tall as its content and the keyboard below it, so until the content has been measured the height is
   // not known: the sheet is not shown, and it does not start to slide, for it would then be in the middle of its way, and
   // of another size, by the time it is shown. A sheet that has been open before has its measures from then.
-  const ios = Platform.OS === 'ios';
-  const measuring = form && ios && (headerHeight === 0 || contentHeight === 0);
+  const measuring = form && phone && (headerHeight === 0 || contentHeight === 0);
   // Its views are made and in the window: what the first time takes long (the text fields are made, and the system sets
   // them up as they get into a window) is behind it. Yoga laying the panel out says nothing about that: it is done before
   // there is a native view.
@@ -414,10 +427,10 @@ export default function Sheet({
     return null;
   }
 
-  // On iOS the sizes are in points. On Android the window itself shrinks for the keyboard, so a form is only
-  // held to nine tenths of it, and its button is above the keyboard by itself.
-  const limit = ios ? Math.min(height * 0.92, height - insets.top - 12) : ('92%' as const);
-  // A form on iOS is as tall as the foot of its content and the keyboard below it. Until the content has been
+  // On the phones the sizes are in points. (On Android the window does not shrink for the keyboard, and a percentage would be of
+  // the wrapper of the panel, which is as tall as the panel: see `phone` above.)
+  const limit = phone ? Math.min(height * 0.92, height - insets.top - 12) : ('92%' as const);
+  // A form on the phones is as tall as the foot of its content and the keyboard below it. Until the content has been
   // measured, it is the most it can be: a smaller panel would make the scroll view scroll to make room for
   // the keyboard.
   // The room under the content, which the scroll view has as padding: a little, and the foot of the panel.
@@ -432,10 +445,10 @@ export default function Sheet({
       ? { height: Math.min(height * TALL_SHARE, DIALOG_TALL_MAX) }
       : { maxHeight: height * FORM_SHARE }
     : tall
-      ? { height: ios ? Math.min(height * TALL_SHARE, height - insets.top - 12) : (`${TALL_SHARE * 100}%` as const) }
+      ? { height: phone ? Math.min(height * TALL_SHARE, height - insets.top - 12) : (`${TALL_SHARE * 100}%` as const) }
       : !form
         ? { maxHeight: limit }
-        : ios
+        : phone
           ? { height: formHeight }
           : { maxHeight: `${FORM_SHARE * 100}%` as const };
   const content = scroll ? (
@@ -525,7 +538,9 @@ export default function Sheet({
                       ) : null}
                     </View>
                   </GestureDetector>
-                  <View className={tall ? 'flex-1' : 'shrink'}>{content}</View>
+                  <View className={tall ? 'flex-1' : 'shrink'} style={keyboardRoom > 0 ? { paddingBottom: keyboardRoom } : undefined}>
+                    {content}
+                  </View>
                 </View>
               </Animated.View>
             </View>

@@ -21,11 +21,21 @@ type BarChartProps = {
   labelRoom?: number;
   // The rounding of the top of a bar.
   radius?: number;
+  // The rounding of the foot of a bar: a little for a thin bar, nearly as much as the top for a soft one.
+  bottomRadius?: number;
 };
 
 // Bars standing on one line, as tall as their value is against the largest one: the chart fills whatever height it
 // is given. The bars are laid over it, not in it, so that they never ask for height of their own.
-export function BarChart({ bars, gap = 3, maxBarWidth, stub = 3, labelRoom = 0, radius = 4 }: BarChartProps) {
+export function BarChart({
+  bars,
+  gap = 3,
+  maxBarWidth,
+  stub = 3,
+  labelRoom = 0,
+  radius = 4,
+  bottomRadius = 1.5,
+}: BarChartProps) {
   const [height, setHeight] = useState(0);
   const largest = Math.max(0, ...bars.map((bar) => bar.value));
   const room = Math.max(0, height - labelRoom);
@@ -48,8 +58,8 @@ export function BarChart({ bars, gap = 3, maxBarWidth, stub = 3, labelRoom = 0, 
                       backgroundColor: bar.color,
                       borderTopLeftRadius: round,
                       borderTopRightRadius: round,
-                      borderBottomLeftRadius: Math.min(1.5, round),
-                      borderBottomRightRadius: Math.min(1.5, round),
+                      borderBottomLeftRadius: Math.min(bottomRadius, round),
+                      borderBottomRightRadius: Math.min(bottomRadius, round),
                     }}
                   />
                 </View>

@@ -9,6 +9,12 @@ export default {
     expiry: 'Il link è valido per {minutes} min. Se non hai chiesto di cambiare la password, puoi ignorare questa email.',
     subject: 'Reimposta la password di {appName}',
   },
+  verification: {
+    // The email with the code that confirms an address: {code} is the six digits, {minutes} how long the code works, {appName} the name of the app.
+    subject: 'Il tuo codice di conferma per {appName}: {code}',
+    intro: 'Il tuo codice di conferma:',
+    expiry: 'Il codice è valido per {minutes} min. Se non hai creato un account, ignora questa email.',
+  },
   page: {
     opening: 'Apertura di {name}',
     explain: 'L’app si aprirà e potrai scegliere una nuova password.',
@@ -18,7 +24,7 @@ export default {
     broken: 'È scaduto o è già stato usato. Richiedine uno nuovo nell’app: “Password dimenticata?”.',
   },
   services: {
-    labor: 'Incordatura',
+    labor: 'Servizio principale',
     grip: 'Sostituzione del grip',
     overgrip: 'Applicazione dell’overgrip',
   },

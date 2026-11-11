@@ -106,6 +106,46 @@ export function loadConfig(env = process.env) {
     // Whether a new account starts with a catalog of common rackets and strings, none in stock (see utils/defaults.js).
     starterCatalog: flag(env.STARTER_CATALOG, true),
 
+    // Subscription plans (see utils/plans.js and ../docs/subscriptions.md). Off unless turned on: every account then has everything
+    // and the app shows no plans at all, so this server can be deployed before the purchases are.
+    billing: {
+      enabled: flag(env.BILLING_ENABLED, false),
+      // What Free allows: new orders in a calendar month of the stringer's own.
+      freeOrdersPerMonth: Math.max(0, integer(env.FREE_ORDERS_PER_MONTH, 15)),
+      // How many days a plan that has run out still holds: the store is slow with a renewal, and Apple tries a card that failed again.
+      graceDays: Math.max(0, integer(env.BILLING_GRACE_DAYS, 3)),
+      // Development only: lets an account give itself a plan (POST /api/billing/dev-grant) to try the screens without the store.
+      // Never in production, whatever is set.
+      devGrants: flag(env.BILLING_DEV_GRANTS, false) && !isProduction,
+      // How many times a minute one address may ask the server to read the store again (POST /api/billing/sync).
+      syncRateLimitMax: Math.max(1, integer(env.BILLING_SYNC_RATE_LIMIT_MAX, 10)),
+      // RevenueCat is where the purchases are read from (see utils/revenuecat.js). Without the secret key the server cannot ask it
+      // anything (the answer is 503); without `webhookAuth` the route that listens to its notices does not exist (404). The names of
+      // the entitlements are the ones set in RevenueCat's dashboard.
+      revenuecat: {
+        secretKey: text(env.REVENUECAT_SECRET_KEY),
+        apiUrl: (text(env.REVENUECAT_API_URL) ?? 'https://api.revenuecat.com/v1').replace(/\/+$/, ''),
+        webhookAuth: text(env.REVENUECAT_WEBHOOK_AUTH),
+        proEntitlement: text(env.REVENUECAT_PRO_ENTITLEMENT) ?? 'pro',
+        studioEntitlement: text(env.REVENUECAT_STUDIO_ENTITLEMENT) ?? 'studio',
+      },
+    },
+
+    // Confirming the email of an account made with an email and a password (see utils/emailVerification.js): a code goes to the address
+    // and the account is not used until it is typed in. On in production unless it is turned off, and off everywhere else (a local
+    // server, the tests) unless it is turned on, so that nobody has to read a code to develop. An account made with Google or Apple
+    // needs no code: they say that the address is verified.
+    emailVerification: {
+      required: flag(env.EMAIL_VERIFICATION_REQUIRED, isProduction),
+      // How long a code works, in minutes.
+      codeMinutes: Math.max(1, integer(env.EMAIL_CODE_MINUTES, 15)),
+      // How many wrong codes one code takes before it is no good and a new one has to be asked for.
+      maxAttempts: Math.max(1, integer(env.EMAIL_CODE_ATTEMPTS, 5)),
+      // The wait before another code can be asked for, in seconds, and how many codes may be sent to one account in an hour.
+      resendSeconds: Math.max(0, integer(env.EMAIL_CODE_RESEND_SECONDS, 60)),
+      sendsPerHour: Math.max(1, integer(env.EMAIL_CODE_SENDS_PER_HOUR, 6)),
+    },
+
     // First admin, created on start when there are no users yet (see bootstrap.js).
     seedAdmin: {
       email: text(env.SEED_ADMIN_EMAIL)?.toLowerCase(),

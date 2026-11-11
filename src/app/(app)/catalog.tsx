@@ -1,9 +1,9 @@
 import { router } from 'expo-router';
-import { createContext, memo, use, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { FlatList, RefreshControl, TextInput, View } from 'react-native';
+import { createContext, memo, use, useMemo, useState, type ReactNode } from 'react';
+import { FlatList, RefreshControl, View } from 'react-native';
 
 import { StackNavBar } from '@/components/app-tab-bar';
-import { Library, Search, Tags } from '@/components/icons';
+import { Library, Tags } from '@/components/icons';
 import PlusIcon from '@/components/icons/plus-icon';
 import RacketFormSheet from '@/components/racket-form-sheet';
 import { StockBadge, StockSheet, sortByStock } from '@/components/stock';
@@ -12,10 +12,9 @@ import { Badge } from '@/components/ui/badge';
 import Card from '@/components/ui/card';
 import { Segmented } from '@/components/ui/chips';
 import { colors } from '@/components/ui/colors';
-import { SEARCH_INPUT_TEXT } from '@/components/ui/field-text';
-import { GridItem, PAGE_CONTENT } from '@/components/ui/page';
-import { PAPER_FIELD } from '@/components/ui/paper';
+import { GridItem, listGap, PAGE_CONTENT } from '@/components/ui/page';
 import { DetailHeader, Screen, useDetailContentTop } from '@/components/ui/screen';
+import SearchField from '@/components/ui/search-field';
 import Shortcut from '@/components/ui/shortcut';
 import { ListSkeleton } from '@/components/ui/skeleton';
 import { EmptyState, ErrorState, NoResults } from '@/components/ui/states';
@@ -27,12 +26,12 @@ import { GRID_GAP, useGridColumns, useIsWide } from '@/lib/layout';
 import { stringLabel } from '@/lib/order-draft';
 import { useRackets, useStrings } from '@/lib/queries';
 import { usePullRefresh } from '@/lib/use-pull-refresh';
+import { useSearch } from '@/lib/use-search';
 import type { CatalogString, Racket } from '@/lib/types';
 
 type Tab = 'rackets' | 'strings';
 // An item whose stock is being set, from its badge.
 type Stocking = { kind: 'racket'; item: Racket } | { kind: 'string'; item: CatalogString };
-const SEARCH_DEBOUNCE_MS = 250;
 
 // What the page asks of its sheets: they are opened from the dock, from the empty states and from the rows.
 type Sheets = {
@@ -161,8 +160,9 @@ function CatalogPage() {
   const { t } = useI18n();
   const sheets = useSheets();
   const [tab, setTab] = useState<Tab>('rackets');
-  const [text, setText] = useState('');
-  const [query, setQuery] = useState('');
+  // Each tab is searched on its own: the words are cleared when the tab is changed.
+  const search = useSearch();
+  const { query } = search;
   // The catalog's rackets are the ones kept in stock; a client's are on the page of the client.
   const rackets = useRackets({ q: tab === 'rackets' ? query : '', kind: 'catalog' });
   const strings = useStrings(tab === 'strings' ? query : '');
@@ -172,15 +172,9 @@ function CatalogPage() {
   const racketList = useMemo(() => sortByStock(rackets.data ?? []), [rackets.data]);
   const stringList = useMemo(() => sortByStock(strings.data ?? []), [strings.data]);
 
-  useEffect(() => {
-    const timer = setTimeout(() => setQuery(text), SEARCH_DEBOUNCE_MS);
-    return () => clearTimeout(timer);
-  }, [text]);
-
   const changeTab = (next: Tab) => {
     setTab(next);
-    setText('');
-    setQuery('');
+    search.clear();
   };
 
   const racketsTab = tab === 'rackets';
@@ -202,24 +196,14 @@ function CatalogPage() {
   );
   // On a wide page the two tabs and the search are in one row, the tabs as wide as they need to be.
   const listHeader = (
-    <View className={wide ? 'flex-row items-center gap-3' : 'gap-3'}>
+    <View className={wide ? 'flex-row items-center gap-3' : 'gap-2'}>
       {wide ? <View className="w-[300px]">{tabs}</View> : tabs}
-      <View className={`min-h-12 flex-row items-center gap-2 rounded-lg border border-line bg-white px-3.5 md:min-h-11 ${PAPER_FIELD} ${wide ? 'flex-1' : ''}`}>
-        <Search size={18} color={colors.muted} />
-        <TextInput
-          value={text}
-          onChangeText={setText}
-          placeholder={racketsTab ? t('rackets_search_placeholder') : t('strings_search_placeholder')}
-          placeholderTextColor={colors.placeholder}
-          selectionColor={colors.primary}
-          autoCapitalize="none"
-          autoCorrect={false}
-          returnKeyType="search"
-          accessibilityLabel={t('search')}
-          textAlignVertical="center"
-          className={`min-w-0 flex-1 font-normal text-ink outline-none ${SEARCH_INPUT_TEXT}`}
-        />
-      </View>
+      <SearchField
+        value={search.text}
+        onChangeText={search.setText}
+        placeholder={racketsTab ? t('rackets_search_placeholder') : t('strings_search_placeholder')}
+        className={wide ? 'flex-1' : ''}
+      />
     </View>
   );
 
@@ -250,9 +234,10 @@ function CatalogPage() {
           keyExtractor={(racket) => racket.id}
           // The rows are drawn a screenful or two at a time, not all of the catalog at once.
           windowSize={7}
-          contentContainerClassName={`gap-3 pb-28 md:pb-12 ${PAGE_CONTENT}`}
+          contentContainerClassName={`${listGap(columns)} pb-28 md:pb-12 ${PAGE_CONTENT}`}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
           refreshControl={
             <RefreshControl
               {...racketsPull}
@@ -292,9 +277,10 @@ function CatalogPage() {
           data={stringList}
           keyExtractor={(string) => string.id}
           windowSize={7}
-          contentContainerClassName={`gap-3 pb-28 md:pb-12 ${PAGE_CONTENT}`}
+          contentContainerClassName={`${listGap(columns)} pb-28 md:pb-12 ${PAGE_CONTENT}`}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
           refreshControl={
             <RefreshControl
               {...stringsPull}

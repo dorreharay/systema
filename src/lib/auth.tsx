@@ -1,19 +1,23 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { createContext, use, useCallback, useEffect, useState, type ReactNode } from 'react';
+import { AppState } from 'react-native';
 
 import { ApiError } from '@/lib/api';
 import { requestAppleCredential } from '@/lib/apple-sign-in';
 import {
   appleLoginRequest,
   deleteAccountRequest,
+  emailConfirmed,
   fetchMe,
   forgotPasswordRequest,
   googleLoginRequest,
   loginRequest,
   logoutRequest,
   registerRequest,
+  resendVerificationRequest,
   resetPasswordRequest,
   updateProfileRequest,
+  verifyEmailRequest,
   type AuthResponse,
   type ProfilePatch,
   type User,
@@ -81,6 +85,18 @@ type AuthContextValue = {
   deleteAccount: (password?: string) => Promise<void>;
   /** Saves preferences to the account and returns the user as the server now has them. */
   updateProfile: (patch: ProfilePatch) => Promise<User>;
+  /** Takes a profile the server has just sent (the answer to a purchase, say) as the signed-in person's. */
+  setUser: (user: User) => void;
+  /** Asks the server for the profile again. Answers with it, or with `null` when the server could not be asked. */
+  refreshUser: () => Promise<User | null>;
+  /**
+   * Types in the code that was emailed when the account was made (for an account that has to confirm its address). Once the server
+   * accepts it the profile says so, and the app opens. A code the server turns down is an `ApiError`: `invalid_code`, `code_expired`,
+   * `code_attempts_exceeded`.
+   */
+  verifyEmail: (code: string) => Promise<void>;
+  /** Emails a new code. Answers with the seconds to wait before another can be asked for; `code_cooldown` and `code_limit` are `ApiError`s. */
+  resendVerification: () => Promise<number>;
   requestPasswordReset: (email: string) => Promise<void>;
   /** Sets the new password with the token of the reset link. A person who is signed in on this device is signed out by it. */
   resetPassword: (token: string, password: string) => Promise<void>;
@@ -153,19 +169,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }, 0);
   }, [queryClient]);
 
+  // The server turns the account away until its address is confirmed, though the profile on the phone says it is (one saved before the
+  // server asked for it): the screen for the code comes up. (The profile is asked for again each time the app comes to the front, which
+  // puts it right for good.)
+  const askForCode = useCallback(() => {
+    setState((current) =>
+      current.status === 'signedIn' && emailConfirmed(current.user)
+        ? { ...current, user: { ...current.user, email_verified: false } }
+        : current
+    );
+  }, []);
+
   useEffect(() => {
     const sessionEnded = (error: unknown) => error instanceof ApiError && error.status === 401;
+    const unconfirmed = (error: unknown) => error instanceof ApiError && error.status === 403 && error.code === 'email_not_verified';
+    const react = (error: unknown) => {
+      if (sessionEnded(error)) endSession();
+      else if (unconfirmed(error)) askForCode();
+    };
     const stopQueries = queryClient.getQueryCache().subscribe((event) => {
-      if (event.type === 'updated' && event.action.type === 'error' && sessionEnded(event.action.error)) endSession();
+      if (event.type === 'updated' && event.action.type === 'error') react(event.action.error);
     });
     const stopMutations = queryClient.getMutationCache().subscribe((event) => {
-      if (event.type === 'updated' && event.action.type === 'error' && sessionEnded(event.action.error)) endSession();
+      if (event.type === 'updated' && event.action.type === 'error') react(event.action.error);
     });
     return () => {
       stopQueries();
       stopMutations();
     };
-  }, [queryClient, endSession]);
+  }, [queryClient, endSession, askForCode]);
 
   // Opened offline: ask again until the server answers, so the profile is the real one and a session
   // that was ended elsewhere is noticed.
@@ -189,6 +221,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }, RETRY_MS);
     return () => clearInterval(timer);
   }, [offlineToken, queryClient]);
+
+  // The plan can change without the app (a renewal, a refund, a purchase made on another device): the profile is asked for again each time
+  // the app comes to the front. Without a connection, or when the session is over, the profile on the phone stays; the requests that
+  // follow notice a session that has ended.
+  const sessionToken = state.status === 'signedIn' ? state.token : null;
+  useEffect(() => {
+    if (!sessionToken) return;
+    const listener = AppState.addEventListener('change', async (next) => {
+      if (next !== 'active') return;
+      try {
+        const user = await fetchMe(sessionToken);
+        void cacheUser(user);
+        setState((current) =>
+          current.status === 'signedIn' && current.token === sessionToken ? { status: 'signedIn', user, token: sessionToken } : current
+        );
+      } catch {
+        // kept as it is
+      }
+    });
+    return () => listener.remove();
+  }, [sessionToken]);
 
   async function startSession({ user, token }: AuthResponse) {
     await saveToken(token);
@@ -265,6 +318,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       void cacheUser(user);
       setState({ status: 'signedIn', user, token: state.token });
       return user;
+    },
+    setUser: (user) => {
+      if (state.status !== 'signedIn') return;
+      void cacheUser(user);
+      setState({ status: 'signedIn', user, token: state.token });
+    },
+    refreshUser: async () => {
+      if (state.status !== 'signedIn') return null;
+      try {
+        const user = await fetchMe(state.token);
+        void cacheUser(user);
+        setState({ status: 'signedIn', user, token: state.token });
+        return user;
+      } catch {
+        return null;
+      }
+    },
+    verifyEmail: async (code) => {
+      if (state.status !== 'signedIn') {
+        throw new Error('Not signed in');
+      }
+      const user = await verifyEmailRequest(state.token, code);
+      void cacheUser(user);
+      setState({ status: 'signedIn', user, token: state.token });
+    },
+    resendVerification: async () => {
+      if (state.status !== 'signedIn') {
+        throw new Error('Not signed in');
+      }
+      return (await resendVerificationRequest(state.token)).retry_after;
     },
     requestPasswordReset: async (email) => {
       await forgotPasswordRequest(email);

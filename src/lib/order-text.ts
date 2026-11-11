@@ -10,16 +10,16 @@ export function describeStrings(setup: Setup, t: Translate) {
       : t('order_customer_strings');
   }
   if (setup.hybrid) {
-    return `${setup.main_string_name ?? '—'} / ${setup.cross_string_name ?? '—'}`;
+    return `${setup.main_string_name ?? '-'} / ${setup.cross_string_name ?? '-'}`;
   }
   return setup.main_string_name ?? t('order_no_string');
 }
 
-/** The strings and the tension on one line: "Luxilon ALU Power 1.25 mm · 24 / 23 kg". */
+/** The strings and the tension on one line: "Luxilon ALU Power 1.25 mm, 24 / 23 kg". */
 export function describeSetup(setup: Setup, unit: TensionUnit, t: Translate) {
   const strings = describeStrings(setup, t);
   if (setup.main_tension === null && setup.cross_tension === null) return strings;
-  return `${strings} · ${formatTensions(setup.main_tension, setup.cross_tension ?? setup.main_tension, unit)}`;
+  return `${strings}, ${formatTensions(setup.main_tension, setup.cross_tension ?? setup.main_tension, unit)}`;
 }
 
 type TextContext = {
@@ -34,7 +34,7 @@ type TextContext = {
 export function orderAsText(order: OrderDetail, { t, language, unit, currency, timeZone }: TextContext) {
   const lines = [
     // The text may be sent on to the customer: an order that has no number yet is not given one.
-    `${order.number === null ? t('order_title_unnumbered') : t('order_title', { number: orderNumber(order.number) })} · ${t(`status_${order.status}`)}`,
+    `${order.number === null ? t('order_title_unnumbered') : t('order_title', { number: orderNumber(order.number) })} (${t(`status_${order.status}`)})`,
     `${t('field_client')}: ${order.client.name}${order.client.phone ? ` (${order.client.phone})` : ''}`,
     `${t('field_racket')}: ${racketName(order.racket)}`,
     `${t('field_strings')}: ${describeStrings(order, t)}`,

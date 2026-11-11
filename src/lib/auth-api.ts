@@ -2,6 +2,7 @@ import { api } from '@/lib/api';
 import type { AppleCredential } from '@/lib/apple-sign-in';
 import type { GoogleCredential } from '@/lib/google-sign-in';
 import type { Language } from '@/lib/i18n';
+import type { Subscription } from '@/lib/subscription';
 import type { TensionUnit } from '@/lib/types';
 
 export type User = {
@@ -18,8 +19,14 @@ export type User = {
   // False for an account made with Google or Apple: there is no password to confirm deleting it with. A profile that an older version
   // of the app saved on the device does not say, and is taken to have one.
   has_password: boolean;
+  // False while the email address has to be confirmed with the code that was emailed, and has not been (the server asks for it in production
+  // only). A profile that an older version of the app saved on the device does not say, and is taken to be confirmed (see emailConfirmed).
+  email_verified?: boolean;
   // False until the first-run setup has been completed.
   setup_completed: boolean;
+  // The plan the account holds and what it allows. A profile that an older version of the app saved on the device does not say, and is
+  // taken to be one with no plans (see lib/subscription.ts).
+  subscription?: Subscription;
   created_at: string;
   updated_at: string;
 };
@@ -38,6 +45,9 @@ export type ProfilePatch = Partial<
 > & { setup_completed?: true };
 
 export type AuthResponse = { user: User; token: string };
+
+/** Whether the person has nothing left to confirm: anyone but an account that the server still waits for a code from. */
+export const emailConfirmed = (user: Pick<User, 'email_verified'> | null | undefined) => user?.email_verified !== false;
 
 export const loginRequest = (email: string, password: string) =>
   api<AuthResponse>('/api/auth/login', { method: 'POST', body: { email, password } });
@@ -76,6 +86,14 @@ export const appleLoginRequest = (credential: AppleCredential, language?: Langua
 
 // A short timeout: this is the request the app waits for before it shows anything.
 export const fetchMe = (token: string) => api<User>('/api/auth/me', { token, timeoutMs: 8_000 });
+
+/** Types in the code that was emailed. Answers with the user, whose address is confirmed now. */
+export const verifyEmailRequest = (token: string, code: string) =>
+  api<User>('/api/auth/verify-email', { method: 'POST', token, body: { code } });
+
+/** Emails a new code (the one before stops working). `retry_after` is how many seconds until another can be asked for. */
+export const resendVerificationRequest = (token: string) =>
+  api<{ ok: true; retry_after: number }>('/api/auth/resend-verification', { method: 'POST', token });
 
 export const logoutRequest = (token: string) =>
   api<{ ok: true }>('/api/auth/logout', { method: 'POST', token });

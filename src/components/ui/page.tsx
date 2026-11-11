@@ -22,7 +22,7 @@ export const PAGE_WIDTH_CLASS: Record<PageWidth, string> = {
 /** The sides of a wide page (`md:`): 48 px, `p-12`. PAGE_PADDING in layout-sizes.ts is the same number (scripts/check-layout.mjs checks they agree). */
 export const PAGE_SIDES = 'md:px-12';
 
-/** The sides of a page: a margin on the phone, a little more on a wide page. Blocks reach past it on the phone, and sit inside it on a wide one (see Card). */
+/** The sides of a page: a margin on the phone, a little more on a wide page. Blocks reach past it on the phone, up to a gutter from the edge of the screen, and sit inside it on a wide one (see Card). */
 export const PAGE_X = `px-page ${PAGE_SIDES}`;
 
 /** Puts a scroll view's content in the column of the page, in the middle of it. */
@@ -30,6 +30,20 @@ export const PAGE_COLUMN = 'md:w-full md:max-w-[var(--page-max)] md:self-center'
 
 /** For the `contentContainerClassName` of the scroll view or the list of a page: the sides, and the column. */
 export const PAGE_CONTENT = `${PAGE_X} ${PAGE_COLUMN}`;
+
+/**
+ * The space between the cards of a list, one under another, and between the search field above them and the first card: close, 4 px on
+ * the phone and 6 px from `md:` up (where a list can be one column too, in a narrow window or on a tablet). It was twice that. On the
+ * phone it is the gutter (`gap-gutter`, global.css), which is also the space between a card and the side of the screen (BLOCK_SHAPE in
+ * card.tsx), so the two stay the same.
+ */
+export const CARD_GAP = 'gap-gutter md:gap-1.5';
+
+/**
+ * `CARD_GAP` for a list that is a grid when the window is wide (`useGridColumns`): where there are several columns the rows are as
+ * far apart as the cards are side by side, `GRID_GAP` (12 px), as a grid has always had it. With one column it is `CARD_GAP`.
+ */
+export const listGap = (columns: number) => (columns > 1 ? 'gap-3' : CARD_GAP);
 
 // --- The main action of a page ---------------------------------------------------------------
 

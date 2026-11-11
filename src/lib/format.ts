@@ -23,11 +23,11 @@ export const unitToKg = (value: number, unit: TensionUnit) =>
   round(unit === 'lbs' ? value / LBS_PER_KG : value, 4);
 
 export const formatTension = (kg: number | null, unit: TensionUnit) =>
-  kg === null ? '—' : `${formatNumber(kgToUnit(kg, unit))} ${unit}`;
+  kg === null ? '-' : `${formatNumber(kgToUnit(kg, unit))} ${unit}`;
 
 /** "24 / 23 kg" when the crosses differ from the mains, "24 kg" otherwise. */
 export function formatTensions(mains: number | null, crosses: number | null, unit: TensionUnit) {
-  if (mains === null) return crosses === null ? '—' : formatTension(crosses, unit);
+  if (mains === null) return crosses === null ? '-' : formatTension(crosses, unit);
   if (crosses === null || round(crosses, 2) === round(mains, 2)) return formatTension(mains, unit);
   return `${formatNumber(kgToUnit(mains, unit))} / ${formatNumber(kgToUnit(crosses, unit))} ${unit}`;
 }
@@ -60,7 +60,7 @@ const LOCALES: Record<Language, string> = {
 };
 
 export function formatMoney(amount: number | null, currency: string, language: Language) {
-  if (amount === null) return '—';
+  if (amount === null) return '-';
   try {
     return new Intl.NumberFormat(LOCALES[language], { style: 'currency', currency }).format(amount);
   } catch {
@@ -103,6 +103,15 @@ export function currencySymbol(currency: string, language: Language) {
     return currency;
   }
 }
+
+/** A currency as the lists and the field show it: its code and its symbol ("UAH ₴"), the code alone where the symbol is the same ("CHF"). */
+export function currencyLabel(currency: string, language: Language) {
+  const symbol = currencySymbol(currency, language);
+  return symbol === currency ? currency : `${currency} ${symbol}`;
+}
+
+/** The label of a field that may be left empty: "Notes (optional)". `optional` is the word for it in the language of the app. */
+export const optionalLabel = (label: string, optional: string) => `${label} (${optional})`;
 
 // --- Dates -----------------------------------------------------------------------------------
 // A date is a calendar day written YYYY-MM-DD, never a moment: it reads the same in every time zone.
@@ -282,8 +291,8 @@ export function isOverdue(order: Pick<Order, 'status' | 'due_date'>, today: stri
 
 export const racketName = (racket: { brand: string; model: string }) => `${racket.brand} ${racket.model}`;
 
-/** "#12", or "#—" for an order that has no number yet: the server gives the numbers, once the order has been sent. */
-export const orderNumber = (number: number | null) => (number === null ? '#—' : `#${number}`);
+/** "#12", or "#-" for an order that has no number yet: the server gives the numbers, once the order has been sent. */
+export const orderNumber = (number: number | null) => (number === null ? '#-' : `#${number}`);
 
 /**
  * What was typed into a search for a client, as the start of a new one: digits with only what goes with them in a phone

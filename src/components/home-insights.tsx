@@ -21,9 +21,9 @@ import {
   type IconComponent,
 } from '@/components/icons';
 import { BarChart, type ChartBar } from '@/components/ui/bar-chart';
-import { BLOCK_ROOM } from '@/components/ui/card';
+import { BLOCK_ROOM, BLOCK_ROOM_X } from '@/components/ui/card';
 import { colors } from '@/components/ui/colors';
-import { PAPER_CARD } from '@/components/ui/paper';
+import { SURFACE_EDGE } from '@/components/ui/paper';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ErrorState } from '@/components/ui/states';
 import { Text } from '@/components/ui/text';
@@ -35,10 +35,9 @@ import { useInsights, useOnline } from '@/lib/queries';
 import { useNow } from '@/lib/use-now';
 import type { ClientTotal, Insights } from '@/lib/types';
 
-// Green is for the charts alone: the bars of the days that are done are in the brand colour, and the days of the week
-// ahead that are not today in a softer one of it, so that today stands out. The rest of the slider (its figures, the dot
-// of the card in view) is black.
-const BAR_SOFT = '#a9b9b3';
+// The charts are black and grey like the rest of the slider (its figures, the dot of the card in view): the bar of today, or of
+// a day that brought money, is in ink and the other days are a light grey, so that today stands out.
+const BAR_SOFT = '#d0d5dd';
 const DOT_OFF = '#c2c8d0';
 
 // --- The slider ------------------------------------------------------------------------------
@@ -226,7 +225,7 @@ function MonthSlide({ data, today }: { data: Insights['revenue']; today: string 
     key: day.date,
     value: day.total,
     // A day that has not come yet is a faint stub; one that has, and brought nothing, a stub you can see.
-    color: day.date > today ? colors.surface : day.total > 0 ? colors.primary : colors.line,
+    color: day.date > today ? colors.surface : day.total > 0 ? colors.ink : colors.line,
   }));
   // Nothing paid this month or last: there is nothing to compare or to draw yet.
   const nothing = data.total === 0 && data.previous_total === 0;
@@ -243,7 +242,7 @@ function MonthSlide({ data, today }: { data: Insights['revenue']; today: string 
         <>
           <Delta total={data.total} previous={data.previous_total} />
           <View className="mt-2 flex-1 gap-1.5">
-            <BarChart bars={bars} gap={3} radius={3} />
+            <BarChart bars={bars} gap={3} radius={4} bottomRadius={2} />
             <View className="h-4">
               {MONTH_TICKS.filter((day) => day <= length).map((day) => (
                 <Text
@@ -264,7 +263,7 @@ function MonthSlide({ data, today }: { data: Insights['revenue']; today: string 
 
 // --- Slide 2: the week ahead -----------------------------------------------------------------
 
-const WEEK_GAP = 8;
+const WEEK_GAP = 10;
 
 function WeekSlide({ data, today }: { data: Insights['workload']; today: string }) {
   const { t, language } = useI18n();
@@ -272,11 +271,11 @@ function WeekSlide({ data, today }: { data: Insights['workload']; today: string 
   const bars: ChartBar[] = data.days.map((day) => ({
     key: day.date,
     value: day.count,
-    color: day.date === today ? colors.primary : BAR_SOFT,
+    color: day.date === today ? colors.ink : BAR_SOFT,
     label:
       day.count > 0 ? (
         <Text
-          className={`pb-1 text-[14.3px] font-semibold ${day.date === today ? 'text-ink' : 'text-muted'}`}
+          className={`pb-1.5 text-[13.2px] ${day.date === today ? 'font-semibold text-ink' : 'font-medium text-muted'}`}
           maxFontSizeMultiplier={1.3}>
           {day.count}
         </Text>
@@ -300,7 +299,7 @@ function WeekSlide({ data, today }: { data: Insights['workload']; today: string 
         <Hint icon={CalendarDays} text={t('insights_week_empty')} />
       ) : (
         <View className="mt-2 flex-1 gap-2">
-          <BarChart bars={bars} gap={WEEK_GAP} maxBarWidth={30} labelRoom={26} radius={6} />
+          <BarChart bars={bars} gap={WEEK_GAP} maxBarWidth={34} labelRoom={26} radius={9} bottomRadius={5} stub={4} />
           {/* The same seven columns as the bars, so that each name stands under its own. */}
           <View className="flex-row" style={{ gap: WEEK_GAP }}>
             {data.days.map((day) => {
@@ -310,7 +309,7 @@ function WeekSlide({ data, today }: { data: Insights['workload']; today: string 
                   <Text className={`text-[13.2px] ${isToday ? 'font-semibold text-ink' : 'text-muted'}`}>
                     {WEEKDAYS_SHORT[language][weekdayOf(day.date)]}
                   </Text>
-                  <View className={`size-6 items-center justify-center rounded-full ${isToday ? 'bg-primary' : ''}`}>
+                  <View className={`size-6 items-center justify-center rounded-full ${isToday ? 'bg-ink' : ''}`}>
                     <Text className={`text-[13.2px] font-medium ${isToday ? 'text-white' : 'text-ink'}`}>
                       {parseIso(day.date).day}
                     </Text>
@@ -449,7 +448,7 @@ function InsightsSkeleton({ className = `flex-1 ${BLOCK_ROOM}` }: { className?: 
 }
 
 // A card of the grid of a wide page: as tall as the charts need, with the room of a card.
-const GRID_CARD = `h-[340px] min-w-0 rounded-[18px] bg-white p-6 ${PAPER_CARD}`;
+const GRID_CARD = `h-[340px] min-w-0 rounded-[18px] bg-white ${BLOCK_ROOM_X} py-6 ${SURFACE_EDGE}`;
 
 // How wide a card of the grid is at least, for the three to stand side by side: the figures and the lists need about this much.
 const GRID_CARD_MIN = 300;
@@ -517,7 +516,7 @@ export default function HomeInsights() {
         <>
         {wide ? <Grid slides={slides(data)} /> : <Pager slides={slides(data)} />}
         {notLive && insights.at ? (
-          <Text className={wide ? 'pt-3 text-[13.2px] text-muted' : 'px-7 pb-2 text-[13.2px] text-muted'}>
+          <Text className={wide ? 'pt-3 text-[13.2px] text-muted' : `${BLOCK_ROOM_X} pb-2 text-[13.2px] text-muted`}>
             {t('insights_not_live', { time: formatMoment(insights.at, language, user?.timezone) })}
           </Text>
         ) : null}

@@ -12,10 +12,10 @@
 | `https://api-production-2cd9.up.railway.app` | теж бекенд: адреса Railway, яку знають уже випущені збірки телефона (не вимикати) |
 | `https://web-production-d0c28.up.railway.app` | службова адреса сервісу `web` (CORS її не дозволяє: вхід на ній не працює) |
 
-> **Стан на 6 листопада 2026.** Веб відкривається на `https://myrestring.com` (сертифікат Let's Encrypt видано того ж дня). Домен
-> `api.myrestring.com` додано до `api`, **але його записи DNS ще треба додати в Namecheap** (розділ «Що лишилось вам»); доки їх немає,
-> веб-версія не бачить бекенда й увійти не вийде. CORS на `api` дозволено. Вхід через Google потребує ще одного кроку вам.
-> Справжній вхід і роботу з даними на цій адресі ще ніхто не пробував: у production тестових акаунтів не створювали.
+> **Стан на 6 листопада 2026.** Веб відкривається на `https://myrestring.com`, бекенд на `https://api.myrestring.com`: DNS власник додав, а
+> сертифікати Let's Encrypt обох доменів видано того ж дня (`/api/health` відповідає `200`, запит із `https://myrestring.com` проходить CORS).
+> Вхід через Google потребує, щоб `https://myrestring.com` був в Authorized JavaScript origins (розділ «Що робить власник»). Справжній вхід і
+> роботу з даними на цій адресі перевіряє власник: у production тестових акаунтів ми не створювали.
 
 ## Що де
 
@@ -62,9 +62,9 @@ railway variable set "CORS_ORIGINS=https://myrestring.com,https://account.myrest
   `curl -i -X OPTIONS https://api.myrestring.com/api/auth/login -H 'Origin: https://myrestring.com' -H 'Access-Control-Request-Method: POST'`
   має відповісти `204` з `access-control-allow-origin: https://myrestring.com`; для чужого походження заголовка немає.
 
-## Що лишилось вам
+## Що робить власник
 
-1. **DNS для `api.myrestring.com`** (Namecheap → Domain List → Manage → Advanced DNS → Add New Record), два записи:
+1. **DNS для `api.myrestring.com`** (зроблено 6 листопада; Namecheap → Domain List → Manage → Advanced DNS → Add New Record), два записи:
 
    | Тип | Host | Value |
    | --- | --- | --- |
@@ -72,8 +72,9 @@ railway variable set "CORS_ORIGINS=https://myrestring.com,https://account.myrest
    | TXT Record | `_railway-verify.api` | `railway-verify=4df6c5e3ac821d3c5e6d5c3d64302f456857f27a51e51f2a0c8d83c9ba9c4486` |
 
    (Актуальні значення: `cd backend && railway domain status api.myrestring.com --service api`.) Записи Resend (`send`, `resend._domainkey`,
-   `rsend`, `_dmarc`), `account` і корінь не чіпайте. Сертифікат з'явиться за кілька хвилин після того, як DNS розійдеться: стан
-   `CERTIFICATE_STATUS_TYPE_VALID` у тій самій команді; тоді `https://api.myrestring.com/api/health` відповідає `200`.
+   `rsend`, `_dmarc`), `account` і корінь не чіпайте. Сертифікат з'являється через якийсь час після того, як DNS розійдеться: стан
+   `CERTIFICATE_STATUS_TYPE_VALID` у тій самій команді; тоді `https://api.myrestring.com/api/health` відповідає `200`. До цього браузер
+   показує `ERR_CERT_COMMON_NAME_INVALID` (див. «Особливості»).
 
 2. **Google.** <https://console.cloud.google.com> → Google Auth Platform → Clients → Web client («re:string server») → Authorized JavaScript
    origins → додати `https://myrestring.com` (схема й хост, без слеша). Докладніше: `docs/web-sign-in.md`, розділ 1. Поки цього немає,
@@ -107,6 +108,17 @@ railway variable set "CORS_ORIGINS=https://myrestring.com,https://account.myrest
 будь-якому `web/dist/*.html`); нова стороння бібліотека → її адреса.
 
 ## Особливості, на які натрапили
+
+- **Вхід через Google з веба потребує бекенда з підтримкою `access_token`** (коміт `80942b4` і новіші, міграція `0006`). До 6 листопада 11:23 (+02:00)
+  на проді був старіший бекенд, і `POST /api/auth/google` з `access_token` давав `400 «Google token is required»`. Перевірка без акаунтів:
+  `curl -s -X POST https://api.myrestring.com/api/auth/google -H 'Content-Type: application/json' -d '{"access_token":"x"}'` має дати
+  `401 google_token_invalid`, а не 400. Бекенд розгортають окремо: `cd backend && railway up . --path-as-root --service api --detach`.
+
+- **`net::ERR_CERT_COMMON_NAME_INVALID` на новому домені** (так було з `api.myrestring.com`, коли власник щойно додав DNS): поки Railway не видав
+  сертифікат, його межа віддає чужий (типовий), і браузер відмовляє. Це пауза між додаванням DNS і видачею сертифіката, лише чекати
+  (у нас сертифікат видали приблизно через 20 хвилин після створення домену на Railway, о 09:11 UTC); стан:
+  `railway domain status <домен> --service <сервіс>` (`VALIDATING_OWNERSHIP` → `VALID`), перевірка поза браузером:
+  `curl -s -o /dev/null -w '%{http_code} %{ssl_verify_result}\n' https://<домен>/api/health` (`200 0`). Потім жорстке оновлення сторінки.
 
 - `railway up` не вантажить те, що в `.gitignore`, а `web/dist` там є: тому `--no-gitignore`. Без нього збірка контейнера падає на `COPY dist`.
 - `RUN rm -f /srv/_sitemap.html` у `Dockerfile` файл не прибрало (він лишився доступним), тому службові файли скрипт видаляє до завантаження.

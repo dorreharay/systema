@@ -5,20 +5,20 @@ import type { Translate } from '@/lib/i18n';
 
 import type { Failure, Op, Tables } from './types';
 
-/** What a change in the queue is, in a line: "New order · Ivan Petrenko", "Order #12 · Ready". */
+/** What a change in the queue is, in a line: "New order: Ivan Petrenko", "#12, Ivan Petrenko: Ready". */
 export function describeOp(op: Op, tables: Tables, t: Translate): string {
-  const client = (id: string, fallback?: string) => tables.clients[id]?.name ?? fallback ?? '—';
+  const client = (id: string, fallback?: string) => tables.clients[id]?.name ?? fallback ?? '-';
   const racket = (id: string, fallback?: string) => {
     const found = tables.rackets[id];
-    return found ? `${found.brand} ${found.model}` : (fallback ?? '—');
+    return found ? `${found.brand} ${found.model}` : (fallback ?? '-');
   };
   const string = (id: string, fallback?: string) => {
     const found = tables.strings[id];
-    return found ? `${found.brand} ${found.model}` : (fallback ?? '—');
+    return found ? `${found.brand} ${found.model}` : (fallback ?? '-');
   };
   const order = (id: string, fallback?: string) => {
     const found = tables.orders[id];
-    return found ? `${orderNumber(found.number)} · ${found.client.name}` : (fallback ?? '—');
+    return found ? `${orderNumber(found.number)}, ${found.client.name}` : (fallback ?? '-');
   };
   const change = (delta: number) => `${delta < 0 ? '−' : '+'}${formatNumber(Math.abs(delta), 1)}`;
 
@@ -48,7 +48,7 @@ export function describeOp(op: Op, tables: Tables, t: Translate): string {
     case 'service.create':
       return t('op_service_create', { name: op.fields.name });
     case 'service.update':
-      return t('op_service_update', { name: tables.services[op.subject]?.name ?? op.patch.name ?? '—' });
+      return t('op_service_update', { name: tables.services[op.subject]?.name ?? op.patch.name ?? '-' });
     case 'order.create':
       return t('op_order_create', { client: tables.clients[op.input.client_id]?.name ?? op.snapshot.client.name });
     case 'order.update': {

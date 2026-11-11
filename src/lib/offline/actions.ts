@@ -10,6 +10,7 @@
 import { ApiError } from '../api-error';
 import { orderNumber } from '../format';
 import { phoneKey } from '../phone';
+import { assertOrderAllowed, type OrderCap } from '../subscription';
 import type { CatalogString, Client, OrderDetail, OrderInput, Racket, Service } from '../types';
 import { newId } from './ids';
 import type { ClientInput, RacketInput, ServiceInput, StringInput } from './inputs';
@@ -51,7 +52,17 @@ export type Actions = ReturnType<typeof createActions>;
 export function createActions(
   store: OfflineStore,
   engine: Pick<SyncEngine, 'kick' | 'waitFor'>,
-  { firstTryMs = FIRST_TRY_MS }: { firstTryMs?: number } = {}
+  {
+    firstTryMs = FIRST_TRY_MS,
+    orderCap = () => null,
+    stockOn = () => true,
+  }: {
+    firstTryMs?: number;
+    // The limit of new orders in a month that the plan of the account sets, asked each time an order is made; none: no limit.
+    orderCap?: () => OrderCap | null;
+    // Whether the plan counts the stock. Where it does not (Free) an order is never refused for what is not in the stock.
+    stockOn?: () => boolean;
+  } = {}
 ) {
   const tables = () => store.getSnapshot().tables;
   // Each change is dated a moment after the one before it, so that what was done later is always later (an order made in the same
@@ -409,6 +420,10 @@ export function createActions(
     if (!input.racket_id && !input.new_racket) throw invalid('racket_id', 'Choose a racket');
     if (input.racket_id && input.new_racket) throw invalid('racket_id', 'Send either racket_id or new_racket');
     assertReferences(t, input);
+    // The plan's limit, as the server would answer it (a 402 `order_limit_reached`): the orders on the phone are counted, those made
+    // without a connection too, so that the stringer is told at once and not when the order reaches the server.
+    const cap = orderCap();
+    if (cap) assertOrderAllowed(Object.values(t.orders), cap, Date.parse(store.now()));
 
     const id = newId();
     // A racket that is named gets its id now, so that what is done to it before the order is sent can name it.
@@ -425,7 +440,7 @@ export function createActions(
       input: create,
       snapshot: snapshotOf(t, input.client_id, input.racket_id),
     };
-    assertStock(t, applyOp(t, op), id);
+    if (stockOn()) assertStock(t, applyOp(t, op), id);
 
     await send(op);
     // Online, the server numbers it in a moment: wait for that, but not for long.
@@ -454,7 +469,7 @@ export function createActions(
       form,
       snapshot: snapshotOf(t, patch.client_id ?? current.client.id, patch.racket_id ?? current.racket.id, current),
     };
-    assertStock(t, applyOp(t, op), id, current);
+    if (stockOn()) assertStock(t, applyOp(t, op), id, current);
 
     if (!form) {
       await send(op);
@@ -497,7 +512,7 @@ export function createActions(
       return ops.filter((op) => !gone.has(op.id));
     });
     if (!forgotten) {
-      await send({ ...stamp(), type: 'order.delete', subject: id, label: `${orderNumber(current.number)} · ${current.client.name}` });
+      await send({ ...stamp(), type: 'order.delete', subject: id, label: `${orderNumber(current.number)}, ${current.client.name}` });
     }
     engine.kick();
     return { ok: true as const };

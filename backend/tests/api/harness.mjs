@@ -145,6 +145,9 @@ export async function startServer({ port = CONFIG.port, env = {} } = {}) {
       SEED_ADMIN_NAME: CONFIG.seedAdmin.name,
       // The tests of everything else start from an empty catalog; the ones of the starter catalog turn it on.
       STARTER_CATALOG: 'false',
+      // An account is not asked to confirm its email address unless a test turns it on (EMAIL_VERIFICATION_REQUIRED: 'true'): a developer's
+      // .env must not decide that.
+      EMAIL_VERIFICATION_REQUIRED: 'false',
       // Sign in with Apple is off unless a test turns it on (startFakeApple().env): a developer's .env must not decide that.
       APPLE_CLIENT_IDS: '',
       APPLE_KEYS_URL: '',
@@ -425,6 +428,55 @@ export async function startFakeResend() {
     apiUrl: `http://127.0.0.1:${server.address().port}`,
     sent,
     answer: (status, body) => Object.assign(reply, { status, body }),
+    stop: () => new Promise((resolve) => server.close(resolve)),
+  };
+}
+
+/**
+ * Stands in for RevenueCat's REST API. `customers` holds what GET /v1/subscribers/{id} gives for an id (its `subscriber`); an id it
+ * does not know is answered 201 with an empty customer, as RevenueCat makes one. A request without the right key is answered 401.
+ * `requests` keeps what it was asked; after `answer(status)` every request is answered with that status (and `answer(null)` ends it).
+ * Start the server with REVENUECAT_SECRET_KEY=`secretKey` and REVENUECAT_API_URL=`apiUrl`.
+ */
+export async function startFakeRevenueCat({ secretKey = 'sk_test_fake_key' } = {}) {
+  const customers = new Map();
+  const requests = [];
+  const failure = { status: null };
+  const server = createServer((req, res) => {
+    requests.push({ method: req.method, url: req.url, authorization: req.headers.authorization });
+    res.setHeader('content-type', 'application/json');
+    if (failure.status) {
+      res.statusCode = failure.status;
+      return res.end(JSON.stringify({ message: 'a failure that was asked for' }));
+    }
+    if (req.headers.authorization !== `Bearer ${secretKey}`) {
+      res.statusCode = 401;
+      return res.end(JSON.stringify({ code: 7225, message: 'Invalid API key' }));
+    }
+    const match = /^\/subscribers\/([^/?]+)/.exec(req.url ?? '');
+    if (req.method !== 'GET' || !match) {
+      res.statusCode = 404;
+      return res.end('{}');
+    }
+    const id = decodeURIComponent(match[1]);
+    res.statusCode = customers.has(id) ? 200 : 201;
+    res.end(
+      JSON.stringify({
+        request_date_ms: Date.now(),
+        subscriber: customers.get(id) ?? { original_app_user_id: id, entitlements: {}, subscriptions: {} },
+      })
+    );
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+
+  return {
+    apiUrl: `http://127.0.0.1:${server.address().port}`,
+    secretKey,
+    customers,
+    requests,
+    answer: (status) => {
+      failure.status = status;
+    },
     stop: () => new Promise((resolve) => server.close(resolve)),
   };
 }

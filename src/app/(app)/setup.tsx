@@ -15,13 +15,16 @@ import { Screen } from '@/components/ui/screen';
 import Shortcut from '@/components/ui/shortcut';
 import { Text } from '@/components/ui/text';
 import { useAuth } from '@/lib/auth';
-import { CURRENCIES, deviceTimeZone } from '@/lib/choices';
-import { canonicalZone } from '@/lib/countries';
+import { CURRENCIES, currencyOfCountry, deviceTimeZone } from '@/lib/choices';
+import { canonicalZone, countryOfZone } from '@/lib/countries';
 import { describeError } from '@/lib/errors';
-import { currencySymbol } from '@/lib/format';
+import { currencyLabel, currencySymbol } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import { useIsWide } from '@/lib/layout';
 import type { TensionUnit } from '@/lib/types';
+
+// Where the setup starts: the zone the account has, or the phone's while the account has only UTC (it has not been set up).
+const startZone = (timezone: string | null | undefined) => canonicalZone(timezone && timezone !== 'UTC' ? timezone : deviceTimeZone());
 
 export default function Setup() {
   const { user, updateProfile } = useAuth();
@@ -29,15 +32,25 @@ export default function Setup() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const wide = useIsWide();
+  // A currency that the account already holds (anything but the server's USD) is the person's own and stays. Otherwise the currency is the
+  // one of the country (US dollars where the app has none for it), and it goes on following the country until the person chooses one.
+  const held = user?.currency && user.currency !== 'USD' ? user.currency : undefined;
   const [name, setName] = useState(user?.full_name ?? '');
-  const [currency, setCurrency] = useState(user?.currency ?? 'USD');
+  const [currency, setCurrency] = useState(() => held ?? currencyOfCountry(countryOfZone(startZone(user?.timezone))));
+  const [currencyChosen, setCurrencyChosen] = useState(held !== undefined);
   const [unit, setUnit] = useState<TensionUnit>(user?.tension_unit ?? 'kg');
-  const [zone, setZone] = useState(canonicalZone(user?.timezone && user.timezone !== 'UTC' ? user.timezone : deviceTimeZone()));
+  const [zone, setZone] = useState(() => startZone(user?.timezone));
   const [nameError, setNameError] = useState<string>();
   const [formError, setFormError] = useState<string>();
   const [saving, setSaving] = useState(false);
   const [choosing, setChoosing] = useState<'currency' | null>(null);
   const [currencyQuery, setCurrencyQuery] = useState('');
+
+  // A new country brings its currency with it, unless the person has chosen a currency of their own.
+  const changeZone = (next: string) => {
+    setZone(next);
+    if (!currencyChosen) setCurrency(currencyOfCountry(countryOfZone(next)));
+  };
 
   const save = async () => {
     if (saving) return;
@@ -82,7 +95,8 @@ export default function Setup() {
         />
       }
       footer={<View style={{ height: Math.max(insets.bottom, 12) + 24 }} />}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} className="flex-1">
+      {/* The keyboard covers the foot of the page on Android as well (the window is edge to edge and does not shrink for it). */}
+      <KeyboardAvoidingView behavior={Platform.OS === 'web' ? undefined : 'padding'} className="flex-1">
         {/* Enter in a field of one line continues, on the web. */}
         <EnterSubmits
           className="flex-1"
@@ -117,7 +131,7 @@ export default function Setup() {
             />
             <PickerField
               label={t('settings_currency')}
-              value={`${currency} · ${currencySymbol(currency, language)}`}
+              value={currencyLabel(currency, language)}
               placeholder=""
               onPress={() => setChoosing('currency')}
             />
@@ -133,7 +147,7 @@ export default function Setup() {
               />
               <Text className="text-xs text-muted">{t('setup_unit_hint')}</Text>
             </View>
-            <PlaceFields zone={zone} onChange={setZone} />
+            <PlaceFields zone={zone} onChange={changeZone} />
           </View>
           <Text className="px-1 text-[14.3px] text-muted">{t('setup_hint')}</Text>
           {formError ? <FormError message={formError} /> : null}
@@ -156,12 +170,11 @@ export default function Setup() {
         selectedKey={currency}
         onQueryChange={setCurrencyQuery}
         renderItem={(code) => (
-          <Text className="text-base">
-            {code} · {currencySymbol(code, language)}
-          </Text>
+          <Text className="text-base">{currencyLabel(code, language)}</Text>
         )}
         onSelect={(code) => {
           setCurrency(code);
+          setCurrencyChosen(true);
           setChoosing(null);
         }}
       />

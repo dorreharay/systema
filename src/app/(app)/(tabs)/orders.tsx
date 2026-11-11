@@ -1,24 +1,13 @@
 import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
-import {
-  ActivityIndicator,
-  FlatList,
-  LayoutAnimation,
-  Platform,
-  RefreshControl,
-  TextInput,
-  View,
-} from 'react-native';
+import { ActivityIndicator, FlatList, Platform, RefreshControl, View } from 'react-native';
 
-import { ClipboardList, Plus, Search, X } from '@/components/icons';
+import { ClipboardList, Plus } from '@/components/icons';
 import OrderCard from '@/components/order-card';
 import OrdersTablePage from '@/components/orders-table';
 import { colors } from '@/components/ui/colors';
-import { SEARCH_INPUT_TEXT } from '@/components/ui/field-text';
-import IconButton from '@/components/ui/icon-button';
-import { GridItem, PAGE_CONTENT } from '@/components/ui/page';
-import { PAPER_FIELD } from '@/components/ui/paper';
+import { GridItem, listGap, PAGE_CONTENT } from '@/components/ui/page';
 import { Screen, ScreenHeader, TAB_HEADER_DROP, useDetailContentTop } from '@/components/ui/screen';
+import SearchField from '@/components/ui/search-field';
 import Shortcut from '@/components/ui/shortcut';
 import { ListSkeleton } from '@/components/ui/skeleton';
 import { EmptyState, ErrorState, NoResults } from '@/components/ui/states';
@@ -26,47 +15,23 @@ import { useI18n } from '@/lib/i18n';
 import { GRID_GAP, useGridColumns, useIsDesktop, useIsWide } from '@/lib/layout';
 import { useOrders } from '@/lib/queries';
 import { usePullRefresh } from '@/lib/use-pull-refresh';
-
-const SEARCH_DEBOUNCE_MS = 250;
-// The search field comes and goes at the head of the list: the cards slide to make room for it, not jump.
-const SEARCH_SLIDE_MS = 200;
-const slideList = () =>
-  LayoutAnimation.configureNext(LayoutAnimation.create(SEARCH_SLIDE_MS, 'easeInEaseOut', 'opacity'));
+import { useSearch } from '@/lib/use-search';
 
 // The orders as cards: on the phone in a list, on a tablet in a grid.
 function OrdersList() {
   const { t } = useI18n();
   const router = useRouter();
-  const [searching, setSearching] = useState(false);
-  const [text, setText] = useState('');
-  const [query, setQuery] = useState('');
-
-  useEffect(() => {
-    const timer = setTimeout(() => setQuery(text), SEARCH_DEBOUNCE_MS);
-    return () => clearTimeout(timer);
-  }, [text]);
+  const search = useSearch();
+  const { query } = search;
 
   const orders = useOrders({ q: query });
   const items = orders.data?.pages.flatMap((page) => page.items) ?? [];
   const contentTop = useDetailContentTop(TAB_HEADER_DROP);
 
   const pull = usePullRefresh(orders.refetch);
-  // A wide page has the search field in view all the time, and the orders in a grid.
+  // A wide page has a header of its own in the flow of the page, and the orders in a grid.
   const wide = useIsWide();
   const columns = useGridColumns(380);
-  const searchShown = searching || wide;
-
-  const openSearch = () => {
-    slideList();
-    setSearching(true);
-  };
-
-  const closeSearch = () => {
-    slideList();
-    setSearching(false);
-    setText('');
-    setQuery('');
-  };
 
   // The list goes up under the floating header. On iOS the room is an inset, so that the pull to refresh opens
   // under the header, not behind it.
@@ -79,29 +44,11 @@ function OrdersList() {
         }
       : { contentContainerStyle: { paddingTop: contentTop } };
 
+  // The field is the first thing of the list, and goes up with it. Under the floating header of the phone it has room above it: on iOS
+  // the list starts 20 pt higher than the foot of the header (see `underHeader`), and that much more is added to it.
   const listHeader = (
-    <View className="pb-3">
-      {searchShown ? (
-        <View>
-          <View className={`min-h-12 flex-row items-center gap-2 rounded-lg border border-line bg-white px-3.5 md:min-h-11 ${PAPER_FIELD} ${wide ? '' : 'mt-6'}`}>
-            <Search size={18} color={colors.muted} />
-            <TextInput
-              autoFocus={!wide}
-              value={text}
-              onChangeText={setText}
-              placeholder={t('orders_search_placeholder')}
-              placeholderTextColor={colors.placeholder}
-              selectionColor={colors.primary}
-              autoCapitalize="none"
-              autoCorrect={false}
-              returnKeyType="search"
-              accessibilityLabel={t('search')}
-              textAlignVertical="center"
-              className={`min-w-0 flex-1 font-normal text-ink outline-none ${SEARCH_INPUT_TEXT}`}
-            />
-          </View>
-        </View>
-      ) : null}
+    <View className={wide ? '' : Platform.OS === 'ios' ? 'pt-7' : 'pt-2'}>
+      <SearchField value={search.text} onChangeText={search.setText} placeholder={t('orders_search_placeholder')} />
     </View>
   );
 
@@ -124,20 +71,7 @@ function OrdersList() {
         </View>
       }
     >
-      <ScreenHeader
-        floating
-        drop={TAB_HEADER_DROP}
-        title={t('tab_orders')}
-        right={
-          wide ? null : (
-            <IconButton
-              icon={searching ? X : Search}
-              label={searching ? t('close_search') : t('search')}
-              onPress={searching ? closeSearch : openSearch}
-            />
-          )
-        }
-      />
+      <ScreenHeader floating drop={TAB_HEADER_DROP} title={t('tab_orders')} />
 
       <FlatList bounces={false} overScrollMode="never"
         // The number of columns cannot change under a list: another count is another list.
@@ -148,9 +82,11 @@ function OrdersList() {
         ListHeaderComponent={listHeader}
         data={items}
         keyExtractor={(order) => order.id}
-        contentContainerClassName={`gap-3 pb-28 md:pb-12 ${PAGE_CONTENT}`}
+        contentContainerClassName={`${listGap(columns)} pb-28 md:pb-12 ${PAGE_CONTENT}`}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        // The keyboard goes away when the list is dragged: what was found is then in sight.
+        keyboardDismissMode="on-drag"
         refreshControl={
           <RefreshControl
             {...pull}

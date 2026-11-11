@@ -199,9 +199,9 @@ export default function OrderDetails() {
           </Pressable>
         </Row>
         <Row label={order.hybrid ? t('field_main_strings') : t('field_strings')}>
-          {order.hybrid ? (order.main_string_name ?? '—') : strungWith}
+          {order.hybrid ? (order.main_string_name ?? '-') : strungWith}
         </Row>
-        {order.hybrid ? <Row label={t('field_cross_strings')}>{order.cross_string_name ?? '—'}</Row> : null}
+        {order.hybrid ? <Row label={t('field_cross_strings')}>{order.cross_string_name ?? '-'}</Row> : null}
         <Row label={order.hybrid || order.cross_tension !== null ? t('field_main_tension') : t('field_tension')}>
           {formatTension(order.main_tension, unit)}
         </Row>

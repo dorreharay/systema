@@ -4,6 +4,7 @@
  * React Native (and is tested in plain Node); this is the one file that joins it to the app.
  */
 import { api } from '@/lib/api';
+import type { OrderCap } from '@/lib/subscription';
 
 import { createActions } from './actions';
 import { FileStorage } from './file-storage';
@@ -26,4 +27,16 @@ const transport = (request: Request) =>
 
 export const engine = new SyncEngine(offlineStore, transport, { onUnauthorized: () => sessionEnded() });
 
-export const offlineActions = createActions(offlineStore, engine);
+let orderCap: () => OrderCap | null = () => null;
+let stockOn: () => boolean = () => true;
+
+/**
+ * What the plan of the account allows on this phone, asked each time an order is made (see lib/subscription.ts): the limit of orders in
+ * a month, and whether the stock is counted. `null`: no plan limits anything.
+ */
+export function bindPlan(rules: { orderCap: () => OrderCap | null; stockOn: () => boolean } | null) {
+  orderCap = rules?.orderCap ?? (() => null);
+  stockOn = rules?.stockOn ?? (() => true);
+}
+
+export const offlineActions = createActions(offlineStore, engine, { orderCap: () => orderCap(), stockOn: () => stockOn() });

@@ -23,7 +23,7 @@ import {
   zoneForCountry,
 } from '@/lib/countries';
 import { describeAuthError, describeError, isApiError } from '@/lib/errors';
-import { currencySymbol } from '@/lib/format';
+import { currencyLabel } from '@/lib/format';
 import { LANGUAGES, useI18n, type Language } from '@/lib/i18n';
 
 type SheetProps = { visible: boolean; onClose: () => void };
@@ -97,7 +97,7 @@ export function CurrencySheet({ visible, onClose }: SheetProps) {
       placeholder={t('search')}
       options={CURRENCIES}
       value={user?.currency ?? 'USD'}
-      label={(code) => `${code} · ${currencySymbol(code, language)}`}
+      label={(code) => currencyLabel(code, language)}
       onChoose={(currency) =>
         updateProfile({ currency }).then(
           () => toast.success(t('settings_saved')),

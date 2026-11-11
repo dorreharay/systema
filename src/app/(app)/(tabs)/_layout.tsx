@@ -25,9 +25,9 @@ export default function TabsLayout() {
         // Switching tabs is instant: the pill in the navigation is what moves.
         animation: 'none',
         sceneStyle: wide
-          ? { backgroundColor: colors.surface }
+          ? { backgroundColor: colors.page }
           : {
-              backgroundColor: colors.surface,
+              backgroundColor: colors.page,
               borderBottomLeftRadius: PAGE_RADIUS,
               borderBottomRightRadius: PAGE_RADIUS,
               overflow: 'hidden',

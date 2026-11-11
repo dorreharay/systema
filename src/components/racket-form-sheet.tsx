@@ -4,7 +4,7 @@ import { View } from 'react-native';
 import { Check } from '@/components/icons';
 import PlusIcon from '@/components/icons/plus-icon';
 import { SUGGESTIONS_SHOWN, SUGGEST_DELAY_MS, Suggestions } from '@/components/reference-suggestions';
-import { StockFields, readStock } from '@/components/stock';
+import { StockFields, StockLocked, readStock, useStockOn } from '@/components/stock';
 import { colors } from '@/components/ui/colors';
 import EnterSubmits from '@/components/ui/enter-submits';
 import { FormError, Input, type InputRef } from '@/components/ui/input';
@@ -15,7 +15,7 @@ import Shortcut from '@/components/ui/shortcut';
 import { Text } from '@/components/ui/text';
 import { useToast } from '@/components/ui/toast';
 import { describeError } from '@/lib/errors';
-import { formatNumber } from '@/lib/format';
+import { formatNumber, optionalLabel } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import { useClients, useCreateRacket, useOnline, useRackets, useReferenceRackets, useUpdateRacket } from '@/lib/queries';
 import { withoutOwnedRackets } from '@/lib/reference';
@@ -57,7 +57,9 @@ function RacketForm({
   const [brand, setBrand] = useState(racket?.brand ?? '');
   const [model, setModel] = useState(racket?.model ?? initialModel ?? '');
   const [notes, setNotes] = useState(racket?.notes ?? '');
-  // A new catalog racket is counted, with one in stock: what was just bought, or is about to be used.
+  // A new catalog racket is counted, with one in stock: what was just bought, or is about to be used. Where the plan does not count the stock
+  // (Free) none of it is asked and nothing of it is sent: a racket made there is not counted, and the count of one that was is left alone.
+  const stockOn = useStockOn();
   const [track, setTrack] = useState(racket?.track_stock ?? true);
   const [stock, setStock] = useState(racket ? formatNumber(racket.stock, 0) : '1');
   const [errors, setErrors] = useState<{ owner?: string; brand?: string; model?: string; stock?: string }>({});
@@ -99,7 +101,7 @@ function RacketForm({
 
   const save = async () => {
     if (saving) return;
-    const counted = forCatalog && track ? readStock('racket', stock) : null;
+    const counted = forCatalog && stockOn && track ? readStock('racket', stock) : null;
     const next = {
       owner: forCatalog || owner ? undefined : t('error_owner_required'),
       brand: brand.trim() ? undefined : t('error_brand_required'),
@@ -117,7 +119,7 @@ function RacketForm({
             brand,
             model,
             notes: notes || null,
-            track_stock: track,
+            track_stock: stockOn && track,
             ...(counted && 'value' in counted ? { stock: counted.value } : {}),
           }
         : { client_id: owner?.id, brand, model, notes: notes || null };
@@ -195,23 +197,27 @@ function RacketForm({
         />
         <Input
           ref={notesRef}
-          label={`${t('field_notes')} · ${t('optional')}`}
+          label={optionalLabel(t('field_notes'), t('optional'))}
           value={notes}
           onChangeText={setNotes}
           multiline
         />
         {forCatalog ? (
-          <StockFields
-            kind="racket"
-            track={track}
-            onTrack={setTrack}
-            stock={stock}
-            onStock={(value) => {
-              setStock(value);
-              setErrors((current) => ({ ...current, stock: undefined }));
-            }}
-            error={errors.stock}
-          />
+          stockOn ? (
+            <StockFields
+              kind="racket"
+              track={track}
+              onTrack={setTrack}
+              stock={stock}
+              onStock={(value) => {
+                setStock(value);
+                setErrors((current) => ({ ...current, stock: undefined }));
+              }}
+              error={errors.stock}
+            />
+          ) : (
+            <StockLocked onClose={onClose} />
+          )
         ) : null}
         {formError ? <FormError message={formError} /> : null}
       </EnterSubmits>

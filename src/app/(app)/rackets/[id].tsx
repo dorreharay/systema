@@ -6,7 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MoreHorizontal, Pencil, Repeat, Trash2 } from '@/components/icons';
 import { HISTORY_SHOWN } from '@/components/order-card';
 import RacketFormSheet from '@/components/racket-form-sheet';
-import { StockBadge, StockSheet } from '@/components/stock';
+import { StockBadge, StockSheet, useStockOn } from '@/components/stock';
 import ActionSheet from '@/components/ui/action-sheet';
 import PlusIcon from '@/components/icons/plus-icon';
 import { StatusBadge } from '@/components/ui/badge';
@@ -39,6 +39,7 @@ export default function RacketDetails() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const query = useRacket(id);
   const remove = useDeleteRacket();
+  const stockOn = useStockOn();
   const [editing, setEditing] = useState(false);
   const [stocking, setStocking] = useState(false);
   const [menu, setMenu] = useState(false);
@@ -124,7 +125,10 @@ export default function RacketDetails() {
             // A catalog racket has no owner; what it has is a stock, which is changed with a tap.
             <View className="flex-row items-center justify-between gap-3">
               <Text className="text-[16.5px] text-muted">{t('field_stock')}</Text>
-              {racket.track_stock ? (
+              {!stockOn ? (
+                // Where the plan does not count the stock (Free): it is Pro's, and the racket's count is kept.
+                <Text className="text-[16.5px] text-muted">{t('stock_locked_title')}</Text>
+              ) : racket.track_stock ? (
                 <StockBadge kind="racket" item={racket} onPress={() => setStocking(true)} />
               ) : (
                 <Text className="text-[16.5px] text-muted">{t('stock_untracked')}</Text>
@@ -185,14 +189,14 @@ export default function RacketDetails() {
                   className="gap-1.5">
                   <View className="flex-row items-center justify-between gap-3">
                     <Text className="text-base font-semibold">
-                      {orderNumber(order.number)} · {formatDate(order.received_date, language, today)}
+                      {orderNumber(order.number)}, {formatDate(order.received_date, language, today)}
                     </Text>
                     <StatusBadge status={order.status} />
                   </View>
                   <Text className="text-[16.5px]">{describeSetup(order, user?.tension_unit ?? 'kg', t)}</Text>
                   {order.stringing_notes || order.notes ? (
                     <Text className="text-[15.4px] text-muted" numberOfLines={3}>
-                      {[order.stringing_notes, order.notes].filter(Boolean).join(' · ')}
+                      {[order.stringing_notes, order.notes].filter(Boolean).join(', ')}
                     </Text>
                   ) : null}
                 </Card>

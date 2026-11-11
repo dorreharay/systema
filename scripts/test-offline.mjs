@@ -623,6 +623,60 @@ test('a number the phone knows is taken is refused at once, as the server would'
   await p.store.close();
 });
 
+test('the limit of orders in a month that a plan sets is checked on the phone as the server would, and what was made without a connection counts', async () => {
+  const person = await stringer();
+  const data = await shop(person);
+  const p = await phone(person);
+  const capped = createActions(p.store, p.engine, { firstTryMs: 0, orderCap: () => ({ limit: 2, timeZone: 'UTC' }) });
+  const order = () => ({ client_id: data.client.id, racket_id: data.racket.id });
+
+  p.net.offline = true;
+  await capped.createOrder(order());
+  const second = await capped.createOrder(order());
+  assert.equal(p.snap().outbox.length, 2);
+  await assert.rejects(
+    () => capped.createOrder(order()),
+    (error) =>
+      error instanceof ApiError &&
+      error.status === 402 &&
+      error.code === 'order_limit_reached' &&
+      error.data.limit === 2 &&
+      error.data.used === 2 &&
+      /^\d{4}-\d{2}-01$/.test(error.data.resets_on)
+  );
+  assert.equal(p.snap().outbox.length, 2, 'the refused order was not queued');
+
+  // Deleting one that was not sent gives its place back; with no limit (the plans off, or Pro) nothing is refused.
+  await capped.deleteOrder(second.id);
+  await capped.createOrder(order());
+  assert.equal(Object.keys(p.tables().orders).length, 2);
+  await p.actions.createOrder(order());
+  assert.equal(Object.keys(p.tables().orders).length, 3);
+  await p.store.close();
+});
+
+test('where the plan does not count the stock, an order is not refused for what is not in it', async () => {
+  const person = await stringer();
+  const data = await shop(person, { stock: 0 });
+  const p = await phone(person);
+  p.net.offline = true;
+  const order = () => ({ client_id: data.client.id, racket_id: data.racket.id, main_string_id: data.string.id });
+
+  // Counted, and none left: refused at once, as the server would.
+  await assert.rejects(
+    () => p.actions.createOrder(order()),
+    (error) => error instanceof ApiError && error.code === 'out_of_stock'
+  );
+  assert.equal(p.snap().outbox.length, 0);
+
+  // Paused (Free): let through.
+  const paused = createActions(p.store, p.engine, { firstTryMs: 0, stockOn: () => false });
+  const made = await paused.createOrder(order());
+  assert.ok(made, 'the order was made');
+  assert.equal(p.snap().outbox.length, 1);
+  await p.store.close();
+});
+
 test('two phones change one stock: neither undoes the other', async () => {
   const person = await stringer();
   const data = await shop(person, { stock: 10 });

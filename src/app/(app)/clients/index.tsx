@@ -1,10 +1,9 @@
 import { useRouter } from 'expo-router';
-import { memo, useEffect, useState } from 'react';
-import { FlatList, RefreshControl, TextInput, View } from 'react-native';
+import { memo, useState } from 'react';
+import { FlatList, RefreshControl, View } from 'react-native';
 
 import { StackNavBar } from '@/components/app-tab-bar';
 import ClientFormSheet from '@/components/client-form-sheet';
-import { Search } from '@/components/icons';
 import PlusIcon from '@/components/icons/plus-icon';
 import UserIcon from '@/components/icons/user-icon';
 import RacketFormSheet from '@/components/racket-form-sheet';
@@ -12,10 +11,9 @@ import ReferenceRacketPicker from '@/components/reference-racket-picker';
 import Avatar from '@/components/ui/avatar';
 import Card from '@/components/ui/card';
 import { colors } from '@/components/ui/colors';
-import { SEARCH_INPUT_TEXT } from '@/components/ui/field-text';
-import { GridItem, PAGE_CONTENT } from '@/components/ui/page';
-import { PAPER_FIELD } from '@/components/ui/paper';
+import { GridItem, listGap, PAGE_CONTENT } from '@/components/ui/page';
 import { DetailHeader, Screen, useDetailContentTop } from '@/components/ui/screen';
+import SearchField from '@/components/ui/search-field';
 import { afterSheetsClosed } from '@/components/ui/sheet';
 import Shortcut from '@/components/ui/shortcut';
 import { ListSkeleton } from '@/components/ui/skeleton';
@@ -28,8 +26,7 @@ import { GRID_GAP, useGridColumns } from '@/lib/layout';
 import { useClients } from '@/lib/queries';
 import type { Client } from '@/lib/types';
 import { usePullRefresh } from '@/lib/use-pull-refresh';
-
-const SEARCH_DEBOUNCE_MS = 250;
+import { useSearch } from '@/lib/use-search';
 
 // A row changes only with its client, so a letter typed in the search does not draw the whole list again.
 const ClientRow = memo(function ClientRow({ client, today, fill }: { client: Client; today: string; fill?: boolean }) {
@@ -57,7 +54,7 @@ const ClientRow = memo(function ClientRow({ client, today, fill }: { client: Cli
             client.last_order_date
               ? t('client_last_order', { date: formatDate(client.last_order_date, language, today) })
               : t('client_no_orders'),
-          ].join(' · ')}
+          ].join(', ')}
         </Text>
       </View>
     </Card>
@@ -68,8 +65,8 @@ export default function Clients() {
   const { user } = useAuth();
   const { t } = useI18n();
   const router = useRouter();
-  const [text, setText] = useState('');
-  const [query, setQuery] = useState('');
+  const search = useSearch();
+  const { query } = search;
   const [adding, setAdding] = useState(false);
   // A client who was just made is offered a racket from the reference list at once (or one typed in); then their page opens.
   const [added, setAdded] = useState<Client | null>(null);
@@ -80,11 +77,6 @@ export default function Clients() {
   const today = todayIso(user?.timezone);
   const contentTop = useDetailContentTop();
   const columns = useGridColumns(340);
-
-  useEffect(() => {
-    const timer = setTimeout(() => setQuery(text), SEARCH_DEBOUNCE_MS);
-    return () => clearTimeout(timer);
-  }, [text]);
 
   // The racket was added, or it was not wanted: the page of the client is next.
   const finish = () => {
@@ -115,28 +107,15 @@ export default function Clients() {
         // The search goes with the list when it is scrolled; the title stays at the top, and the list goes up behind it.
         contentContainerStyle={{ paddingTop: contentTop }}
         ListHeaderComponent={
-          <View className={`min-h-12 flex-row items-center gap-2 rounded-lg border border-line bg-white px-3.5 md:min-h-11 ${PAPER_FIELD}`}>
-            <Search size={18} color={colors.muted} />
-            <TextInput
-              value={text}
-              onChangeText={setText}
-              placeholder={t('clients_search_placeholder')}
-              placeholderTextColor={colors.placeholder}
-              selectionColor={colors.primary}
-              autoCapitalize="words"
-              autoCorrect={false}
-              returnKeyType="search"
-              accessibilityLabel={t('search')}
-              textAlignVertical="center"
-              className={`min-w-0 flex-1 font-normal text-ink outline-none ${SEARCH_INPUT_TEXT}`}
-            />
-          </View>
+          <SearchField value={search.text} onChangeText={search.setText} placeholder={t('clients_search_placeholder')} />
         }
         data={clients.data ?? []}
         keyExtractor={(client) => client.id}
-        contentContainerClassName={`gap-3 pb-28 md:pb-12 ${PAGE_CONTENT}`}
+        contentContainerClassName={`${listGap(columns)} pb-28 md:pb-12 ${PAGE_CONTENT}`}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        // The keyboard goes away when the list is dragged: what was found is then in sight.
+        keyboardDismissMode="on-drag"
         refreshControl={
           <RefreshControl
             {...pull}
@@ -170,7 +149,7 @@ export default function Clients() {
       <ClientFormSheet
         visible={adding}
         onClose={() => setAdding(false)}
-        search={text}
+        search={search.text}
         onSaved={(client) => {
           setAdded(client);
           afterSheetsClosed(() => setStep('picking'));

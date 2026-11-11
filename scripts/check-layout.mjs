@@ -72,4 +72,30 @@ for (const name of ['narrow', 'medium', 'wide']) {
   }
 }
 
+// The space around the cards on the phone: the gutter (between the cards of a list, and between a card or the search field and the side
+// of the screen) and the bleed (how far a card reaches past the margin of the page: the margin less the gutter) are two tokens in
+// global.css, and the classes must use them: CARD_GAP in page.tsx starts with `gap-gutter`, and BLOCK_SHAPE in card.tsx and the frame of
+// the search field in search-field.tsx have `-mx-bleed`.
+{
+  const rem = (name) => Number(css.match(new RegExp(`--spacing-${name}:\\s*(\\d+(?:\\.\\d+)?)rem;`))?.[1]);
+  const [margin, gutter, bleed] = [rem('page'), rem('gutter'), rem('bleed')];
+  const card = readFileSync(`${root}src/components/ui/card.tsx`, 'utf8');
+  const search = readFileSync(`${root}src/components/ui/search-field.tsx`, 'utf8');
+  const problems = [];
+  if ([margin, gutter, bleed].some(Number.isNaN)) {
+    problems.push('cannot read --spacing-page, --spacing-gutter and --spacing-bleed from global.css');
+  } else if (Math.abs(margin - (gutter + bleed)) > 1e-9) {
+    problems.push(`--spacing-bleed is ${bleed}rem but the page margin less the gutter is ${margin - gutter}rem`);
+  }
+  if (!/export const CARD_GAP = 'gap-gutter /.test(page)) problems.push("CARD_GAP in page.tsx does not start with 'gap-gutter'");
+  if (!/export const BLOCK_SHAPE = '-mx-bleed /.test(card)) problems.push("BLOCK_SHAPE in card.tsx does not start with '-mx-bleed'");
+  if (!/const FRAME =\s*'-mx-bleed /.test(search)) problems.push("FRAME in search-field.tsx does not start with '-mx-bleed'");
+  if (problems.length > 0) {
+    for (const problem of problems) console.log(`cards: ${problem}`);
+    failed = true;
+  } else {
+    console.log(`cards: a gutter of ${gutter * 16} px between them and from the sides of the screen (bleed ${bleed * 16} px of a ${margin * 16} px margin), the same in the styles and in the classes`);
+  }
+}
+
 process.exit(failed ? 1 : 0);

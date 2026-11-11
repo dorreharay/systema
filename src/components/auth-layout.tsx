@@ -2,7 +2,7 @@ import type { Href } from 'expo-router';
 import { useFocusEffect, useNavigation } from 'expo-router';
 import type { ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { LayoutChangeEvent, ViewStyle } from 'react-native';
+import type { LayoutChangeEvent, ScrollViewInstance, ViewStyle } from 'react-native';
 import { Keyboard, Platform, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 import Animated, {
   Easing,
@@ -24,6 +24,7 @@ import { ArrowLeft } from '@/components/icons';
 import { BUTTON_RADIUS } from '@/components/ui/button-radius';
 import { useI18n } from '@/lib/i18n';
 import { useIsWide } from '@/lib/layout';
+import { useKeyboardOverlap } from '@/lib/use-keyboard';
 
 // Height of the strip the back button sits in at the top left. The strip is centred on the letters of the logo and the
 // button on the strip, so the two are on one line whatever size the button is.
@@ -176,16 +177,23 @@ export default function AuthLayout({
   }));
   const shadeStyle = useAnimatedStyle(() => ({ opacity: shown.get() }));
 
-  // On iOS the centered form is moved so the button that sends it sits just above the keyboard (up, and a little down on a tall
+  // On the phones the centered form is moved so the button that sends it sits just above the keyboard (up, and a little down on a tall
   // phone), and the other ways in below that button are behind the keyboard, none of them above it. The move is animated once
   // per keyboard change, over the keyboard's own duration, so moving between fields does not make the form jump. It stops
-  // below the status bar, and the title fades out before it reaches the logo.
-  const liftsForKeyboard = centered && Platform.OS === 'ios';
+  // below the status bar, and the title fades out before it reaches the logo. (On Android the window does not shrink for the
+  // keyboard, so the form is moved there too; it is told of the keyboard once it is up, and the move takes the usual time.)
+  const liftsForKeyboard = centered && (Platform.OS === 'ios' || Platform.OS === 'android');
+  // A short screen cannot lift the whole form above the keyboard. On Android, where the window does not shrink for the keyboard,
+  // the scroll view is made as tall as what is in sight above it, so that the field that has the cursor, and the button, can be
+  // scrolled into sight. (Off, on iOS and the web, it is 0 and listens to nothing.)
+  const keyboardRoom = useKeyboardOverlap(centered && Platform.OS === 'android');
   const lift = useSharedValue(0);
   const [blockTop, setBlockTop] = useState(0);
   const blockLayout = useRef({ y: 0 });
   const formLayout = useRef({ y: 0, height: 0 });
   const formRef = useRef<AuthViewRef>(null);
+  // The scroll view, to take it back to the top once the keyboard is gone (Android, below).
+  const scrollRef = useRef<ScrollViewInstance>(null);
   // Where the button that sends the form ends, from the top of the form (the button says where it is, see AuthSubmit). Until
   // it has, the whole form counts.
   const submitEnd = useRef<number | null>(null);
@@ -233,12 +241,31 @@ export default function AuthLayout({
     if (!liftsForKeyboard) {
       return;
     }
+    if (Platform.OS === 'android') {
+      // Android says how tall the keyboard is, not where it begins, and leaves out the navigation bar that it covers as well.
+      const shown = Keyboard.addListener('keyboardDidShow', (event) => {
+        keyboardTop.current = height - (event.endCoordinates.height + insets.bottom);
+        updateLift(KEYBOARD_DURATION);
+      });
+      const hidden = Keyboard.addListener('keyboardDidHide', () => {
+        keyboardTop.current = height;
+        updateLift(KEYBOARD_DURATION);
+        // The scroll view was made shorter for the keyboard, and the form may have been scrolled in it to bring a field or the button
+        // into sight. It does not take itself back when it is tall again (a short screen): the form would stay up under the logo, so
+        // it goes back to where it is centered.
+        scrollRef.current?.scrollTo({ y: 0, animated: true });
+      });
+      return () => {
+        shown.remove();
+        hidden.remove();
+      };
+    }
     const subscription = Keyboard.addListener('keyboardWillChangeFrame', (event) => {
       keyboardTop.current = event.endCoordinates.screenY;
       updateLift(event.duration > 0 ? event.duration : KEYBOARD_DURATION);
     });
     return () => subscription.remove();
-  }, [liftsForKeyboard, updateLift]);
+  }, [height, insets.bottom, liftsForKeyboard, updateLift]);
 
   const handleBlockLayout = ({ nativeEvent: { layout } }: LayoutChangeEvent) => {
     blockLayout.current.y = layout.y;
@@ -294,6 +321,20 @@ export default function AuthLayout({
     </Animated.View>
   );
 
+  const scroller = (
+    <ScrollView ref={scrollRef} bounces={false} overScrollMode="never"
+      className="flex-1"
+      contentContainerClassName="grow"
+      keyboardDismissMode="on-drag"
+      keyboardShouldPersistTaps="handled">
+      <View
+        className="justify-center px-6"
+        style={{ minHeight: height, paddingTop: headerSpace, paddingBottom: wide ? WIDE_FOOT : headerSpace }}>
+        {content}
+      </View>
+    </ScrollView>
+  );
+
   return (
     <AuthLeaveContext value={leave}>
       {shade ? (
@@ -305,17 +346,13 @@ export default function AuthLayout({
       ) : null}
       <Animated.View className="flex-1" style={screenStyle}>
         {centered ? (
-          <ScrollView bounces={false} overScrollMode="never"
-            className="flex-1"
-            contentContainerClassName="grow"
-            keyboardDismissMode="on-drag"
-            keyboardShouldPersistTaps="handled">
-            <View
-              className="justify-center px-6"
-              style={{ minHeight: height, paddingTop: headerSpace, paddingBottom: wide ? WIDE_FOOT : headerSpace }}>
-              {content}
+          Platform.OS === 'android' ? (
+            <View className="flex-1" style={{ paddingBottom: keyboardRoom }}>
+              {scroller}
             </View>
-          </ScrollView>
+          ) : (
+            scroller
+          )
         ) : (
           <View className="flex-1 justify-end">
             <View

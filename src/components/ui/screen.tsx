@@ -57,8 +57,8 @@ type ScreenProps = {
 };
 
 /**
- * A page of the signed-in app: light grey, all the way up. The app header has no colour of its own: the
- * page goes on under it, and leaves room at the top for the notch and the header. The bottom of a tab's
+ * A page of the signed-in app: the colour of the pages (`bg-page`) behind its content, all the way up. The app header has no colour of its
+ * own: the page goes on under it, and leaves room at the top for the notch and the header. The bottom of a tab's
  * page is rounded by the tabs layout (it stands over the navigation); with a `dock` the page is rounded
  * at the bottom here, as the dock sits under it, on the dark ground of the navigation.
  */
@@ -73,7 +73,7 @@ export function Screen({ children, dock, footer, logo, flush, width = 'narrow', 
   // is in the header (`WideHeader`), so only the column is left to make.
   if (wide) {
     return (
-      <View className={`flex-1 bg-surface ${PAGE_WIDTH_CLASS[width]}`}>
+      <View className={`flex-1 bg-page ${PAGE_WIDTH_CLASS[width]}`}>
         <DockProvider dock={wideDock === undefined ? dock : wideDock}>{children}</DockProvider>
       </View>
     );
@@ -81,7 +81,7 @@ export function Screen({ children, dock, footer, logo, flush, width = 'narrow', 
 
   if (!dock) {
     return (
-      <View className="flex-1 bg-surface" style={{ paddingTop }}>
+      <View className="flex-1 bg-page" style={{ paddingTop }}>
         {children}
       </View>
     );
@@ -90,7 +90,7 @@ export function Screen({ children, dock, footer, logo, flush, width = 'narrow', 
   // The radius is the one of the tabs' pages (see the tabs layout).
   return (
     <View className="flex-1" style={{ backgroundColor: colors.chrome }}>
-      <View className="flex-1 overflow-hidden rounded-b-[18px] bg-surface" style={{ paddingTop }}>
+      <View className="flex-1 overflow-hidden rounded-b-[18px] bg-page" style={{ paddingTop }}>
         {children}
       </View>
       {keyboardOpen ? null : (
@@ -210,7 +210,7 @@ function FloatingBar({ children, className, drop = 0 }: { children: ReactNode; c
       className="absolute inset-x-0 top-0 z-10 overflow-hidden"
       style={{ height: insets.top + HEADER_TOP_GAP + drop + HEADER_ROW_HEIGHT }}>
       <BackBlur intensity={50} tint="light" className="absolute inset-0" pointerEvents="none" />
-      <View className="absolute inset-0 bg-surface/70" pointerEvents="none" />
+      <View className="absolute inset-0 bg-page/70" pointerEvents="none" />
       <View
         pointerEvents="box-none"
         className={`${HEADER_ROW} ${className}`}

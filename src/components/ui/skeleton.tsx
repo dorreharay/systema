@@ -9,6 +9,7 @@ import Animated, {
 import { View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { BLOCK, BLOCK_ROOM, BLOCK_SHAPE } from '@/components/ui/card';
+import { CARD_GAP } from '@/components/ui/page';
 import { useI18n } from '@/lib/i18n';
 
 // A grey block that pulses where something is still loading.
@@ -66,7 +67,7 @@ export function RowSkeleton() {
 
 export function ListSkeleton({ rows = 4, variant = 'order' }: { rows?: number; variant?: 'order' | 'row' }) {
   return (
-    <View className="gap-3">
+    <View className={CARD_GAP}>
       {Array.from({ length: rows }, (_, index) =>
         variant === 'order' ? <OrderCardSkeleton key={index} /> : <RowSkeleton key={index} />
       )}

@@ -22,6 +22,9 @@ export const colors = {
   // them (a client, a racket, a string).
   clients: '#F3D590',
   catalog: '#CCE7AC',
+  // The background of the pages of the signed-in app, behind their content: the logo's strip, the gaps between the blocks, the sides
+  // of a wide page (the Tailwind token `page` in global.css is the same).
+  page: '#f4f5f6',
   // A soft red for a button that takes something away, with its text (5.7:1 on it).
   dangerSoft: '#FBE4E1',
   dangerInk: '#B42318',

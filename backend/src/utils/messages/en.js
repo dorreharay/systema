@@ -11,6 +11,12 @@ export default {
     expiry: 'The link is valid for {minutes} min. If you did not ask to change your password, just ignore this email.',
     subject: 'Password reset for {appName}',
   },
+  verification: {
+    // The email with the code that confirms an address: {code} is the six digits, {minutes} how long the code works, {appName} the name of the app.
+    subject: 'Your {appName} confirmation code: {code}',
+    intro: 'Your confirmation code:',
+    expiry: 'The code is valid for {minutes} min. If you did not create an account, just ignore this email.',
+  },
   page: {
     // {name} is the name of the app.
     opening: 'Opening {name}',
@@ -21,8 +27,9 @@ export default {
     broken: 'It has expired or was already used. Ask for a new one in the app: “Forgot password?”.',
   },
   services: {
-    // What a new account starts with in its list of services (see utils/defaults.js): the stringing itself, and two extras.
-    labor: 'Stringing Labor',
+    // What a new account starts with in its list of services (see utils/defaults.js): the main service, the stringing itself, which every
+    // order gets, and two extras.
+    labor: 'Main Service',
     grip: 'Grip Replacement',
     overgrip: 'Overgrip Installation',
   },

@@ -10,7 +10,7 @@ import Sheet from '@/components/ui/sheet';
 import Shortcut from '@/components/ui/shortcut';
 import { useToast } from '@/components/ui/toast';
 import { describeError, fieldError, isApiError } from '@/lib/errors';
-import { clientFromSearch } from '@/lib/format';
+import { clientFromSearch, optionalLabel } from '@/lib/format';
 import { useI18n, type Translate } from '@/lib/i18n';
 import { useCreateClient, useUpdateClient } from '@/lib/queries';
 import type { Client } from '@/lib/types';
@@ -119,7 +119,7 @@ function ClientForm({ client, search, onClose, onSaved }: Omit<ClientFormSheetPr
         />
         <Input
           ref={emailRef}
-          label={`${t('field_email')} · ${t('optional')}`}
+          label={optionalLabel(t('field_email'), t('optional'))}
           value={email}
           onChangeText={(value) => {
             setEmail(value);
@@ -135,7 +135,7 @@ function ClientForm({ client, search, onClose, onSaved }: Omit<ClientFormSheetPr
         />
         <Input
           ref={notesRef}
-          label={`${t('field_notes')} · ${t('optional')}`}
+          label={optionalLabel(t('field_notes'), t('optional'))}
           value={notes}
           onChangeText={setNotes}
           multiline

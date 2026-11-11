@@ -9,6 +9,12 @@ export default {
     expiry: 'Посилання діє {minutes} хв. Якщо ви не просили змінити пароль, просто проігноруйте цей лист.',
     subject: 'Відновлення пароля {appName}',
   },
+  verification: {
+    // The email with the code that confirms an address: {code} is the six digits, {minutes} how long the code works, {appName} the name of the app.
+    subject: 'Ваш код підтвердження {appName}: {code}',
+    intro: 'Ваш код підтвердження:',
+    expiry: 'Код діє {minutes} хв. Якщо ви не створювали акаунт, просто проігноруйте цей лист.',
+  },
   page: {
     opening: 'Відкриваємо {name}',
     explain: 'Зараз відкриється застосунок, де ви зможете задати новий пароль.',
@@ -18,7 +24,7 @@ export default {
     broken: 'Воно застаріло або вже використане. Запросіть нове в застосунку: «Забули пароль?».',
   },
   services: {
-    labor: 'Робота з перетяжки',
+    labor: 'Основна послуга',
     grip: 'Заміна гріпа',
     overgrip: 'Намотування овергріпа',
   },

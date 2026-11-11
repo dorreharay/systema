@@ -66,7 +66,7 @@ const OrderCard = memo(function OrderCard({ order, fill }: { order: Order; fill?
     <Card
       onPress={() => router.push({ pathname: '/orders/[id]', params: { id: order.id } })}
       className={`gap-1 ${fill ? 'flex-1' : ''}`}
-      accessibilityLabel={t('order_card_label', { number: order.number ?? '—', client: order.client.name })}>
+      accessibilityLabel={t('order_card_label', { number: order.number ?? '-', client: order.client.name })}>
       <View className="flex-row items-center justify-between gap-3">
         <View className="flex-row items-center gap-2">
           <StatusBadge status={order.status} />
@@ -91,7 +91,7 @@ const OrderCard = memo(function OrderCard({ order, fill }: { order: Order; fill?
         <Text className="flex-1 text-[16.5px]" numberOfLines={1}>
           {racketName(order.racket)}
         </Text>
-        <Text className="text-[14.3px] text-muted">{t('order_number', { number: order.number ?? '—' })}</Text>
+        <Text className="text-[14.3px] text-muted">{t('order_number', { number: order.number ?? '-' })}</Text>
       </View>
       <Text className="text-[15.4px] text-muted" numberOfLines={2}>
         {describeSetup(order, user?.tension_unit ?? 'kg', t)}

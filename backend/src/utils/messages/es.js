@@ -9,6 +9,12 @@ export default {
     expiry: 'El enlace es válido durante {minutes} min. Si no has solicitado el cambio de contraseña, simplemente ignora este correo.',
     subject: 'Restablece tu contraseña de {appName}',
   },
+  verification: {
+    // The email with the code that confirms an address: {code} is the six digits, {minutes} how long the code works, {appName} the name of the app.
+    subject: 'Tu código de confirmación de {appName}: {code}',
+    intro: 'Tu código de confirmación:',
+    expiry: 'El código es válido durante {minutes} min. Si no has creado una cuenta, ignora este correo.',
+  },
   page: {
     opening: 'Abriendo {name}',
     explain: 'Se abrirá la aplicación para que puedas elegir una nueva contraseña.',
@@ -18,7 +24,7 @@ export default {
     broken: 'Ha caducado o ya se ha usado. Solicita uno nuevo en la aplicación: “¿Olvidaste tu contraseña?”',
   },
   services: {
-    labor: 'Encordado',
+    labor: 'Servicio principal',
     grip: 'Cambio de grip',
     overgrip: 'Colocación de overgrip',
   },

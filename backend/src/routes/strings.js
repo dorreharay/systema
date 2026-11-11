@@ -9,6 +9,7 @@ import { idConflict } from '../utils/clientIds.js';
 import { notFound, rejectMalformedIds } from '../utils/http.js';
 import { claimOperation } from '../utils/operations.js';
 import { toNumber } from '../utils/orders.js';
+import { stockTracked } from '../utils/plans.js';
 import {
   MAX_STOCK, inStockQuery, matchesWords, money, opId, optionalText, requiredText, searchText, setsInStock, stockDelta, uuid,
 } from '../utils/validators.js';
@@ -43,20 +44,24 @@ const listQuery = z.object({ q: searchText, in_stock: inStockQuery });
 const owned = (id, userId) =>
   and(eq(catalogStrings.id, id), eq(catalogStrings.user_id, userId), isNull(catalogStrings.deleted_at));
 
-const serialize = (row) => ({
-  id: row.id,
-  brand: row.brand,
-  model: row.model,
-  gauge: row.gauge,
-  type: row.type,
-  default_price: toNumber(row.default_price),
-  track_stock: row.track_stock,
-  stock: toNumber(row.stock),
-  // What an order can use: not counted, or at least half a set left.
-  available: !row.track_stock || Number(row.stock) > 0,
-  created_at: row.created_at,
-  updated_at: row.updated_at,
-});
+// `tracked`: whether the plan of the account counts the stock (see `stockTracked`); the count is kept either way.
+const serialize = (row, tracked = true) => {
+  const counted = row.track_stock && tracked;
+  return {
+    id: row.id,
+    brand: row.brand,
+    model: row.model,
+    gauge: row.gauge,
+    type: row.type,
+    default_price: toNumber(row.default_price),
+    track_stock: counted,
+    stock: toNumber(row.stock),
+    // What an order can use: not counted, or at least half a set left.
+    available: !counted || Number(row.stock) > 0,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+};
 
 async function findString(id, userId) {
   const [row] = await db.select().from(catalogStrings).where(owned(id, userId)).limit(1);
@@ -67,6 +72,7 @@ async function findString(id, userId) {
 // GET /api/strings?q=&in_stock=
 router.get('/', async (req, res) => {
   const { q, in_stock: inStock } = parseQuery(listQuery, req.query);
+  const tracked = stockTracked(req.user);
 
   const rows = await db
     .select()
@@ -75,45 +81,52 @@ router.get('/', async (req, res) => {
       and(
         eq(catalogStrings.user_id, req.user.id),
         isNull(catalogStrings.deleted_at),
-        inStock ? or(eq(catalogStrings.track_stock, false), gt(catalogStrings.stock, '0')) : undefined,
+        // (Where the stock is not counted, every string is available.)
+        inStock && tracked ? or(eq(catalogStrings.track_stock, false), gt(catalogStrings.stock, '0')) : undefined,
         q ? matchesWords(sql`${catalogStrings.brand} || ' ' || ${catalogStrings.model}`, q) : undefined
       )
     )
     .orderBy(sql`lower(${catalogStrings.brand})`, sql`lower(${catalogStrings.model})`);
 
-  res.json({ items: rows.map(serialize) });
+  res.json({ items: rows.map((row) => serialize(row, tracked)) });
 });
 
 // POST /api/strings: a string with the `id` that this stringer already has is not made again; it is answered with 200 and the
 // string as it is. The id of another stringer's string is a 409.
 router.post('/', validateBody(newStringSchema), async (req, res) => {
   const { id, ...fields } = req.body;
+  const tracked = stockTracked(req.user);
   const [row] = await db
     .insert(catalogStrings)
-    .values({ ...fields, ...(id && { id }), user_id: req.user.id })
+    // Where the stock is not counted (Free), a new string is not counted either, whatever the request says.
+    .values({ ...fields, ...(!tracked && { track_stock: false }), ...(id && { id }), user_id: req.user.id })
     .onConflictDoNothing({ target: catalogStrings.id })
     .returning();
-  if (row) return res.status(201).json(serialize(row));
+  if (row) return res.status(201).json(serialize(row, tracked));
 
   const [existing] = await db.select().from(catalogStrings).where(eq(catalogStrings.id, id)).limit(1);
   if (!existing || existing.user_id !== req.user.id) throw idConflict();
-  res.status(200).json(serialize(existing));
+  res.status(200).json(serialize(existing, tracked));
 });
 
 // GET /api/strings/:id
 router.get('/:id', async (req, res) => {
-  res.json(serialize(await findString(req.params.id, req.user.id)));
+  res.json(serialize(await findString(req.params.id, req.user.id), stockTracked(req.user)));
 });
 
 // PATCH /api/strings/:id
 router.patch('/:id', validateBody(stringSchema.partial()), async (req, res) => {
-  await findString(req.params.id, req.user.id);
-  const [row] = await db
-    .update(catalogStrings)
-    .set(req.body)
-    .where(owned(req.params.id, req.user.id))
-    .returning();
-  res.json(serialize(row));
+  const found = await findString(req.params.id, req.user.id);
+  const tracked = stockTracked(req.user);
+  // Whether it is counted is not written where the stock is not counted (Free): what the form shows there is the paused view, and
+  // writing it back would switch the counting off for good. The count itself is still taken.
+  const { track_stock: _trackStock, ...uncounted } = req.body;
+  const changes = tracked ? req.body : uncounted;
+  const [row] =
+    Object.keys(changes).length > 0
+      ? await db.update(catalogStrings).set(changes).where(owned(req.params.id, req.user.id)).returning()
+      : [found];
+  res.json(serialize(row, tracked));
 });
 
 // POST /api/strings/:id/stock: adds `delta` sets to the stock (a negative one takes them away), never below 0 and never above
@@ -132,7 +145,7 @@ router.post('/:id/stock', validateBody(stockChangeSchema), async (req, res) => {
     // Removed since the check above: the key goes with the change.
     if (changed.length === 0) throw notFound();
   });
-  res.json(serialize(await findString(req.params.id, req.user.id)));
+  res.json(serialize(await findString(req.params.id, req.user.id), stockTracked(req.user)));
 });
 
 // DELETE /api/strings/:id: orders keep the name of the string they were made with
