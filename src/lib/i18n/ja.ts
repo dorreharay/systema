@@ -739,4 +739,5 @@ export const ja: Record<Exclude<keyof typeof en, `${'date_in_days' | 'insights_u
   order_performer_queue: "なし、未担当のまま",
   order_performer_queue_hint: "ストリンガーなら誰でも引き受けられます。",
   stock_empty_member: "在庫はまだありません。工房が持つ在庫はオーナーが追加します。",
+  plan_terms: "お支払いは購入の確定時にお使いのApple IDに請求されます。期間の終了の24時間前までに解約しない限り、サブスクリプションは表示された価格で自動的に更新されます。管理や解約はApple IDの設定から行えます。関連情報：{terms}、{privacy}。",
 };

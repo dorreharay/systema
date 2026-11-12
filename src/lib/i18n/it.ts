@@ -744,4 +744,5 @@ export const it: Record<keyof typeof en, string> & Record<string, string> = {
   order_performer_queue: "Nessuno, in coda",
   order_performer_queue_hint: "Qualsiasi incordatore può prenderlo.",
   stock_empty_member: "Il magazzino è ancora vuoto. Il titolare aggiunge ciò che il laboratorio tiene.",
+  plan_terms: "Il pagamento viene addebitato sul tuo ID Apple alla conferma dell’acquisto. L’abbonamento si rinnova automaticamente al prezzo indicato, a meno che tu non lo annulli almeno 24 ore prima della fine del periodo. Puoi gestirlo o annullarlo nelle impostazioni del tuo ID Apple. Vedi anche: {terms}, {privacy}.",
 };

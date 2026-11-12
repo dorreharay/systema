@@ -33,6 +33,7 @@ import type { Period } from '@/lib/subscription';
 import { usePurchase } from '@/lib/use-purchase';
 import { useYearSaving } from '@/lib/use-store-prices';
 import { useSubscription } from '@/lib/use-subscription';
+import SubscriptionTerms from '@/components/subscription-terms';
 
 const DEV_STATES: DevState[] = ['free', 'trial', 'active', 'cancelled', 'expired'];
 
@@ -175,6 +176,7 @@ export default function Subscription() {
           loading={purchase.busy === 'buy'}
           onPress={() => void purchase.buy(period)}
         />
+        <SubscriptionTerms />
       </View>
     );
 

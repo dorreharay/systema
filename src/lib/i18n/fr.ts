@@ -744,4 +744,5 @@ export const fr: Record<keyof typeof en, string> & Record<string, string> = {
   order_performer_queue: "Personne, dans la file d’attente",
   order_performer_queue_hint: "N’importe quel cordeur peut la prendre.",
   stock_empty_member: "Rien en stock pour l’instant. Le propriétaire ajoute ce que l’atelier garde.",
+  plan_terms: "Le paiement est prélevé sur votre identifiant Apple à la confirmation de l’achat. L’abonnement se renouvelle automatiquement au prix indiqué, sauf si vous l’annulez au moins 24 heures avant la fin de la période. Vous pouvez le gérer ou l’annuler dans les réglages de votre identifiant Apple. Voir aussi : {terms}, {privacy}.",
 };

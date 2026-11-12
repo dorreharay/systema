@@ -744,4 +744,5 @@ export const de: Record<keyof typeof en, string> & Record<string, string> = {
   order_performer_queue: "Niemand, in die Warteschlange",
   order_performer_queue_hint: "Jeder Bespanner kann ihn übernehmen.",
   stock_empty_member: "Noch nichts auf Lager. Der Inhaber legt an, was die Werkstatt vorrätig hält.",
+  plan_terms: "Die Zahlung wird Ihrer Apple-ID belastet, sobald Sie den Kauf bestätigen. Das Abonnement verlängert sich automatisch zum angezeigten Preis, wenn Sie es nicht mindestens 24 Stunden vor Ende des Zeitraums kündigen. Sie können es in den Einstellungen Ihrer Apple-ID verwalten oder kündigen. Siehe auch: {terms}, {privacy}.",
 };

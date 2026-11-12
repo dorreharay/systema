@@ -754,4 +754,5 @@ export const pl: Record<keyof typeof en, string> & Record<string, string> = {
   order_performer_queue: "Nikt, do kolejki",
   order_performer_queue_hint: "Każdy naciągacz może je wziąć.",
   stock_empty_member: "Magazyn jest jeszcze pusty. Właściciel dodaje to, co trzyma warsztat.",
+  plan_terms: "Płatność jest pobierana z Twojego Apple ID po potwierdzeniu zakupu. Subskrypcja odnawia się automatycznie po wskazanej cenie, chyba że anulujesz ją co najmniej 24 godziny przed końcem okresu. Możesz nią zarządzać lub ją anulować w ustawieniach Apple ID. Zobacz też: {terms}, {privacy}.",
 };

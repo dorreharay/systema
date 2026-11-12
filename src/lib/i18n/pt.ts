@@ -744,4 +744,5 @@ export const pt: Record<keyof typeof en, string> & Record<string, string> = {
   order_performer_queue: "Ninguém, na fila",
   order_performer_queue_hint: "Qualquer encordoador pode pegá-lo.",
   stock_empty_member: "Ainda não há nada em estoque. O dono adiciona o que a oficina mantém.",
+  plan_terms: "O pagamento é cobrado no seu ID Apple quando você confirma a compra. A assinatura é renovada automaticamente pelo preço exibido, a menos que você a cancele pelo menos 24 horas antes do fim do período. Você pode gerenciá-la ou cancelá-la nos ajustes do seu ID Apple. Veja também: {terms}, {privacy}.",
 };

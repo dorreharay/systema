@@ -23,6 +23,7 @@ import { usePurchase } from '@/lib/use-purchase';
 import { useYearSaving } from '@/lib/use-store-prices';
 import { useStudioWaitlist } from '@/lib/use-studio-waitlist';
 import { useSubscription } from '@/lib/use-subscription';
+import SubscriptionTerms from '@/components/subscription-terms';
 
 /**
  * Studio, the plan for a workshop with several stringers. Where the server does not have it yet (`plan.studioAvailable` is false) this page
@@ -222,6 +223,7 @@ export default function Studio() {
         {featureList}
 
         {purchase.error ? <FormError message={purchase.error} /> : null}
+        {SELLS_PLANS ? <SubscriptionTerms /> : null}
       </DetailScroll>
     </Screen>
   );

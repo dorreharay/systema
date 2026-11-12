@@ -751,4 +751,5 @@ export const en = {
   order_performer_queue: "Nobody, to the queue",
   order_performer_queue_hint: "Any master can take it.",
   stock_empty_member: "Nothing is in stock yet. The owner adds what the workshop keeps.",
+  plan_terms: "Payment is charged to your Apple ID when you confirm the purchase. The subscription renews automatically at the price shown unless you cancel it at least 24 hours before the end of the period. You can manage or cancel it in your Apple ID settings. See also: {terms}, {privacy}.",
 } as const;

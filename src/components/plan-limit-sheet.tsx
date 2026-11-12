@@ -12,6 +12,7 @@ import { SELLS_PLANS, TRIAL_DAYS } from '@/lib/billing';
 import { useI18n } from '@/lib/i18n';
 import { usePurchase } from '@/lib/use-purchase';
 import { useSubscription } from '@/lib/use-subscription';
+import SubscriptionTerms from '@/components/subscription-terms';
 
 type PlanLimitSheetProps = {
   visible: boolean;
@@ -74,6 +75,7 @@ export default function PlanLimitSheet({ visible, onClose, onDecline, used: know
           </View>
 
           {purchase.error ? <FormError message={purchase.error} /> : null}
+          {SELLS_PLANS ? <SubscriptionTerms /> : null}
 
           <View className="gap-2 pt-1">
             {/* (Where Pro cannot be bought, the web and Android, there is only the page that compares the plans.) */}

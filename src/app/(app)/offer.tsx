@@ -16,6 +16,7 @@ import { useOfferSeen } from '@/lib/offer';
 import type { Period } from '@/lib/subscription';
 import { usePurchase } from '@/lib/use-purchase';
 import { useYearSaving } from '@/lib/use-store-prices';
+import SubscriptionTerms from '@/components/subscription-terms';
 
 type Choice = 'free' | 'pro';
 
@@ -105,6 +106,7 @@ export default function Offer() {
               ? t('offer_fine_free')
               : t('plan_then_price', { yearly: prices.proYear, monthly: prices.proMonth })}
           </Text>
+          <SubscriptionTerms />
           {purchase.error ? <FormError message={purchase.error} /> : null}
         </View>
       </ScrollView>
