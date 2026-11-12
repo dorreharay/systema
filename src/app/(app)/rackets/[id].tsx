@@ -28,6 +28,7 @@ import { formatDate, orderNumber, racketName, todayIso } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import { describeSetup } from '@/lib/order-text';
 import { useDeleteRacket, useRacket } from '@/lib/queries';
+import { useWorkshop } from '@/lib/use-workshop';
 
 export default function RacketDetails() {
   const { user } = useAuth();
@@ -40,6 +41,8 @@ export default function RacketDetails() {
   const query = useRacket(id);
   const remove = useDeleteRacket();
   const stockOn = useStockOn();
+  // A client's racket is changed by anyone who may write; a racket of the catalog is stock, and the owner's.
+  const { canWrite, canEditCatalog } = useWorkshop();
   const [editing, setEditing] = useState(false);
   const [stocking, setStocking] = useState(false);
   const [menu, setMenu] = useState(false);
@@ -81,12 +84,14 @@ export default function RacketDetails() {
     }
   };
 
+  const canEditRacket = racket.client_id ? canWrite : canEditCatalog;
+
   return (
     <Screen
       flush
       width="medium"
       dock={
-        racket.last_setup ? (
+        racket.last_setup && canWrite ? (
           <Shortcut
             icon={PlusIcon}
             label={t('new_order')}
@@ -97,11 +102,11 @@ export default function RacketDetails() {
           />
         ) : undefined
       }
-      footer={racket.last_setup ? <View style={{ height: Math.max(insets.bottom, 12) + 24 }} /> : undefined}>
+      footer={racket.last_setup && canWrite ? <View style={{ height: Math.max(insets.bottom, 12) + 24 }} /> : undefined}>
       <DetailHeader
         floating
         title={racketName(racket)}
-        right={<IconButton icon={MoreHorizontal} label={t('more_actions')} onPress={() => setMenu(true)} />}
+        right={canEditRacket ? <IconButton icon={MoreHorizontal} label={t('more_actions')} onPress={() => setMenu(true)} /> : undefined}
       />
       <DetailScroll contentContainerClassName="gap-page p-page pb-28 md:pb-12" showsVerticalScrollIndicator={false}>
         {/* On a desktop the racket and its last setup are in one column, and the history of the stringings in the other. */}
@@ -138,7 +143,7 @@ export default function RacketDetails() {
           {racket.notes ? <Text className="text-[16.5px] text-muted">{racket.notes}</Text> : null}
         </Card>
 
-        {racket.last_setup ? (
+        {!canWrite ? null : racket.last_setup ? (
           <Card className="gap-3">
             <View className="gap-0.5">
               <Text className="text-[14.3px] font-medium text-primary">

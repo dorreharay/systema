@@ -11,6 +11,7 @@ import type {
   Order,
   OrderDetail,
   OrderStatus,
+  Person,
   Racket,
   RacketDetail,
   Service,
@@ -42,7 +43,18 @@ const byName = <T>(key: (item: T) => string) => (a: T, b: T) => {
 
 // --- Orders ----------------------------------------------------------------------------------
 
-export type OrderFilter = { status?: OrderStatus | 'active'; q?: string; clientId?: string; racketId?: string };
+export type OrderFilter = {
+  status?: OrderStatus | 'active';
+  q?: string;
+  clientId?: string;
+  racketId?: string;
+  // Only in a workshop with a team: the orders of the person at the phone (`me` is their id), or the queue, the ones nobody has taken.
+  queue?: 'mine' | 'none';
+  me?: string;
+};
+
+/** In the queue: nobody has taken it, and it is still to be done (a finished order with no performer is old news, not work). */
+export const inQueue = (order: Pick<Order, 'assignee' | 'status'>) => !order.assignee && order.status !== 'completed';
 
 /** The queue by the day it is due, then the order it came in; finished work after it, the latest first. */
 function queueOrder(a: Order, b: Order) {
@@ -60,13 +72,15 @@ function queueOrder(a: Order, b: Order) {
   return -newerOrder(a, b);
 }
 
-export function selectOrders(t: Tables, { status, q = '', clientId, racketId }: OrderFilter = {}): Order[] {
+export function selectOrders(t: Tables, { status, q = '', clientId, racketId, queue, me }: OrderFilter = {}): Order[] {
   const search = q.trim();
   const number = search.match(/^#?(\d{1,9})$/)?.[1];
   const items = Object.values(t.orders).filter((order) => {
     if (status === 'active' ? !isActive(order) : status && order.status !== status) return false;
     if (clientId && order.client.id !== clientId) return false;
     if (racketId && order.racket.id !== racketId) return false;
+    if (queue === 'mine' && (!me || order.assignee?.id !== me)) return false;
+    if (queue === 'none' && !inQueue(order)) return false;
     if (!search) return true;
     return (
       (number !== undefined && order.number === Number(number)) ||
@@ -78,6 +92,36 @@ export function selectOrders(t: Tables, { status, q = '', clientId, racketId }: 
   });
   // A list of the finished ones only is just the latest first.
   return items.sort(status === 'completed' ? (a, b) => (b.completed_at ?? '').localeCompare(a.completed_at ?? '') || newerOrder(a, b) : queueOrder);
+}
+
+/** The work of a workshop with a team, worked out from the orders on the phone: who has how much in hand, and what waits in the queue. */
+export type QueueSummary = {
+  /** Orders still to be done that nobody has taken. */
+  queue: number;
+  /** Orders still to be done that `me` has. */
+  mine: number;
+  /** Everyone who has an order in hand, the busiest first. */
+  people: { person: Person; count: number }[];
+};
+
+export function selectQueue(t: Tables, me?: string): QueueSummary {
+  let queue = 0;
+  let mine = 0;
+  const counts = new Map<string, { person: Person; count: number }>();
+  for (const order of Object.values(t.orders)) {
+    if (!isActive(order)) continue;
+    const who = order.assignee;
+    if (!who) {
+      queue++;
+      continue;
+    }
+    if (who.id === me) mine++;
+    const entry = counts.get(who.id);
+    if (entry) entry.count++;
+    else counts.set(who.id, { person: who, count: 1 });
+  }
+  const people = [...counts.values()].sort((a, b) => b.count - a.count || byName((x: { person: Person }) => x.person.name)(a, b));
+  return { queue, mine, people };
 }
 
 export const selectOrder = (t: Tables, id: string | undefined): OrderDetail | undefined => (id ? t.orders[id] : undefined);

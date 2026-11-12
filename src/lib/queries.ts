@@ -13,6 +13,7 @@ import {
   selectDashboard,
   selectOrder,
   selectOrders,
+  selectQueue,
   selectRacket,
   selectRackets,
   selectServices,
@@ -24,6 +25,7 @@ import type { Tables } from '@/lib/offline/types';
 import type {
   Insights,
   OrderInput,
+  Person,
   ReferenceRacket,
   ReferenceString,
 } from '@/lib/types';
@@ -121,10 +123,10 @@ export const useInsights = (): Read<Insights> & { at: string | null } => {
   };
 };
 
-export function useOrders({ status, q = '', clientId }: OrderFilter) {
+export function useOrders({ status, q = '', clientId, queue, me }: OrderFilter) {
   const text = q.trim();
-  const key = `${status ?? ''}|${text}|${clientId ?? ''}`;
-  const all = useRead((tables) => selectOrders(tables, { status, q: text, clientId }), key);
+  const key = `${status ?? ''}|${text}|${clientId ?? ''}|${queue ?? ''}|${me ?? ''}`;
+  const all = useRead((tables) => selectOrders(tables, { status, q: text, clientId, queue, me }), key);
   const [shown, setShown] = useState({ key, count: 1 });
   // A new filter starts from the first page again.
   const count = shown.key === key ? shown.count : 1;
@@ -153,6 +155,13 @@ export function useOrders({ status, q = '', clientId }: OrderFilter) {
 
 /** Every order that fits the words typed, in the order of the queue: for a table that shows them all, and counts them. */
 export const useAllOrders = (q = '') => useRead((tables) => selectOrders(tables, { q }), q.trim());
+
+/**
+ * The work of a workshop with a team: how many orders are in the queue (nobody has them), how many are the person's own, and who has how
+ * many in hand. Read from the copy; `enabled` is false in a workshop of one, which then reads nothing.
+ */
+export const useQueueSummary = (me: string | undefined, enabled = true) =>
+  useRead((tables) => selectQueue(tables, me), me ?? '', { enabled });
 
 /** The orders that are still to be done, for the reminders on the phone. */
 export const useActiveOrders = () => useRead((tables) => selectOrders(tables, { status: 'active' }), '');
@@ -286,9 +295,10 @@ function useAction<Vars, Result>(run: (vars: Vars) => Promise<Result>) {
   };
 }
 
-const createOrder = (input: OrderInput) => offlineActions.createOrder(input);
+const createOrder = (input: OrderInput & { assignee?: Person | null }) => offlineActions.createOrder(input);
 const updateOrder = ({ id, ...input }: OrderInput & { id: string }) => offlineActions.updateOrder(id, input);
 const deleteOrder = (id: string) => offlineActions.deleteOrder(id);
+const assignOrder = ({ id, assignee }: { id: string; assignee: Person | null }) => offlineActions.assignOrder(id, assignee);
 const createClient = (input: ClientInput) => offlineActions.createClient(input);
 const updateClient = ({ id, ...input }: ClientInput & { id: string }) => offlineActions.updateClient(id, input);
 const deleteClient = (id: string) => offlineActions.deleteClient(id);
@@ -305,6 +315,7 @@ const deletePhoto = (id: string) => offlineActions.deletePhoto(id);
 export const useCreateOrder = () => useAction(createOrder);
 export const useUpdateOrder = () => useAction(updateOrder);
 export const useDeleteOrder = () => useAction(deleteOrder);
+export const useAssignOrder = () => useAction(assignOrder);
 export const useCreateClient = () => useAction(createClient);
 export const useUpdateClient = () => useAction(updateClient);
 export const useDeleteClient = () => useAction(deleteClient);

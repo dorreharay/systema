@@ -113,6 +113,13 @@ export function loadConfig(env = process.env) {
     // and the app shows no plans at all, so this server can be deployed before the purchases are.
     billing: {
       enabled: flag(env.BILLING_ENABLED, false),
+      // Whether the Studio plan really exists (several stringers in one workshop: see utils/workshop.js and routes/team.js). Off, Studio
+      // is only a waiting list, as it was: no team routes, no invitations, no seats. It needs the plans to be on too.
+      studioEnabled: flag(env.STUDIO_ENABLED, false),
+      // How many people a Studio workshop holds, the owner included. Invitations that are waiting take a seat.
+      studioSeats: Math.max(1, integer(env.STUDIO_SEATS, 3)),
+      // How many days an invitation to a workshop can be used.
+      inviteDays: Math.max(1, integer(env.STUDIO_INVITE_DAYS, 7)),
       // What Free allows: new orders in a calendar month of the stringer's own.
       freeOrdersPerMonth: Math.max(0, integer(env.FREE_ORDERS_PER_MONTH, 15)),
       // How many days a plan that has run out still holds: the store is slow with a renewal, and Apple tries a card that failed again.

@@ -88,20 +88,30 @@ export type StorePrice = { text: string; amount: number; currency: string };
 /** What the store sells for a plan, by period; one it does not have is left out. */
 export type StorePackages = Partial<Record<Period, PurchasesPackage>>;
 
-let packages: Promise<StorePackages> | undefined;
+/** The plans the store sells. Each has an offering in the RevenueCat project: Pro the current one, Studio the one whose identifier is `studio`. */
+export type StorePlan = 'pro' | 'studio';
+const STUDIO_OFFERING = 'studio';
 
-/** The packages of the current offering of the RevenueCat project (the monthly and the annual one). */
-export function storePackages(): Promise<StorePackages> {
-  if (!packages) {
-    packages = purchases().then(async (instance) => {
-      const { current } = await instance.getOfferings();
-      return { month: current?.monthly ?? undefined, year: current?.annual ?? undefined };
+const packages: Partial<Record<StorePlan, Promise<StorePackages>>> = {};
+
+/**
+ * The packages of the offering of a plan (the monthly and the annual one): for Pro the current offering of the RevenueCat project, for
+ * Studio the offering named `studio`. A plan whose offering is not there (not set up in the store yet) has no packages.
+ */
+export function storePackages(plan: StorePlan = 'pro'): Promise<StorePackages> {
+  let found = packages[plan];
+  if (!found) {
+    found = purchases().then(async (instance) => {
+      const { current, all } = await instance.getOfferings();
+      const offering = plan === 'studio' ? all[STUDIO_OFFERING] : current;
+      return { month: offering?.monthly ?? undefined, year: offering?.annual ?? undefined };
     });
-    packages.catch(() => {
-      packages = undefined;
+    packages[plan] = found;
+    found.catch(() => {
+      delete packages[plan];
     });
   }
-  return packages;
+  return found;
 }
 
 export function priceOf(item: PurchasesPackage | undefined): StorePrice | undefined {

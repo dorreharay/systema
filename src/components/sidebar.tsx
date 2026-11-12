@@ -7,6 +7,7 @@ import HomeIcon from '@/components/icons/home-icon';
 import ListIcon from '@/components/icons/list-icon';
 import PlusIcon from '@/components/icons/plus-icon';
 import SettingsIcon from '@/components/icons/settings-icon';
+import TeamIcon from '@/components/icons/team-icon';
 import UserIcon from '@/components/icons/user-icon';
 import Grain from '@/components/grain';
 import { BUTTON_RADIUS } from '@/components/ui/button-radius';
@@ -19,6 +20,7 @@ import { SIDEBAR_LOGO_SLOT, SIDEBAR_WIDTH, type LayoutMode } from '@/lib/layout'
 import { useSyncSummary } from '@/lib/offline/react';
 import { useDashboard } from '@/lib/queries';
 import { usePlanName } from '@/lib/use-subscription';
+import { useWorkshop } from '@/lib/use-workshop';
 
 const NAV_ICON = 22;
 
@@ -47,6 +49,16 @@ const PLACES: Place[] = [
     owns: (path) => under(path, '/catalog') || under(path, '/rackets'),
   },
 ];
+
+// The people of a Studio workshop: a place of the sidebar only for the owner of one and for those who work in it, and only where Studio
+// exists. (The page that takes the code of an invitation is a page of the same place.)
+const TEAM_PLACE: Place = {
+  key: 'team',
+  href: '/team',
+  icon: TeamIcon,
+  label: 'team_title',
+  owns: (path) => under(path, '/team') || under(path, '/join'),
+};
 
 // The focus ring on the dark ground is white, not green (web-styles.web.ts reads `data-on-dark`), and the dark has a soft green light
 // at its foot (`data-sidebar`, there too). `dataSet` is react-native-web's, so it goes in as a spread: React Native's own types do not
@@ -162,7 +174,15 @@ export default function Sidebar({ mode }: { mode: Exclude<LayoutMode, 'phone'> }
   const { t } = useI18n();
   const router = useRouter();
   const path = usePathname();
+  const { user } = useAuth();
+  const planName = usePlanName();
   const open = useDashboard().data?.active_orders ?? 0;
+  // Studio exists at this server, and this person holds it or works in a workshop that does (or did: a paused team is still theirs).
+  const workshop = user?.workshop;
+  const studio = user?.subscription?.studio_available === true;
+  const places = studio && (planName === 'studio' || workshop?.member === true || workshop?.team === true) ? [...PLACES, TEAM_PLACE] : PLACES;
+  // A member of a paused workshop reads and does not write: no new order.
+  const { canWrite } = useWorkshop();
 
   return (
     <View
@@ -192,18 +212,20 @@ export default function Sidebar({ mode }: { mode: Exclude<LayoutMode, 'phone'> }
 
         <View className="pb-4">
           {/* On a tablet the sidebar is narrower: the button is the smaller one, so that "Nouvelle commande" fits. */}
-          <Shortcut
-            compact={mode === 'desktop'}
-            dense={mode === 'tablet'}
-            icon={PlusIcon}
-            label={t('new_order')}
-            color={colors.newOrder}
-            contentColor="#000000"
-            onPress={() => router.push('/orders/new')}
-          />
+          {canWrite ? (
+            <Shortcut
+              compact={mode === 'desktop'}
+              dense={mode === 'tablet'}
+              icon={PlusIcon}
+              label={t('new_order')}
+              color={colors.newOrder}
+              contentColor="#000000"
+              onPress={() => router.push('/orders/new')}
+            />
+          ) : null}
         </View>
 
-        {PLACES.map((place) => {
+        {places.map((place) => {
           const active = place.owns(path);
           const Icon = place.icon;
           const label = t(place.label);

@@ -19,7 +19,7 @@ const { ApiError } = await import('../src/lib/api-error.ts');
 const { createActions } = await import('../src/lib/offline/actions.ts');
 const { blockedBy, discardSet, inOrder } = await import('../src/lib/offline/outbox.ts');
 const { applyOp, replay } = await import('../src/lib/offline/reduce.ts');
-const { selectClient, selectDashboard, selectOrders, selectRackets, selectStrings } = await import('../src/lib/offline/select.ts');
+const { selectClient, selectDashboard, selectOrders, selectQueue, selectRackets, selectStrings } = await import('../src/lib/offline/select.ts');
 const { MemoryStorage } = await import('../src/lib/offline/storage.ts');
 const { OfflineStore } = await import('../src/lib/offline/store.ts');
 const { SyncEngine, requestFor } = await import('../src/lib/offline/sync.ts');
@@ -36,8 +36,8 @@ let phones = [];
 
 // --- A server and its people -------------------------------------------------------------------
 
-async function call(token, method, path, body) {
-  const response = await fetch(server.base + path, {
+async function call(token, method, path, body, base = server.base) {
+  const response = await fetch(base + path, {
     method,
     headers: {
       ...(body !== undefined && { 'content-type': 'application/json' }),
@@ -50,12 +50,12 @@ async function call(token, method, path, body) {
   return { status: response.status, data };
 }
 
-/** A stringer with an account at the server. */
-async function stringer() {
+/** A stringer with an account at the server (`base`: at another server, the one of a Studio test). */
+async function stringer(base = server.base) {
   const email = `offline${++counter}@test.local`;
-  const { status, data } = await call(null, 'POST', '/api/auth/register', { email, password: 'correct-horse-1' });
+  const { status, data } = await call(null, 'POST', '/api/auth/register', { email, password: 'correct-horse-1' }, base);
   assert.equal(status, 201);
-  const api = (method, path, body) => call(data.token, method, path, body).then((r) => r);
+  const api = (method, path, body) => call(data.token, method, path, body, base).then((r) => r);
   const made = async (method, path, body) => {
     const r = await api(method, path, body);
     assert.ok(r.status < 300, `${method} ${path}: ${r.status} ${JSON.stringify(r.data)}`);
@@ -69,7 +69,7 @@ async function stringer() {
  * and an answer that can be lost on the way back (`net.lose`: that many requests are done by the server and their answer is not
  * heard).
  */
-async function phone(person, { time, timers = false } = {}) {
+async function phone(person, { time, timers = false, base = server.base, firstTryMs = 0 } = {}) {
   const net = { offline: false, lose: 0, unauthorized: false, sent: [] };
   const clock = { now: time ?? Date.now() };
   const storage = new MemoryStorage();
@@ -78,7 +78,7 @@ async function phone(person, { time, timers = false } = {}) {
     if (net.offline) throw new ApiError(0, 'The server could not be reached', 'network');
     if (net.unauthorized) throw new ApiError(401, 'Unauthorized');
     net.sent.push(`${method} ${path}`);
-    const response = await fetch(server.base + path, {
+    const response = await fetch(base + path, {
       method,
       headers: {
         ...(body !== undefined && { 'content-type': 'application/json' }),
@@ -100,7 +100,7 @@ async function phone(person, { time, timers = false } = {}) {
     onUnauthorized: () => phoneObject.unauthorized++,
     timers,
   });
-  const actions = createActions(store, engine, { firstTryMs: 0 });
+  const actions = createActions(store, engine, { firstTryMs });
   Object.assign(phoneObject, {
     engine,
     actions,
@@ -982,6 +982,153 @@ test('the lists are in the order the server puts them in', async () => {
   assert.equal(selectRackets(p.tables(), { kind: 'client' }).length, 1);
   assert.equal(selectClient(p.tables(), data.client.id).orders.length, 4);
   await p.store.close();
+});
+
+// --- Studio: several people in one workshop -----------------------------------------------------
+
+test('giving an order, and returning it to the queue, change the order on the phone and go to the server as one request', async () => {
+  const person = await stringer();
+  const data = await shop(person);
+  const p = await phone(person);
+  const order = await p.actions.createOrder(orderInput(data));
+  const olena = { id: newId(), name: 'Olena' };
+  const at = new Date().toISOString();
+  const op = { id: newId(), at, type: 'order.assign', subject: order.id, assignee: olena };
+
+  const given = applyOp(p.tables(), op);
+  assert.deepEqual(given.orders[order.id].assignee, olena);
+  assert.equal(given.orders[order.id].assigned_at, at, 'since the moment it was given');
+  const back = applyOp(given, { ...op, id: newId(), assignee: null });
+  assert.equal(back.orders[order.id].assignee, null);
+  assert.equal(back.orders[order.id].assigned_at, null, 'back in the queue: nobody, since never');
+  assert.deepEqual(applyOp(given, op).orders[order.id], given.orders[order.id], 'the same change twice is one change');
+  assert.equal(applyOp(p.tables(), { ...op, subject: newId() }), p.tables(), 'an order that is not there is left alone');
+
+  assert.deepEqual(requestFor(op), { method: 'POST', path: `/api/orders/${order.id}/assign`, body: { assignee_id: olena.id, at } });
+  assert.deepEqual(requestFor({ ...op, assignee: null }).body, { assignee_id: null, at });
+
+  // Giving an order to who has it already does nothing: no change is queued.
+  const before = p.snap().outbox.length;
+  assert.equal((await p.actions.assignOrder(order.id, null)).id, order.id);
+  assert.equal(p.snap().outbox.length, before);
+  await p.store.close();
+});
+
+test('a new order carries who took it in and who strings it, by the role of the person', async () => {
+  const person = await stringer();
+  const data = await shop(person, { stock: 9 });
+  const p = await phone(person);
+  const me = { id: person.id, name: 'Ivan' };
+  const as = (role) => createActions(p.store, p.engine, { firstTryMs: 0, self: () => ({ person: me, role }) });
+
+  const alone = await p.actions.createOrder(orderInput(data));
+  assert.equal(p.tables().orders[alone.id].accepted_by, null, 'a workshop of one names nobody');
+  assert.equal(p.tables().orders[alone.id].assignee, null);
+
+  const master = await as('master').createOrder(orderInput(data));
+  assert.deepEqual(p.tables().orders[master.id].accepted_by, me);
+  assert.deepEqual(p.tables().orders[master.id].assignee, me, 'a master\'s own order is theirs');
+  assert.ok(p.tables().orders[master.id].assigned_at);
+
+  const reception = await as('receptionist').createOrder(orderInput(data));
+  assert.deepEqual(p.tables().orders[reception.id].accepted_by, me);
+  assert.equal(p.tables().orders[reception.id].assignee, null, 'a receptionist\'s goes to the queue');
+
+  const owner = await as('owner').createOrder(orderInput(data));
+  assert.equal(p.tables().orders[owner.id].assignee, null, 'the owner leaves it for the queue unless they choose');
+  const chosen = await as('owner').createOrder({ ...orderInput(data), assignee: me });
+  assert.deepEqual(p.tables().orders[chosen.id].assignee, me);
+
+  // The queue, as the lists filter it.
+  const t = p.tables();
+  assert.deepEqual(selectOrders(t, { queue: 'none' }).map((o) => o.id).sort(), [alone.id, owner.id, reception.id].sort());
+  assert.deepEqual(selectOrders(t, { queue: 'mine', me: me.id }).map((o) => o.id).sort(), [chosen.id, master.id].sort());
+  assert.equal(selectOrders(t, { queue: 'mine' }).length, 0, 'whose "mine" is not known: none');
+  assert.equal(selectOrders(t, {}).length, 5, 'no filter: all of them');
+  const done = await p.actions.updateOrder(owner.id, { status: 'completed' });
+  assert.equal(done.status, 'completed');
+  assert.equal(selectOrders(p.tables(), { queue: 'none' }).some((o) => o.id === owner.id), false, 'a finished order is not in the queue');
+  assert.deepEqual(
+    [selectQueue(p.tables(), me.id).queue, selectQueue(p.tables(), me.id).mine, selectQueue(p.tables(), me.id).people.map((x) => x.count)],
+    [2, 2, [2]]
+  );
+
+  // What the server has after: the same people.
+  await p.sync();
+  assert.equal(p.snap().outbox.length, 0);
+  const saved = await serverOrders(person);
+  const find = (id) => saved.find((o) => o.id === id);
+  assert.equal(find(master.id).assignee.id, person.id);
+  assert.equal(find(master.id).accepted_by.id, person.id);
+  assert.equal(find(reception.id).assignee, null);
+  assert.equal(find(reception.id).accepted_by.id, person.id);
+  assert.equal(find(chosen.id).assignee.id, person.id);
+  await p.store.close();
+});
+
+test('two masters reach for one order: the first has it, the second is told it is taken and the refused change leaves the queue', async () => {
+  const team = await startServer({
+    port: CONFIG.port + 1,
+    env: { BILLING_ENABLED: 'true', BILLING_DEV_GRANTS: 'true', FREE_ORDERS_PER_MONTH: '50', STUDIO_ENABLED: 'true' },
+  });
+  try {
+    const owner = await stringer(team.base);
+    assert.equal((await owner.api('POST', '/api/billing/dev-grant', { plan: 'studio' })).status, 200);
+    const data = await shop(owner);
+    const join = async (role) => {
+      const { invite } = await owner.made('POST', '/api/team/invites', { role });
+      const member = await stringer(team.base);
+      await member.made('POST', '/api/team/join', { code: invite.code });
+      return member;
+    };
+    const first = await join('master');
+    const second = await join('master');
+    const queued = await owner.made('POST', '/api/orders', orderInput(data));
+    const other = await owner.made('POST', '/api/orders', orderInput(data, { main_tension: 22 }));
+    const person = (member, name) => ({ id: member.id, name });
+
+    // Each phone has read the queue: the order is nobody's on both.
+    const a = await phone(first, { base: team.base, firstTryMs: 3000 });
+    const b = await phone(second, { base: team.base, firstTryMs: 3000 });
+    assert.equal(a.tables().orders[queued.id].assignee, null);
+    assert.equal(b.tables().orders[queued.id].assignee, null);
+
+    // The first takes it: at once on the phone, and the server has it.
+    await a.actions.assignOrder(queued.id, person(first, 'First'));
+    assert.equal(a.tables().orders[queued.id].assignee.id, first.id);
+    assert.equal(a.snap().outbox.length, 0);
+    assert.equal((await owner.made('GET', `/api/orders/${queued.id}`)).assignee.id, first.id);
+
+    // The second still sees it in the queue, and takes it: the server says it is taken. The refusal reaches the screen as an error, and
+    // the change is taken out of the queue of the phone, so that it is not played again and again.
+    await assert.rejects(
+      () => b.actions.assignOrder(queued.id, person(second, 'Second')),
+      (error) => error instanceof ApiError && error.status === 409 && error.code === 'order_taken'
+    );
+    assert.equal(b.snap().outbox.length, 0, 'nothing refused is left to be played again');
+    await b.sync();
+    assert.equal(b.tables().orders[queued.id], undefined, 'the order is the first one\'s now: the second does not see it');
+
+    // The first lets go of it: it is in the queue again, and the second can have it.
+    await a.actions.assignOrder(queued.id, null);
+    assert.equal((await owner.made('GET', `/api/orders/${queued.id}`)).assignee, null);
+    await b.sync();
+    await b.actions.assignOrder(queued.id, person(second, 'Second'));
+    assert.equal((await owner.made('GET', `/api/orders/${queued.id}`)).assignee.id, second.id);
+
+    // A master cannot give an order to someone else, but the owner can.
+    await assert.rejects(
+      () => b.actions.assignOrder(other.id, person(first, 'First')),
+      (error) => error instanceof ApiError && error.status === 403 && error.code === 'forbidden_role'
+    );
+    const o = await phone(owner, { base: team.base, firstTryMs: 3000 });
+    await o.actions.assignOrder(other.id, person(first, 'First'));
+    assert.equal((await owner.made('GET', `/api/orders/${other.id}`)).assignee.id, first.id);
+    assert.equal(o.snap().outbox.length, 0);
+    for (const phoneOf of [a, b, o]) await phoneOf.store.close();
+  } finally {
+    await team.stop();
+  }
 });
 
 test('the requests are the ones the server takes', () => {

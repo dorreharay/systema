@@ -24,6 +24,10 @@ const MESSAGES: Record<string, TKey> = {
   payload_too_large: 'error_photo_too_large',
   out_of_stock: 'error_out_of_stock',
   order_limit_reached: 'error_order_limit',
+  // A workshop with a team: someone else took the order first, the role does not allow it, the workshop is paused.
+  order_taken: 'queue_error_taken',
+  forbidden_role: 'queue_error_role',
+  workshop_paused: 'paused_error',
   google_token_invalid: 'error_google_token',
   google_email_unverified: 'error_google_email_unverified',
   google_account_mismatch: 'error_google_mismatch',

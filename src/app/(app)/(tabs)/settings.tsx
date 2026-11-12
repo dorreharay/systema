@@ -3,7 +3,8 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { ScrollView, View } from 'react-native';
 
-import { Banknote, ClipboardList, Clock, Eye, Gauge, Globe, Languages, LogOut, RotateCcw, ShieldCheck, Tags, Wallet } from '@/components/icons';
+import { Banknote, ClipboardList, Clock, Eye, Gauge, Globe, KeyRound, Languages, LogOut, RotateCcw, ShieldCheck, Tags, Wallet } from '@/components/icons';
+import TeamIcon from '@/components/icons/team-icon';
 import {
   AccountSheet,
   CountrySettingsSheet,
@@ -26,8 +27,10 @@ import { describeError } from '@/lib/errors';
 import { LANGUAGES, useI18n } from '@/lib/i18n';
 import { openLegalPage, type LegalPage } from '@/lib/legal';
 import { useSyncSummary } from '@/lib/offline/react';
+import { useTeam } from '@/lib/team-api';
 import type { TensionUnit } from '@/lib/types';
 import { useSubscription } from '@/lib/use-subscription';
+import { useWorkshop } from '@/lib/use-workshop';
 
 type OpenSheet = 'profile' | 'currency' | 'country' | 'zone' | 'language' | 'account' | null;
 
@@ -39,14 +42,21 @@ export default function Settings() {
   const confirm = useConfirm();
   const sync = useSyncSummary();
   const plan = useSubscription();
+  const workshop = useWorkshop();
   const [sheet, setSheet] = useState<OpenSheet>(null);
   const [pageHeight, setPageHeight] = useState(0);
   const [contentHeight, setContentHeight] = useState(0);
+  // Where Studio exists: the team, for anyone who works in one, has one or holds Studio; the way into a workshop, for anyone else.
+  const showTeam = plan.studioAvailable && (workshop.member || workshop.team || plan.team);
+  const showJoin = plan.studioAvailable && !showTeam;
+  const team = useTeam(showTeam);
 
   if (!user) return null;
 
   // The country is read from the time zone of the account (an account that has only UTC gets the country of the phone).
   const country = countryOfAccount(user.timezone);
+  // The currency, the country, the time zone and the unit of tension are the workshop's: someone who works in another's only reads them.
+  const readOnly = workshop.member;
 
   const save =(patch: Parameters<typeof updateProfile>[0]) =>
     updateProfile(patch).catch((error) => toast.error(describeError(error, t)));
@@ -93,6 +103,15 @@ export default function Settings() {
               onPress={() => router.push('/subscription')}
             />
           ) : null}
+          {showTeam ? (
+            <ListRow
+              icon={TeamIcon}
+              label={t('team_title')}
+              value={team.data ? t('settings_team_value', { used: team.data.members.length, limit: team.data.seats.limit }) : ''}
+              onPress={() => router.push('/team')}
+            />
+          ) : null}
+          {showJoin ? <ListRow icon={KeyRound} label={t('settings_team_join')} onPress={() => router.push('/join')} /> : null}
           <ListRow icon={Tags} label={t('settings_services')} onPress={() => router.push('/settings/services')} />
           <ListRow
             icon={RotateCcw}
@@ -100,31 +119,44 @@ export default function Settings() {
             value={sync.failed > 0 ? t('sync_status_failed', { count: sync.failed }) : sync.unsynced > 0 ? String(sync.unsynced) : ''}
             onPress={() => router.push('/sync')}
           />
-          <ListRow icon={Banknote} label={t('settings_currency')} value={user.currency} onPress={() => setSheet('currency')} />
+          <ListRow
+            icon={Banknote}
+            label={t('settings_currency')}
+            value={user.currency}
+            onPress={readOnly ? undefined : () => setSheet('currency')}
+          />
           <ListRow
             icon={Globe}
             label={t('settings_country')}
             value={country ? countryName(country, language) : ''}
-            onPress={() => setSheet('country')}
+            onPress={readOnly ? undefined : () => setSheet('country')}
           />
           {country && zoneChoices(country).length > 1 ? (
-            <ListRow icon={Clock} label={t('field_timezone')} value={timeZoneLabel(user.timezone)} onPress={() => setSheet('zone')} />
+            <ListRow
+              icon={Clock}
+              label={t('field_timezone')}
+              value={timeZoneLabel(user.timezone)}
+              onPress={readOnly ? undefined : () => setSheet('zone')}
+            />
           ) : null}
           <ListRow
             icon={Gauge}
             label={t('settings_tension_unit')}
+            value={readOnly ? user.tension_unit : undefined}
             trailing={
-              <View className="w-[86px]">
-                <Segmented<TensionUnit>
-                  compact
-                  options={[
-                    { value: 'kg', label: 'kg' },
-                    { value: 'lbs', label: 'lbs' },
-                  ]}
-                  value={user.tension_unit}
-                  onChange={(tension_unit) => void save({ tension_unit })}
-                />
-              </View>
+              readOnly ? undefined : (
+                <View className="w-[86px]">
+                  <Segmented<TensionUnit>
+                    compact
+                    options={[
+                      { value: 'kg', label: 'kg' },
+                      { value: 'lbs', label: 'lbs' },
+                    ]}
+                    value={user.tension_unit}
+                    onChange={(tension_unit) => void save({ tension_unit })}
+                  />
+                </View>
+              )
             }
           />
           <ListRow
@@ -134,6 +166,7 @@ export default function Settings() {
             onPress={() => setSheet('language')}
           />
         </ListGroup>
+        {readOnly ? <Text className="px-1 text-[13.5px] leading-[18px] text-muted">{t('settings_team_owner_note')}</Text> : null}
             </>
           }
           second={

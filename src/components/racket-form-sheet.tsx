@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { View } from 'react-native';
 
 import { Check } from '@/components/icons';
+import NoRightsNote from '@/components/no-rights-note';
 import PlusIcon from '@/components/icons/plus-icon';
 import { SUGGESTIONS_SHOWN, SUGGEST_DELAY_MS, Suggestions } from '@/components/reference-suggestions';
 import { StockFields, StockLocked, readStock, useStockOn } from '@/components/stock';
@@ -21,6 +22,7 @@ import { useClients, useCreateRacket, useOnline, useRackets, useReferenceRackets
 import { withoutOwnedRackets } from '@/lib/reference';
 import type { Racket } from '@/lib/types';
 import { useDebounced } from '@/lib/use-debounced';
+import { useWorkshop } from '@/lib/use-workshop';
 
 type Owner = { id: string; name: string };
 
@@ -264,9 +266,13 @@ function RacketForm({
 // Add or edit a racket: a client's (its owner, brand and model) or the catalog's (brand, model and the stock).
 export default function RacketFormSheet({ visible, onClose, ...rest }: RacketFormSheetProps) {
   const { t } = useI18n();
+  // A racket of the catalog is stock, and the owner's; a client's racket is made by anyone who takes the order in (and may write).
+  const { canWrite, canEditCatalog } = useWorkshop();
+  const forCatalog = rest.racket ? rest.racket.client_id === null : !!rest.catalog;
+  const allowed = forCatalog ? canEditCatalog : canWrite;
   return (
-    <Sheet visible={visible} onClose={onClose} form title={rest.racket ? t('edit_racket') : t('add_racket')}>
-      <RacketForm onClose={onClose} {...rest} />
+    <Sheet visible={visible} onClose={onClose} form={allowed} title={rest.racket ? t('edit_racket') : t('add_racket')}>
+      {allowed ? <RacketForm onClose={onClose} {...rest} /> : <NoRightsNote />}
     </Sheet>
   );
 }

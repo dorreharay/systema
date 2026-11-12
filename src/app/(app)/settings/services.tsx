@@ -25,6 +25,7 @@ import { useI18n } from '@/lib/i18n';
 import { useServices, useUpdateService } from '@/lib/queries';
 import type { Service } from '@/lib/types';
 import { useSearch } from '@/lib/use-search';
+import { useWorkshop } from '@/lib/use-workshop';
 
 export default function ServicesAndPricing() {
   const { user } = useAuth();
@@ -35,6 +36,8 @@ export default function ServicesAndPricing() {
   const { query } = search;
   const services = useServices(query);
   const update = useUpdateService();
+  // The price list is the owner's: for anyone else it is read (a receptionist and a master see the prices they quote).
+  const { canEditCatalog } = useWorkshop();
   const [editing, setEditing] = useState<Service | 'new' | null>(null);
 
   const setActive = async (service: Service, active: boolean) => {
@@ -50,7 +53,7 @@ export default function ServicesAndPricing() {
     <Card
       key={service.id}
       nested
-      onPress={() => setEditing(service)}
+      onPress={canEditCatalog ? () => setEditing(service) : undefined}
       accessibilityLabel={service.name}
       className="flex-row items-center gap-3">
       <View className="flex-1 gap-1">
@@ -71,6 +74,7 @@ export default function ServicesAndPricing() {
       <AppSwitch
         accessibilityLabel={t('service_active_toggle', { name: service.name })}
         value={service.active}
+        disabled={!canEditCatalog}
         onValueChange={(active) => void setActive(service, active)}
       />
     </Card>
@@ -85,16 +89,18 @@ export default function ServicesAndPricing() {
     <Screen
       flush
       dock={
-        <Shortcut
-          icon={PlusIcon}
-          label={t('add_service')}
-          color={colors.catalog}
-          contentColor={colors.ink}
-          className="w-full px-5 py-5"
-          onPress={() => setEditing('new')}
-        />
+        canEditCatalog ? (
+          <Shortcut
+            icon={PlusIcon}
+            label={t('add_service')}
+            color={colors.catalog}
+            contentColor={colors.ink}
+            className="w-full px-5 py-5"
+            onPress={() => setEditing('new')}
+          />
+        ) : undefined
       }
-      footer={<View style={{ height: Math.max(insets.bottom, 12) + 24 }} />}>
+      footer={canEditCatalog ? <View style={{ height: Math.max(insets.bottom, 12) + 24 }} /> : undefined}>
       <DetailHeader floating title={t('settings_services')} />
       <DetailScroll
         contentContainerClassName="gap-page p-page pb-28 md:pb-12"

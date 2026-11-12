@@ -4311,6 +4311,472 @@ test('Studio interest', 'the script that reads the list counts it, keeps those r
 });
 
 // ---------------------------------------------------------------------------
+// Team (Studio): several people in one workshop. The data belongs to the owner's account; a master or a receptionist works in it by a role.
+// The server of these tests has Studio on besides the plans, three seats, and the dev grants (to give an owner the plan without the store).
+// ---------------------------------------------------------------------------
+const TEAM_ENV = { STUDIO_ENABLED: 'true', FREE_ORDERS_PER_MONTH: '50' };
+const withTeam = (run, env = {}) => withPlans(run, { ...TEAM_ENV, ...env });
+
+/** A stringer on Studio. */
+async function studioOwner(server) {
+  const s = await stringerOn(server);
+  assertStatus(await s.client.post('/api/billing/dev-grant', { plan: 'studio' }), 200);
+  return s;
+}
+
+/** The invitation the owner makes for a role. */
+async function inviteFor(s, role) {
+  const res = await s.client.post('/api/team/invites', { role });
+  assertStatus(res, 201);
+  return res.data.invite;
+}
+
+/** A new person who joins the owner's workshop in a role, and what the join answered. */
+async function joiner(server, s, role) {
+  const { code } = await inviteFor(s, role);
+  const client = new Client(server.base);
+  const email = newEmail();
+  assertStatus(await client.post('/api/auth/register', { email, password, full_name: `${role} ${counter}` }), 201);
+  const joined = await client.post('/api/team/join', { code });
+  assertStatus(joined, 200);
+  return { client, email, user: joined.data };
+}
+
+/** An owner on Studio with a master and a receptionist. */
+async function fullTeam(server) {
+  const owner = await studioOwner(server);
+  const master = await joiner(server, owner, 'master');
+  const reception = await joiner(server, owner, 'receptionist');
+  return { owner, master, reception };
+}
+
+const queue = async (s, query = '') => (await s.client.get(`/api/orders${query}`)).data.items;
+
+test('Team', 'where the server has no Studio the team does not exist, and Studio is still a waiting list', async () => {
+  await withPlans(async (server) => {
+    const s = await stringerOn(server);
+    assertStatus(await s.client.get('/api/team'), 404);
+    assertStatus(await s.client.post('/api/team/invites', { role: 'master' }), 404);
+    assertStatus(await s.client.post('/api/team/join', { code: 'ABCDE-FGHJK' }), 404);
+    const sub = s.user.subscription;
+    assertEq([sub.studio_available, sub.team, sub.seats], [false, false, 1], 'the account says so');
+    assertEq(s.user.workshop, { owner_id: s.user.id, role: 'owner', member: false, name: null, owner_name: null, paused: false, team: false }, 'a workshop of one');
+  });
+});
+
+test('Team', 'an owner on Studio invites by role; the code is shown once; a workshop holds three people, waiting invitations too', async () => {
+  await withTeam(async (server) => {
+    const s = await studioOwner(server);
+    const start = (await s.client.get('/api/team')).data;
+    assertEq([start.seats, start.can_invite, start.members.map((m) => m.role), start.invites], [{ limit: 3, used: 1 }, true, ['owner'], []], 'alone at first');
+    assertEq(start.members[0].you, true, 'the list says who you are');
+    await s.client.post('/api/strings', { brand: 'Babolat', model: 'RPM', type: 'polyester' });
+    assertEq('last_used' in (await s.client.get('/api/strings')).data.items[0], false, 'a workshop of one has no "used last"');
+
+    const first = await inviteFor(s, 'master');
+    assertTrue(/^[A-Z2-9]{5}-[A-Z2-9]{5}$/.test(first.code), `the code is easy to read out: ${first.code}`);
+    assertTrue(first.link.startsWith('http://app.test/join?code=') && first.link.endsWith(first.code.replace('-', '')), 'and the link carries it');
+    assertTrue(Date.parse(first.expires_at) > Date.now() + 6 * 86400000, 'good for a week');
+    assertEq(dbScalar(`SELECT count(*) FROM workshop_invites WHERE code_hash = '${first.code}'`), '0', 'the code itself is not kept');
+
+    await inviteFor(s, 'receptionist');
+    const full = (await s.client.get('/api/team')).data;
+    assertEq([full.seats.used, full.can_invite, full.invites.map((i) => i.role)], [3, false, ['master', 'receptionist']], 'two waiting take two seats');
+    assertTrue(full.invites.every((i) => i.code === undefined), 'the list does not give the codes again');
+    const refused = await s.client.post('/api/team/invites', { role: 'master' });
+    assertStatus(refused, 409);
+    assertEq([refused.data.code, refused.data.data.limit], ['no_seats', 3], 'no more');
+
+    assertStatus(await s.client.delete(`/api/team/invites/${full.invites[0].id}`), 200);
+    assertStatus(await s.client.post('/api/team/invites', { role: 'master' }), 201);
+    assertStatus(await s.client.post('/api/team/invites', { role: 'owner' }), 400);
+    assertStatus(await s.client.delete(`/api/team/invites/${full.invites[0].id}`), 404);
+  });
+});
+
+test('Team', 'only an owner who holds Studio invites, and only the owner runs the team', async () => {
+  await withTeam(async (server) => {
+    const free = await stringerOn(server);
+    const refused = await free.client.post('/api/team/invites', { role: 'master' });
+    assertStatus(refused, 402);
+    assertEq(refused.data.code, 'studio_required', 'Studio is needed');
+    assertEq((await free.client.get('/api/team')).data.can_invite, false, 'the screen knows it');
+
+    const { owner, master, reception } = await fullTeam(server);
+    for (const person of [master, reception]) {
+      const res = await person.client.post('/api/team/invites', { role: 'master' });
+      assertStatus(res, 403);
+      assertEq(res.data.code, 'forbidden_role', 'not theirs to do');
+    }
+    const members = (await owner.client.get('/api/team')).data.members;
+    assertStatus(await master.client.delete(`/api/team/members/${members[2].id}`), 403);
+    assertStatus(await master.client.patch(`/api/team/members/${members[2].id}`, { role: 'master' }), 403);
+    assertStatus(await new Client(server.base).get('/api/team'), 401);
+  });
+});
+
+test('Team', 'a person joins with the code, once; the workshop is what they see, their own stays as it was', async () => {
+  await withTeam(async (server) => {
+    const s = await studioOwner(server);
+    const mine = new Client(server.base);
+    assertStatus(await mine.post('/api/auth/register', { email: newEmail(), password }), 201);
+    const own = (await mine.post('/api/clients', { name: 'Their own client', phone: '+380631110000' })).data;
+
+    const { code } = await inviteFor(s, 'master');
+    const preview = await mine.post('/api/team/preview', { code: code.toLowerCase().replace('-', ' ') });
+    assertStatus(preview, 200);
+    assertEq([preview.data.role, typeof preview.data.workshop.owner_name], ['master', 'string'], 'the invitation says what it is for, typed any way');
+    assertEq(JSON.stringify(preview.data).includes(s.email), false, 'and does not give the owner away');
+
+    const joined = await mine.post('/api/team/join', { code: ` ${code.toLowerCase()} ` });
+    assertStatus(joined, 200);
+    assertEq([joined.data.workshop.member, joined.data.workshop.role, joined.data.workshop.team, joined.data.setup_completed], [true, 'master', true, true], 'in the workshop, nothing to set up');
+    assertEq([joined.data.subscription.plan, joined.data.subscription.member, joined.data.currency], ['studio', true, s.user.currency], "with the workshop's plan and settings");
+
+    const names = (await mine.get('/api/clients')).data.items.map((c) => c.name);
+    assertEq(names, ['Maria Sharapova'], 'they see the clients of the workshop and not their own');
+    assertEq((await mine.get('/api/auth/me')).data.workshop.owner_id, s.user.id, '/me says whose workshop');
+
+    const again = await mine.post('/api/team/join', { code });
+    assertStatus(again, 404);
+    assertEq(again.data.code, 'invite_invalid', 'a code is used once');
+    const second = await inviteFor(s, 'receptionist');
+    const taken = await mine.post('/api/team/join', { code: second.code });
+    assertStatus(taken, 409);
+    assertEq(taken.data.code, 'already_member', 'one workshop at a time');
+
+    const team = (await s.client.get('/api/team')).data;
+    assertEq([team.members.map((m) => m.role), team.seats.used], [['owner', 'master'], 3], 'the owner sees them, the waiting invitation too');
+    assertEq(typeof team.members[1].email, 'string', 'with the address, for the owner');
+    assertEq((await mine.get('/api/team')).data.members.every((m) => m.email === undefined), true, 'and no addresses for the rest');
+
+    const left = await mine.post('/api/team/leave');
+    assertStatus(left, 200);
+    assertEq(left.data.workshop.member, false, 'out of it');
+    assertEq((await mine.get('/api/clients')).data.items.map((c) => c.id), [own.id], 'their own data are back, as they were');
+    assertStatus(await mine.post('/api/team/leave'), 409);
+  });
+});
+
+test('Team', 'a wrong code, one that ran out, and the owner\'s own are turned away', async () => {
+  await withTeam(async (server) => {
+    const s = await studioOwner(server);
+    const person = new Client(server.base);
+    assertStatus(await person.post('/api/auth/register', { email: newEmail(), password }), 201);
+
+    const wrong = await person.post('/api/team/join', { code: 'ZZZZZ-ZZZZZ' });
+    assertStatus(wrong, 404);
+    assertEq(wrong.data.code, 'invite_invalid', 'nobody has it');
+    assertStatus(await person.post('/api/team/join', { code: '' }), 400);
+    assertStatus(await person.post('/api/team/join', {}), 400);
+    assertStatus(await new Client(server.base).post('/api/team/join', { code: 'ZZZZZ-ZZZZZ' }), 401);
+
+    const mine = await inviteFor(s, 'master');
+    const own = await s.client.post('/api/team/join', { code: mine.code });
+    assertStatus(own, 409);
+    assertEq(own.data.code, 'own_workshop', 'not their own');
+
+    dbExec(`UPDATE workshop_invites SET expires_at = now() - interval '1 minute' WHERE owner_id = '${s.user.id}'`);
+    const late = await person.post('/api/team/join', { code: mine.code });
+    assertStatus(late, 404);
+    assertEq(late.data.code, 'invite_invalid', 'a week is a week');
+    assertEq((await s.client.get('/api/team')).data.seats.used, 1, 'and it takes no seat any more');
+    assertEq((await s.client.get('/api/team')).data.invites, [], 'nor shows');
+  });
+});
+
+test('Team', 'someone who runs a team of their own cannot join another, and a workshop that lost Studio cannot be joined', async () => {
+  await withTeam(async (server) => {
+    const a = await studioOwner(server);
+    const b = await studioOwner(server);
+    await joiner(server, b, 'master');
+    const { code } = await inviteFor(a, 'master');
+    const refused = await b.client.post('/api/team/join', { code });
+    assertStatus(refused, 409);
+    assertEq(refused.data.code, 'has_team', 'a team of their own first');
+
+    const person = new Client(server.base);
+    assertStatus(await person.post('/api/auth/register', { email: newEmail(), password }), 201);
+    assertStatus(await a.client.post('/api/billing/dev-grant', { plan: 'free' }), 200);
+    const gone = await person.post('/api/team/join', { code });
+    assertStatus(gone, 409);
+    assertEq(gone.data.code, 'studio_inactive', 'no Studio, no team');
+  });
+});
+
+test('Team', 'a workshop whose owner no longer has Studio is paused for the others: they read, they do not write', async () => {
+  await withTeam(async (server) => {
+    const { owner, master, reception } = await fullTeam(server);
+    const made = await owner.client.post('/api/orders', owner.order());
+    assertStatus(made, 201);
+
+    assertStatus(await owner.client.post('/api/billing/dev-grant', { plan: 'studio', days: -1 }), 200);
+    assertStatus(await master.client.post('/api/orders', owner.order()), 201, 'the days of grace keep it going');
+
+    assertStatus(await owner.client.post('/api/billing/dev-grant', { plan: 'studio', days: -10 }), 200);
+    for (const person of [master, reception]) {
+      assertStatus(await person.client.get('/api/orders'), 200);
+      assertStatus(await person.client.get(`/api/orders/${made.data.id}`), 200);
+      const refused = await person.client.post('/api/orders', owner.order());
+      assertStatus(refused, 403);
+      assertEq(refused.data.code, 'workshop_paused', 'paused');
+      assertStatus(await person.client.post('/api/clients', { name: 'Zed', phone: '+380671234567' }), 403);
+      const me = (await person.client.get('/api/auth/me')).data;
+      assertEq([me.workshop.paused, me.subscription.plan], [true, 'free'], 'the account says so');
+    }
+    assertStatus(await owner.client.post('/api/orders', owner.order()), 201, 'the owner goes on, on the plan they have');
+    assertEq((await owner.client.get('/api/auth/me')).data.workshop.paused, false, 'it is not paused for the owner');
+
+    assertStatus(await owner.client.post('/api/billing/dev-grant', { plan: 'studio' }), 200);
+    assertStatus(await master.client.post('/api/orders', owner.order()), 201, 'back as it was');
+  });
+});
+
+test('Team', 'a master sees the queue and their own, takes what nobody has, and cannot take what is taken', async () => {
+  await withTeam(async (server) => {
+    const { owner, master } = await fullTeam(server);
+    const second = await joiner(server, owner, 'master').catch(() => undefined);
+    assertEq(second, undefined, 'a fourth person does not fit');
+
+    const queued = (await owner.client.post('/api/orders', owner.order())).data;
+    const mine = (await owner.client.post('/api/orders', owner.order({ assignee_id: master.user.id }))).data;
+    const owners = (await owner.client.post('/api/orders', owner.order({ assignee_id: owner.user.id }))).data;
+    assertEq([queued.assignee, mine.assignee.id, owners.assignee.id], [null, master.user.id, owner.user.id], 'the owner gives orders out');
+
+    const old = (await owner.client.post('/api/orders', owner.order())).data;
+    assertStatus(await owner.client.patch(`/api/orders/${old.id}`, { status: 'completed' }), 200);
+    assertEq((await queue(owner)).length, 4, 'the owner sees the old one too');
+    assertEq((await queue(master)).map((o) => o.id).sort(), [queued.id, mine.id].sort(), 'the queue (what is still to be done) and their own');
+    assertStatus(await master.client.get(`/api/orders/${old.id}`), 404, 'an old order nobody strung is not a queue');
+    assertEq((await queue(master, '?assignee=me')).map((o) => o.id), [mine.id], 'their own');
+    assertEq((await queue(master, '?assignee=none')).map((o) => o.id), [queued.id], 'the queue');
+    const { client_id: clientId, racket_id: racketId } = owner.order();
+    const visible = [queued.id, mine.id].sort();
+    assertEq((await master.client.get(`/api/clients/${clientId}`)).data.orders.map((o) => o.id).sort(), visible, "the client's history is theirs to see only in part");
+    assertEq((await master.client.get(`/api/rackets/${racketId}`)).data.orders.map((o) => o.id).sort(), visible, "so is the racket's");
+    assertEq((await owner.client.get(`/api/clients/${clientId}`)).data.orders.length, 4, 'the owner sees all');
+    assertStatus(await master.client.get(`/api/orders/${owners.id}`), 404, "another's order does not exist for them");
+    assertStatus(await master.client.patch(`/api/orders/${owners.id}`, { notes: 'x' }), 404);
+    const dash = (await master.client.get('/api/dashboard')).data;
+    assertEq(dash.active_orders, 2, 'the numbers are theirs too');
+
+    const noTouch = await master.client.patch(`/api/orders/${queued.id}`, { notes: 'mine now?' });
+    assertStatus(noTouch, 403);
+    assertEq(noTouch.data.code, 'forbidden_role', 'take it first');
+    assertStatus(await master.client.patch(`/api/orders/${mine.id}`, { status: 'in_progress' }), 200);
+
+    const took = await master.client.post(`/api/orders/${queued.id}/assign`, { assignee_id: master.user.id });
+    assertStatus(took, 200);
+    assertEq([took.data.assignee.id, typeof took.data.assigned_at], [master.user.id, 'string'], 'taken, and since when');
+    assertStatus(await master.client.post(`/api/orders/${queued.id}/assign`, { assignee_id: master.user.id }), 200, 'again changes nothing');
+    assertStatus(await master.client.patch(`/api/orders/${queued.id}`, { notes: 'mine' }), 200);
+
+    const grab = await master.client.post(`/api/orders/${owners.id}/assign`, { assignee_id: master.user.id });
+    assertStatus(grab, 409);
+    assertEq(grab.data.code, 'order_taken', "not the owner's order");
+    assertStatus(await master.client.post(`/api/orders/${mine.id}/assign`, { assignee_id: owner.user.id }), 403, 'and not for someone else');
+    assertStatus(await master.client.delete(`/api/orders/${mine.id}`), 403, 'a master does not delete');
+
+    const let_go = await master.client.post(`/api/orders/${queued.id}/assign`, { assignee_id: null });
+    assertStatus(let_go, 200);
+    assertEq(let_go.data.assignee, null, 'back to the queue');
+  });
+});
+
+test('Team', 'two masters reaching for one order: the first has it, the second is told', async () => {
+  await withTeam(async (server) => {
+    const owner = await studioOwner(server);
+    const a = await joiner(server, owner, 'master');
+    const b = await joiner(server, owner, 'master');
+    const order = (await owner.client.post('/api/orders', owner.order())).data;
+    const [first, second] = await Promise.all([
+      a.client.post(`/api/orders/${order.id}/assign`, { assignee_id: a.user.id }),
+      b.client.post(`/api/orders/${order.id}/assign`, { assignee_id: b.user.id }),
+    ]);
+    assertEq([first.status, second.status].sort(), [200, 409], 'one takes it, the other is refused');
+    const taken = (await owner.client.get(`/api/orders/${order.id}`)).data;
+    assertTrue([a.user.id, b.user.id].includes(taken.assignee.id), 'and it has one performer');
+  });
+});
+
+test('Team', 'a master who takes an order in is its performer; a receptionist leaves it for the queue; who took it in is kept', async () => {
+  await withTeam(async (server) => {
+    const { owner, master, reception } = await fullTeam(server);
+    const byMaster = (await master.client.post('/api/orders', owner.order())).data;
+    assertEq([byMaster.assignee.id, byMaster.accepted_by.id], [master.user.id, master.user.id], 'a master\'s own');
+    const refused = await master.client.post('/api/orders', owner.order({ assignee_id: owner.user.id }));
+    assertStatus(refused, 403);
+
+    const byReception = (await reception.client.post('/api/orders', owner.order())).data;
+    assertEq([byReception.assignee, byReception.accepted_by.id], [null, reception.user.id], 'for the queue, taken in by the receptionist');
+    assertStatus(await reception.client.post('/api/orders', owner.order({ assignee_id: master.user.id })), 403, 'a receptionist does not give orders');
+    assertStatus(await reception.client.post(`/api/orders/${byReception.id}/assign`, { assignee_id: master.user.id }), 403);
+
+    assertEq((await queue(reception)).length, 2, 'they see all of them');
+    assertStatus(await reception.client.patch(`/api/orders/${byMaster.id}`, { is_paid: true }), 200, 'and can hand one out and take the money');
+    assertStatus(await reception.client.delete(`/api/orders/${byReception.id}`), 200);
+    assertEq(JSON.stringify(byMaster).includes('@'), false, 'no addresses in an order');
+  });
+});
+
+test('Team', 'the owner gives an order to themselves or a master, never to a receptionist, and takes it back', async () => {
+  await withTeam(async (server) => {
+    const { owner, master, reception } = await fullTeam(server);
+    const order = (await owner.client.post('/api/orders', owner.order())).data;
+    for (const [person, expected] of [[owner, 200], [master, 200], [reception, 400]]) {
+      const res = await owner.client.post(`/api/orders/${order.id}/assign`, { assignee_id: person.user.id });
+      assertStatus(res, expected);
+    }
+    assertEq((await owner.client.get(`/api/orders/${order.id}`)).data.assignee.id, master.user.id, 'the last one that fitted');
+    const stranger = new Client(server.base);
+    const reg = await stranger.post('/api/auth/register', { email: newEmail(), password });
+    assertStatus(await owner.client.post(`/api/orders/${order.id}/assign`, { assignee_id: reg.data.user.id }), 400);
+    assertStatus(await owner.client.post(`/api/orders/${order.id}/assign`, { assignee_id: null }), 200);
+    assertEq((await queue(owner, '?assignee=none')).length, 1, 'in the queue again');
+    assertStatus(await owner.client.post(`/api/orders/${order.id}/assign`, { assignee_id: 'nope' }), 400);
+  });
+});
+
+test('Team', 'the stock is one for the workshop: a master\'s order takes from it, and only the owner changes it', async () => {
+  await withTeam(async (server) => {
+    const { owner, master, reception } = await fullTeam(server);
+    const string = (await owner.client.post('/api/strings', { brand: 'Luxilon', model: 'ALU', type: 'polyester', track_stock: true, stock: 5 })).data;
+    assertEq(string.track_stock, true, 'counted on Studio');
+    assertStatus(await master.client.post('/api/orders', owner.order({ main_string_id: string.id })), 201);
+    assertEq((await owner.client.get(`/api/strings/${string.id}`)).data.stock, 4, 'one set less for everyone');
+    assertEq((await reception.client.get('/api/strings')).data.items[0].stock, 4, 'seen by all');
+    const used = (await reception.client.get('/api/strings')).data.items[0].last_used;
+    assertEq([used.order_number, used.by.id, used.by.name.startsWith('master ')], [1, master.user.id, true], 'and who used it last');
+
+    for (const person of [master, reception]) {
+      assertStatus(await person.client.post(`/api/strings/${string.id}/stock`, { delta: 10, op_id: randomUUID() }), 403);
+      assertStatus(await person.client.patch(`/api/strings/${string.id}`, { stock: 99 }), 403);
+      assertStatus(await person.client.post('/api/strings', { brand: 'X', model: 'Y' }), 403);
+      assertStatus(await person.client.delete(`/api/strings/${string.id}`), 403);
+      assertStatus(await person.client.post('/api/rackets', { brand: 'Wilson', model: 'Blade', track_stock: true, stock: 3 }), 403, 'a catalog racket is stock');
+      assertStatus(await person.client.post('/api/services', { name: 'Grip', price: 5 }), 403);
+    }
+    const catalog = (await owner.client.post('/api/rackets', { brand: 'Wilson', model: 'Blade' })).data;
+    assertStatus(await master.client.patch(`/api/rackets/${catalog.id}`, { notes: 'x' }), 403);
+    assertStatus(await master.client.post(`/api/rackets/${catalog.id}/stock`, { delta: 1, op_id: randomUUID() }), 403);
+    assertStatus(await master.client.delete(`/api/rackets/${catalog.id}`), 403);
+    assertStatus(await owner.client.post(`/api/strings/${string.id}/stock`, { delta: 10, op_id: randomUUID() }), 200);
+    assertEq((await reception.client.get('/api/services')).status, 200, 'the price list is read by all');
+
+    // What a person takes in is everybody's: a client, and the racket of that client.
+    const client = (await reception.client.post('/api/clients', { name: 'Walk In', phone: '+380991112233' })).data;
+    assertStatus(await master.client.get(`/api/clients/${client.id}`), 200);
+    assertStatus(await reception.client.post('/api/rackets', { client_id: client.id, brand: 'Head', model: 'Speed' }), 201);
+  });
+});
+
+test('Team', 'the money of the month is the owner\'s; the settings of the workshop are too', async () => {
+  await withTeam(async (server) => {
+    const { owner, master, reception } = await fullTeam(server);
+    assertStatus(await owner.client.get('/api/insights'), 200);
+    for (const person of [master, reception]) {
+      const res = await person.client.get('/api/insights');
+      assertStatus(res, 403);
+      assertEq(res.data.code, 'forbidden_role', 'the revenue is not for them');
+      assertEq(person.user.subscription.entitlements.month_overview, false, 'and the account says there is no overview');
+      for (const field of [{ currency: 'EUR' }, { timezone: 'Europe/Kyiv' }, { tension_unit: 'lbs' }, { workshop_name: 'Mine' }]) {
+        const refused = await person.client.patch('/api/auth/me', field);
+        assertStatus(refused, 403);
+        assertEq(refused.data.code, 'forbidden_role', 'the workshop is not theirs to set');
+      }
+      const own = await person.client.patch('/api/auth/me', { language: 'de', full_name: 'New Name' });
+      assertStatus(own, 200);
+      assertEq([own.data.language, own.data.full_name], ['de', 'New Name'], 'their own settings they can');
+    }
+    assertEq((await owner.client.get('/api/auth/me')).data.subscription.entitlements.month_overview, true, 'the owner has the overview');
+    const members = (await owner.client.get('/api/team')).data.members;
+    assertEq(members.find((m) => m.role === 'master').name, 'New Name', 'the team shows the new name');
+  });
+});
+
+test('Team', 'a person who is taken out loses the access at once, and what they had unfinished goes back to the queue', async () => {
+  await withTeam(async (server) => {
+    const { owner, master } = await fullTeam(server);
+    const open = (await owner.client.post('/api/orders', owner.order({ assignee_id: master.user.id }))).data;
+    const done = (await owner.client.post('/api/orders', owner.order({ assignee_id: master.user.id }))).data;
+    assertStatus(await owner.client.patch(`/api/orders/${done.id}`, { status: 'completed' }), 200);
+
+    const row = (await owner.client.get('/api/team')).data.members.find((m) => m.role === 'master');
+    assertStatus(await owner.client.delete(`/api/team/members/${row.id}`), 200);
+    assertStatus(await owner.client.delete(`/api/team/members/${row.id}`), 404);
+
+    const me = (await master.client.get('/api/auth/me')).data;
+    assertEq([me.workshop.member, me.workshop.owner_id], [false, master.user.id], 'in their own workshop on the next request');
+    assertEq((await master.client.get('/api/orders')).data.items.length, 0, 'and none of the orders are theirs to see');
+    assertEq((await owner.client.get(`/api/orders/${open.id}`)).data.assignee, null, 'the open order is in the queue');
+    assertEq((await owner.client.get(`/api/orders/${done.id}`)).data.assignee.id, master.user.id, 'the done one keeps the name');
+    assertEq((await owner.client.get('/api/team')).data.seats.used, 2, 'the seat is free: the owner and the receptionist are left');
+  });
+});
+
+test('Team', 'a master made a receptionist does not keep orders to string', async () => {
+  await withTeam(async (server) => {
+    const { owner, master } = await fullTeam(server);
+    const order = (await owner.client.post('/api/orders', owner.order({ assignee_id: master.user.id }))).data;
+    const row = (await owner.client.get('/api/team')).data.members.find((m) => m.role === 'master');
+    assertStatus(await owner.client.patch(`/api/team/members/${row.id}`, { role: 'receptionist' }), 200);
+    assertEq((await owner.client.get(`/api/orders/${order.id}`)).data.assignee, null, 'back in the queue');
+    assertEq((await master.client.get('/api/auth/me')).data.workshop.role, 'receptionist', 'and they are one');
+    assertStatus(await owner.client.patch('/api/team/members/00000000-0000-4000-8000-000000000000', { role: 'master' }), 404);
+    assertStatus(await owner.client.patch(`/api/team/members/${row.id}`, { role: 'owner' }), 400);
+  });
+});
+
+test('Team', 'the report of the month: by person, the money adds up, a master sees their own line, a receptionist none', async () => {
+  await withTeam(async (server) => {
+    const { owner, master, reception } = await fullTeam(server);
+    const make = async (assignee, price) => {
+      const created = (await owner.client.post('/api/orders', owner.order({ labor_price: price, ...(assignee && { assignee_id: assignee }) }))).data;
+      assertStatus(await owner.client.patch(`/api/orders/${created.id}`, { status: 'in_progress' }), 200);
+      assertStatus(await owner.client.patch(`/api/orders/${created.id}`, { status: 'ready', is_paid: true }), 200);
+      return created;
+    };
+    await make(master.user.id, 40);
+    await make(master.user.id, 60);
+    await make(owner.user.id, 25);
+    await make(null, 10);
+    // An hour from "in progress" to "ready", for the average.
+    dbExec(`UPDATE orders SET started_at = ready_at - interval '2 hours' WHERE assignee_id = '${master.user.id}'`);
+
+    const report = await owner.client.get('/api/team/report');
+    assertStatus(report, 200);
+    const { rows, totals } = report.data;
+    assertEq(rows.map((r) => r.person?.role ?? null), ['owner', 'master', null], 'the owner, the master, then the queue');
+    const byMaster = rows.find((r) => r.person?.id === master.user.id);
+    assertEq([byMaster.orders, byMaster.revenue, byMaster.avg_hours], [2, 100, 2], "the master's month");
+    assertEq(rows.find((r) => r.person?.id === owner.user.id).revenue, 25, "the owner's");
+    assertEq(rows.find((r) => r.person === null).revenue, 10, 'and what nobody had');
+    assertEq([totals.orders, totals.revenue], [4, 135], 'and the sum is the workshop\'s');
+    assertEq(rows.reduce((sum, r) => sum + r.revenue, 0), totals.revenue, 'the lines add up to the total');
+    assertEq(Math.round(rows.reduce((sum, r) => sum + r.share, 0) * 100), 100, 'the shares are the whole');
+    assertEq(report.data.currency, owner.user.currency, 'in the workshop\'s money');
+
+    const own = await master.client.get('/api/team/report');
+    assertStatus(own, 200);
+    assertEq([own.data.rows.length, own.data.rows[0].revenue, own.data.totals], [1, 100, null], 'a master sees only their line');
+    assertStatus(await reception.client.get('/api/team/report'), 403);
+
+    assertEq((await owner.client.get('/api/team/report?month=2020-01')).data.rows.map((r) => r.orders), [0, 0], 'a month with nothing');
+    assertStatus(await owner.client.get('/api/team/report?month=2020-13'), 400);
+  });
+});
+
+test('Team', 'an owner who deletes the account takes the workshop with it, and the others are in their own again', async () => {
+  await withTeam(async (server) => {
+    const { owner, master } = await fullTeam(server);
+    assertStatus(await owner.client.post('/api/auth/delete-account', { password }), 200);
+    const me = (await master.client.get('/api/auth/me')).data;
+    assertEq([me.workshop.member, me.workshop.owner_id], [false, master.user.id], 'in their own workshop');
+    assertEq(dbScalar(`SELECT count(*) FROM workshop_members WHERE user_id = '${master.user.id}'`), '0', 'no membership left');
+  });
+});
+
+// ---------------------------------------------------------------------------
 async function main() {
   resetDatabase();
   const google = await startFakeGoogle();

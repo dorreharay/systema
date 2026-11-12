@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { loadConfig } from '../../src/config.js';
-import { OFFLINE_AFTER_MS, activePlan, entitlementsOf, madeOffline, stockTracked, subscriptionOf } from '../../src/utils/plans.js';
+import { OFFLINE_AFTER_MS, activePlan, entitlementsOf, madeOffline, stockTracked, subscriptionOf, teamAllowed } from '../../src/utils/plans.js';
 
 const DAY = 24 * 60 * 60 * 1000;
 const MINUTE = 60 * 1000;
@@ -78,6 +78,9 @@ assert.deepEqual(free, {
   entitlements: FREE,
   free: FREE,
   studio_waitlist: false,
+  studio_available: false,
+  team: false,
+  seats: 1,
 });
 assert.equal(subscriptionOf(account({ studio_waitlist_at: ago(DAY) }), now, on).studio_waitlist, true, 'on the Studio list once there is a date');
 
@@ -129,5 +132,28 @@ assert.equal(madeOffline(ago(2 * 60 * MINUTE).toISOString(), now), true, 'hours 
 assert.equal(madeOffline(ago(89 * DAY).toISOString(), now), true, 'a long time without a connection');
 assert.equal(madeOffline(ago(100 * DAY).toISOString(), now), false, 'a clock that is wrong is not believed (see eventTime)');
 assert.equal(madeOffline(ahead(DAY).toISOString(), now), false, 'nor one that is ahead');
+
+
+// Studio: a team only where the server has Studio on, and the account holds the plan
+const studioOn = { ...on, studioEnabled: true, studioSeats: 3 };
+const studio = account({ plan: 'studio', plan_expires_at: ahead(10 * DAY) });
+assert.equal(teamAllowed(studio, now, studioOn), true, 'a team for an account on Studio');
+assert.equal(teamAllowed(studio, now, on), false, 'not where the server has no Studio: it is only a waiting list');
+assert.equal(teamAllowed(studio, now, { ...studioOn, enabled: false }), false, 'and not with the plans off');
+assert.equal(teamAllowed(account({ plan: 'pro', plan_expires_at: ahead(DAY) }), now, studioOn), false, 'Pro is one person');
+assert.equal(teamAllowed(account(), now, studioOn), false, 'so is Free');
+assert.equal(teamAllowed(account({ plan: 'studio', plan_expires_at: ago(DAY) }), now, studioOn), true, 'the days of grace keep the team working');
+assert.equal(teamAllowed(account({ plan: 'studio', plan_expires_at: ago(4 * DAY) }), now, studioOn), false, 'then it is paused');
+const asStudio = subscriptionOf(studio, now, studioOn);
+assert.equal(asStudio.studio_available, true);
+assert.equal(asStudio.team, true);
+assert.equal(asStudio.seats, 3, 'a Studio workshop holds three people, the owner among them');
+assert.equal(subscriptionOf(account({ plan: 'pro', plan_expires_at: ahead(DAY) }), now, studioOn).seats, 1, 'Pro holds one');
+assert.equal(loadConfig({}).billing.studioEnabled, false, 'Studio is a waiting list until it is turned on');
+assert.equal(loadConfig({ STUDIO_ENABLED: 'true' }).billing.studioEnabled, true);
+assert.equal(loadConfig({}).billing.studioSeats, 3);
+assert.equal(loadConfig({ STUDIO_SEATS: '5' }).billing.studioSeats, 5);
+assert.equal(loadConfig({ STUDIO_SEATS: '0' }).billing.studioSeats, 1, 'never fewer than the owner');
+assert.equal(loadConfig({}).billing.inviteDays, 7);
 
 console.log('plans: ok');

@@ -91,7 +91,19 @@ export default function Subscription() {
   // --- What the account holds ------------------------------------------------------------------
 
   const statusLabel = plan.trial ? t('status_trial') : !plan.renews ? t('status_cancelled') : t('status_active');
-  const status = paid ? (
+  // Someone who works in another's workshop has the plan of that workshop, and its owner pays for it: they read it, and buy and ask for nothing.
+  const member = plan.member;
+  const planLabel = t(plan.plan === 'studio' ? 'plan_studio' : plan.plan === 'pro' ? 'plan_pro' : 'plan_free');
+  const status = member ? (
+    <View className="gap-2.5">
+      <View className="flex-row items-center gap-2.5">
+        <Badge label={planLabel} tone={paid ? 'success' : 'neutral'} />
+      </View>
+      <Text className="text-[17px] font-bold">
+        {t('plan_member_title', { owner: user.workshop?.owner_name ?? user.workshop?.name ?? '' })}
+      </Text>
+    </View>
+  ) : paid ? (
     <View className="gap-2.5">
       <View className="flex-row items-center gap-2.5">
         <Badge label={t(plan.plan === 'studio' ? 'plan_studio' : 'plan_pro')} tone="success" />
@@ -137,7 +149,7 @@ export default function Subscription() {
   // Only where Pro is bought. Elsewhere the card of Pro says where it is bought (below), so there is nothing to say twice.
 
   const promo =
-    paid || !SELLS_PLANS ? null : (
+    paid || !SELLS_PLANS || member ? null : (
       <View className="gap-3 rounded-[18px] border border-[#cfe0d8] bg-primary-soft p-5">
         <Text accessibilityRole="header" className="text-[17.5px] font-bold leading-[23px] text-primary">
           {plan.expired ? t('subscription_return_pro') : t('plan_try_pro', { days: TRIAL_DAYS })}
@@ -171,16 +183,22 @@ export default function Subscription() {
   // Several in a row (a wide screen): the price under the name, and the foot of each card says what it leads to.
   const stacked = columns > 1;
 
+  // Where Studio exists, its card leads to the team of whoever holds it or works in a workshop that does, and to the page that sells it to
+  // everyone else; where it does not, to the page with the waiting list.
+  const toTeam = plan.studioAvailable && (member || plan.plan === 'studio');
+
   const renderCard = (def: PlanCardDef) => {
     const current = def.plan === plan.plan;
     let footer: ReactNode;
     if (def.plan === 'studio') {
-      footer = plan.studioWaitlist ? (
+      footer = toTeam ? (
+        <CardNote tone="quiet" icon={ChevronRight} after label={t('studio_open_team')} />
+      ) : plan.studioWaitlist && !plan.studioAvailable ? (
         <CardNote tone="info" icon={Check} label={t('studio_card_listed')} />
       ) : (
         <CardNote tone="quiet" icon={ChevronRight} after label={t('studio_card_more')} />
       );
-    } else if (def.plan === 'pro' && !SELLS_PLANS && !current) {
+    } else if (def.plan === 'pro' && !SELLS_PLANS && !current && !member) {
       // The web points to the iPhone app; on Android, which may be all the person has, it is said straight that there is no purchase yet.
       footer = <CardNote tone="info" icon={Smartphone} label={android ? t('plan_buy_android') : t('plan_buy_in_app')} />;
     }
@@ -191,14 +209,14 @@ export default function Subscription() {
         badge={
           current
             ? { label: t('plan_badge_current'), tone: 'success' }
-            : def.soon
+            : def.soon && !plan.studioAvailable
               ? { label: t('plan_soon'), tone: 'warning' }
-              : def.plan === 'pro' && !paid
+              : def.plan === 'pro' && !paid && !member
                 ? { label: t('plan_badge_recommended'), tone: 'success' }
                 : undefined
         }
         selected={current}
-        onPress={def.plan === 'studio' ? () => router.push('/studio') : undefined}
+        onPress={def.plan === 'studio' ? () => router.push(toTeam ? '/team' : '/studio') : undefined}
         footer={footer}
       />
     );
@@ -233,15 +251,21 @@ export default function Subscription() {
         </Section>
 
         <ListGroup>
-          {SELLS_PLANS ? <ListRow icon={RotateCcw} label={t('subscription_restore')} onPress={() => void restore()} /> : null}
-          {SELLS_PLANS ? <ListRow icon={Store} label={t('subscription_manage')} onPress={() => void openManageSubscriptions()} /> : null}
+          {SELLS_PLANS && !member ? <ListRow icon={RotateCcw} label={t('subscription_restore')} onPress={() => void restore()} /> : null}
+          {SELLS_PLANS && !member ? <ListRow icon={Store} label={t('subscription_manage')} onPress={() => void openManageSubscriptions()} /> : null}
           <ListRow icon={ClipboardList} label={t('settings_terms')} onPress={() => void openLegal('terms')} />
           <ListRow icon={Eye} label={t('settings_privacy_policy')} onPress={() => void openLegal('privacy')} />
         </ListGroup>
         {!SELLS_PLANS || !purchase.error || !paid ? null : <FormError message={purchase.error} />}
 
         <Text className="px-1 text-[12.5px] leading-[17px] text-muted">
-          {SELLS_PLANS ? t('subscription_footer') : android ? t('subscription_android_note') : t('subscription_web_note')}
+          {member
+            ? t('plan_member_text')
+            : SELLS_PLANS
+              ? t('subscription_footer')
+              : android
+                ? t('subscription_android_note')
+                : t('subscription_web_note')}
         </Text>
 
         {/* Development builds only: every state of this page can be looked at. (Not in the texts of the app: nobody else sees it.) */}

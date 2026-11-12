@@ -225,10 +225,18 @@ export const orders = pgTable(
     started_at: timestamp('started_at', { withTimezone: true }),
     ready_at: timestamp('ready_at', { withTimezone: true }),
     completed_at: timestamp('completed_at', { withTimezone: true }),
+
+    // Who in the workshop takes the order in (accepted_by) and who strings it (assignee, from assigned_at). In a workshop of one person
+    // the first is that person and the second is never set. They are people, not the workshop: a person who leaves keeps
+    // their name on the old orders (the report is built from them), and the row is only emptied when the account itself is deleted.
+    accepted_by_id: uuid('accepted_by_id').references(() => users.id, { onDelete: 'set null' }),
+    assignee_id: uuid('assignee_id').references(() => users.id, { onDelete: 'set null' }),
+    assigned_at: timestamp('assigned_at', { withTimezone: true }),
     ...timestamps,
   },
   (table) => [
     uniqueIndex('orders_user_number_idx').on(table.user_id, table.number),
+    index('orders_user_assignee_idx').on(table.user_id, table.assignee_id),
     index('orders_user_status_due_idx').on(table.user_id, table.status, table.due_date),
     index('orders_client_idx').on(table.client_id),
     index('orders_racket_idx').on(table.racket_id),
@@ -303,6 +311,47 @@ export const emailCodes = pgTable(
     created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [index('email_codes_user_idx').on(table.user_id, table.created_at)]
+);
+
+// The roles of the people who work in a workshop that is not their own. The owner is not a row here: the owner is the account whose
+// data it is (every table above is scoped by `user_id`, which for a member is the owner's id: see utils/workshop.js).
+export const WORKSHOP_ROLES = ['owner', 'master', 'receptionist'];
+export const MEMBER_ROLES = ['master', 'receptionist'];
+
+// A person in someone else's workshop. `user_id` is unique: a person works in at most one workshop of another at a time, and that one is
+// the data they see while they are in it (their own stays in their account, untouched, for when they leave).
+export const workshopMembers = pgTable(
+  'workshop_members',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    // Whose workshop it is: the account that holds the data and pays for Studio.
+    owner_id: uuid('owner_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    user_id: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    role: text('role').notNull(), // one of MEMBER_ROLES
+    ...timestamps,
+  },
+  (table) => [uniqueIndex('workshop_members_user_idx').on(table.user_id), index('workshop_members_owner_idx').on(table.owner_id)]
+);
+
+// An invitation to a workshop. Only a hash of its code is kept (the code is shown to the owner once, when it is made), and the row is
+// deleted when the code is used or taken back; one that has run out stays until the owner opens the team, and takes no seat.
+export const workshopInvites = pgTable(
+  'workshop_invites',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    owner_id: uuid('owner_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    role: text('role').notNull(), // one of MEMBER_ROLES
+    code_hash: text('code_hash').notNull(),
+    expires_at: timestamp('expires_at', { withTimezone: true }).notNull(),
+    created_at: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex('workshop_invites_code_idx').on(table.code_hash), index('workshop_invites_owner_idx').on(table.owner_id)]
 );
 
 // Someone who asked, on the website, to be told when Studio is ready (routes/studio.js). It is not an account: a visitor may have none,

@@ -4,6 +4,8 @@ import { ActivityIndicator, FlatList, Platform, RefreshControl, View } from 'rea
 import { ClipboardList, Plus } from '@/components/icons';
 import OrderCard from '@/components/order-card';
 import OrdersTablePage from '@/components/orders-table';
+import { useGiveSheet } from '@/components/performer';
+import QueueChips, { useQueueFilter } from '@/components/queue-chips';
 import { colors } from '@/components/ui/colors';
 import { GridItem, listGap, PAGE_CONTENT } from '@/components/ui/page';
 import { Screen, ScreenHeader, TAB_HEADER_DROP, useDetailContentTop } from '@/components/ui/screen';
@@ -16,6 +18,8 @@ import { GRID_GAP, useGridColumns, useIsDesktop, useIsWide } from '@/lib/layout'
 import { useOrders } from '@/lib/queries';
 import { usePullRefresh } from '@/lib/use-pull-refresh';
 import { useSearch } from '@/lib/use-search';
+import { useWorkshop } from '@/lib/use-workshop';
+import WorkshopPausedBanner from '@/components/workshop-paused-banner';
 
 // The orders as cards: on the phone in a list, on a tablet in a grid.
 function OrdersList() {
@@ -24,7 +28,15 @@ function OrdersList() {
   const search = useSearch();
   const { query } = search;
 
-  const orders = useOrders({ q: query });
+  const { canWrite } = useWorkshop();
+  // In a workshop with a team: all the orders, the person's own, or the queue. (In a workshop of one the list is not filtered at all.)
+  const filter = useQueueFilter();
+  const orders = useOrders({
+    q: query,
+    queue: filter.queue === 'all' ? undefined : filter.queue === 'mine' ? 'mine' : 'none',
+    me: filter.me,
+  });
+  const { give, sheet: giveSheet } = useGiveSheet();
   const items = orders.data?.pages.flatMap((page) => page.items) ?? [];
   const contentTop = useDetailContentTop(TAB_HEADER_DROP);
 
@@ -47,8 +59,10 @@ function OrdersList() {
   // The field is the first thing of the list, and goes up with it. Under the floating header of the phone it has room above it: on iOS
   // the list starts 20 pt higher than the foot of the header (see `underHeader`), and that much more is added to it.
   const listHeader = (
-    <View className={wide ? '' : Platform.OS === 'ios' ? 'pt-7' : 'pt-2'}>
+    <View className={`${wide ? '' : Platform.OS === 'ios' ? 'pt-7' : 'pt-2'} ${filter.team ? 'gap-2' : ''}`}>
+      <WorkshopPausedBanner className="mb-2" />
       <SearchField value={search.text} onChangeText={search.setText} placeholder={t('orders_search_placeholder')} />
+      {filter.team ? <QueueChips value={filter.queue} onChange={filter.setQueue} waiting={filter.waiting} /> : null}
     </View>
   );
 
@@ -58,17 +72,20 @@ function OrdersList() {
       width="wide"
       // The sidebar has the button of the new order: there is none here on a wide page.
       wideDock={false}
+      // (A member of a paused workshop reads and does not write: no new order.)
       dock={
-        <View className="flex-row w-full gap-1">
-          <Shortcut
-            icon={Plus}
-            label={t('new_order')}
-            color={colors.newOrder}
-            contentColor="#000000"
-            className="px-5 py-5 w-full"
-            onPress={() => router.push('/orders/new')}
-          />
-        </View>
+        canWrite ? (
+          <View className="flex-row w-full gap-1">
+            <Shortcut
+              icon={Plus}
+              label={t('new_order')}
+              color={colors.newOrder}
+              contentColor="#000000"
+              className="px-5 py-5 w-full"
+              onPress={() => router.push('/orders/new')}
+            />
+          </View>
+        ) : undefined
       }
     >
       <ScreenHeader floating drop={TAB_HEADER_DROP} title={t('tab_orders')} />
@@ -99,7 +116,7 @@ function OrdersList() {
         }}
         renderItem={({ item, index }) => (
           <GridItem columns={columns} index={index} count={items.length}>
-            <OrderCard order={item} fill={columns > 1} />
+            <OrderCard order={item} fill={columns > 1} onGive={give} />
           </GridItem>
         )}
         ListEmptyComponent={
@@ -107,6 +124,12 @@ function OrdersList() {
             <ListSkeleton />
           ) : orders.isError ? (
             <ErrorState error={orders.error} onRetry={() => orders.refetch()} />
+          ) : !query && filter.queue !== 'all' ? (
+            <EmptyState
+              icon={ClipboardList}
+              title={t(filter.queue === 'mine' ? 'queue_empty_mine_title' : 'queue_empty_none_title')}
+              message={t(filter.queue === 'mine' ? 'queue_empty_mine_message' : 'queue_empty_none_message')}
+            />
           ) : !query ? (
             <EmptyState
               icon={ClipboardList}
@@ -123,6 +146,7 @@ function OrdersList() {
           orders.isFetchingNextPage ? <ActivityIndicator className="py-4" color={colors.primary} /> : undefined
         }
       />
+      {giveSheet}
     </Screen>
   );
 }

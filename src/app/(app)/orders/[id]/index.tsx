@@ -20,6 +20,7 @@ import {
 } from '@/components/icons';
 import UserIcon from '@/components/icons/user-icon';
 import { useDueText } from '@/components/order-card';
+import { PeopleSection } from '@/components/performer';
 import ReadyMessageSheet from '@/components/ready-message-sheet';
 import SyncBadge from '@/components/sync-badge';
 import ActionSheet from '@/components/ui/action-sheet';
@@ -38,6 +39,7 @@ import { ErrorState } from '@/components/ui/states';
 import StatusSteps from '@/components/ui/status-steps';
 import { Text } from '@/components/ui/text';
 import { useToast } from '@/components/ui/toast';
+import WorkshopPausedBanner from '@/components/workshop-paused-banner';
 import { useAuth } from '@/lib/auth';
 import { copyText, emailTo } from '@/lib/contact';
 import { describeError } from '@/lib/errors';
@@ -55,6 +57,7 @@ import { useMark } from '@/lib/offline/react';
 import { describeStrings, orderAsText, readyMessage } from '@/lib/order-text';
 import { useDeleteOrder, useOrder, useUpdateOrder } from '@/lib/queries';
 import { ORDER_STATUSES, type OrderStatus } from '@/lib/types';
+import { useSelf, useWorkshop } from '@/lib/use-workshop';
 
 // What the main button does for each status: where the order goes next.
 const NEXT: Partial<
@@ -95,6 +98,8 @@ export default function OrderDetails() {
   const { today, dueText } = useDueText();
   const desktop = useIsDesktop();
   const wide = useIsWide();
+  const { canWrite, canDeleteOrder, role } = useWorkshop();
+  const self = useSelf();
 
   const [menu, setMenu] = useState(false);
   const [contact, setContact] = useState(false);
@@ -123,10 +128,13 @@ export default function OrderDetails() {
     );
   }
 
-  const next = NEXT[order.status];
+  // Who may change this order: anyone who may write, but a master only the orders that are theirs. An order that is in the queue, or is
+  // another's, is read; a master takes it from the section "People". (In a workshop of one this is always true.)
+  const canChange = canWrite && (role !== 'master' || (!!self && order.assignee?.id === self.id));
+  const next = canChange ? NEXT[order.status] : undefined;
   // The status before this one, which the order can be taken back to (a tap on the wrong button, or the racket is not done after all).
   const index = ORDER_STATUSES.indexOf(order.status);
-  const previous: OrderStatus | undefined = index > 0 ? ORDER_STATUSES[index - 1] : undefined;
+  const previous: OrderStatus | undefined = canChange && index > 0 ? ORDER_STATUSES[index - 1] : undefined;
   const overdue = isOverdue(order, today);
   const money = (amount: number | null) => formatMoney(amount, currency, language);
   const hasContact = !!(order.client.phone || order.client.email);
@@ -282,7 +290,7 @@ export default function OrderDetails() {
             tone={order.is_paid ? 'info' : 'warning'}
           />
         </View>
-        {order.is_paid ? (
+        {!canChange ? null : order.is_paid ? (
           <Shortcut
             compact
             icon={Undo2}
@@ -345,6 +353,8 @@ export default function OrderDetails() {
       <DetailScroll
         contentContainerClassName="gap-4 p-page pb-28 md:pb-12"
         showsVerticalScrollIndicator={false}>
+        {/* A member of a paused workshop reads and does not write. */}
+        <WorkshopPausedBanner />
         {/* Where the order stands and whom it is for: one block. */}
         <Card className="gap-4">
           <View className="flex-row flex-wrap items-center gap-2">
@@ -403,6 +413,7 @@ export default function OrderDetails() {
           <TwoColumns
             first={
               <>
+                <PeopleSection order={order} />
                 {racketBlock}
                 {notesBlock}
               </>
@@ -416,6 +427,7 @@ export default function OrderDetails() {
           />
         ) : (
           <>
+            <PeopleSection order={order} />
             {racketBlock}
             {datesBlock}
             {notesBlock}
@@ -432,23 +444,34 @@ export default function OrderDetails() {
           ...(previous
             ? [{ label: t('action_back', { status: t(`status_${previous}`) }), icon: Undo2, onPress: () => void move(previous) }]
             : []),
-          {
-            label: t('edit_order'),
-            icon: Pencil,
-            onPress: () => router.push({ pathname: '/orders/[id]/edit', params: { id: order.id } }),
-          },
-          {
-            label: t('repeat_order'),
-            icon: Repeat,
-            onPress: () => router.push({ pathname: '/orders/new', params: { from: order.id } }),
-          },
+          ...(canChange
+            ? [
+                {
+                  label: t('edit_order'),
+                  icon: Pencil,
+                  onPress: () => router.push({ pathname: '/orders/[id]/edit', params: { id: order.id } }),
+                },
+              ]
+            : []),
+          ...(canWrite
+            ? [
+                {
+                  label: t('repeat_order'),
+                  icon: Repeat,
+                  onPress: () => router.push({ pathname: '/orders/new', params: { from: order.id } }),
+                },
+              ]
+            : []),
           {
             label: t('contact_customer'),
             icon: Phone,
             onPress: () => (hasContact ? setContact(true) : toast.error(t('no_contact_details'))),
           },
           { label: t('copy_order_details'), icon: Copy, onPress: () => void copyDetails() },
-          { label: t('delete_order'), icon: Trash2, destructive: true, onPress: () => void askDelete() },
+          // (A master does not delete orders; nobody does while the workshop is paused.)
+          ...(canDeleteOrder
+            ? [{ label: t('delete_order'), icon: Trash2, destructive: true, onPress: () => void askDelete() }]
+            : []),
         ]}
       />
       <ContactSheet

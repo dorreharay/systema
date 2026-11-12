@@ -3,6 +3,7 @@ import { memo } from 'react';
 import { View } from 'react-native';
 
 import { CalendarDays, Check, Clock } from '@/components/icons';
+import { PerformerLine } from '@/components/performer';
 import SyncBadge from '@/components/sync-badge';
 import { StatusBadge } from '@/components/ui/badge';
 import Card from '@/components/ui/card';
@@ -14,6 +15,7 @@ import { useI18n } from '@/lib/i18n';
 import { useMark } from '@/lib/offline/react';
 import { describeSetup } from '@/lib/order-text';
 import type { Order } from '@/lib/types';
+import { useWorkshop } from '@/lib/use-workshop';
 
 // How many orders of a history (a client's, a racket's) its page opens with. Someone who comes often has many, and each is
 // a card with a lot in it: all of them at once made the page open with a pause. The rest is one tap away.
@@ -39,10 +41,20 @@ export function useDueText() {
 // The line above the name says where the order stands (the status, as a badge) and when it was received. Then who it is
 // for and what it costs, and what is being strung; the numbers, the price and the number to quote, are in a column on
 // the right. The last line is the day it is to be handed over (red when it is late), or, once it has been, the day it
-// was; it is left out when there is no such day. A tap opens the order. A card changes only with its order, so a page
+// was; it is left out when there is no such day. In a workshop with a team the last line is who strings it (or "No performer" with a button
+// to take it or to give it: `onGive`, for the owner). A tap opens the order. A card changes only with its order, so a page
 // with many of them (a letter typed in a search, a sheet opened) does not draw them all again.
-const OrderCard = memo(function OrderCard({ order, fill }: { order: Order; fill?: boolean }) {
+const OrderCard = memo(function OrderCard({
+  order,
+  fill,
+  onGive,
+}: {
+  order: Order;
+  fill?: boolean;
+  onGive?: (order: Order) => void;
+}) {
   const { user } = useAuth();
+  const { team } = useWorkshop();
   const { t, language } = useI18n();
   const { dateText, today } = useDueText();
   const mark = useMark(order.id);
@@ -65,6 +77,8 @@ const OrderCard = memo(function OrderCard({ order, fill }: { order: Order; fill?
   return (
     <Card
       onPress={() => router.push({ pathname: '/orders/[id]', params: { id: order.id } })}
+      // (With a team the card has a button of its own in it, and on the web a button cannot hold another one.)
+      nested={team}
       className={`gap-1 ${fill ? 'flex-1' : ''}`}
       accessibilityLabel={t('order_card_label', { number: order.number ?? '-', client: order.client.name })}>
       <View className="flex-row items-center justify-between gap-3">
@@ -108,6 +122,7 @@ const OrderCard = memo(function OrderCard({ order, fill }: { order: Order; fill?
           </Text>
         </View>
       ) : null}
+      <PerformerLine order={order} onGive={onGive} />
     </Card>
   );
 });

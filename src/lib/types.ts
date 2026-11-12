@@ -57,6 +57,9 @@ export type LastSetup = Setup & {
   string_price: number | null;
 };
 
+/** Who took a racket or a string from the stock last, and for which order. */
+export type LastUsed = { order_number: number; at: string; by: { id: string; name: string | null } | null };
+
 export type Racket = {
   id: string;
   // The owner. A catalog racket, one the stringer keeps in stock, has none.
@@ -71,6 +74,8 @@ export type Racket = {
   available: boolean;
   orders_count: number;
   last_setup: LastSetup | null;
+  // Only in a workshop with a team, and only for a catalog racket: the order that took it last (null: none did). Absent otherwise.
+  last_used?: LastUsed | null;
 };
 
 export type RacketDetail = Racket & { orders: Order[] };
@@ -90,6 +95,8 @@ export type CatalogString = {
   track_stock: boolean;
   stock: number;
   available: boolean;
+  // Only in a workshop with a team: the order that took it last (null: none did). Absent otherwise.
+  last_used?: LastUsed | null;
 };
 
 // The reference list of rackets and strings that exist (names, no photos): what a new racket or string of the
@@ -114,6 +121,9 @@ export type Service = {
   active: boolean;
 };
 
+/** A person of the workshop as the server shows them on an order: an id and a name, never an address. */
+export type Person = { id: string; name: string };
+
 export type Order = Setup & {
   id: string;
   // The server numbers the orders 1, 2, 3... for each stringer. An order made without a connection has none until it has
@@ -134,6 +144,11 @@ export type Order = Setup & {
   started_at: string | null;
   ready_at: string | null;
   completed_at: string | null;
+  // Who took the order in, and who strings it (none: it waits in the queue). Only a workshop with a team has the second. A copy that an older
+  // version of the app saved does not say, and is taken to have neither.
+  accepted_by?: Person | null;
+  assignee?: Person | null;
+  assigned_at?: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -196,4 +211,6 @@ export type OrderInput = Partial<Setup> & {
   services?: { service_id: string | null; name: string; price: number | null }[];
   status?: OrderStatus;
   is_paid?: boolean;
+  // Only for a new order, and only the owner's to choose: who strings it (a master's own order is theirs, a receptionist's goes to the queue).
+  assignee_id?: string | null;
 };

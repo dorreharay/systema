@@ -85,6 +85,13 @@
       "when": 1794436491310,
       "tag": "0011_studio_interest",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1794441737530,
+      "tag": "0012_studio_team",
+      "breakpoints": true
     }
   ]
 }

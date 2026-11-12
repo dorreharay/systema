@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { View } from 'react-native';
 
 import { Check } from '@/components/icons';
+import NoRightsNote from '@/components/no-rights-note';
 import PlusIcon from '@/components/icons/plus-icon';
 import { colors } from '@/components/ui/colors';
 import EnterSubmits from '@/components/ui/enter-submits';
@@ -17,6 +18,7 @@ import { currencySymbol, formatNumber, parseDecimal } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import { useCreateService, useUpdateService } from '@/lib/queries';
 import type { Service } from '@/lib/types';
+import { useWorkshop } from '@/lib/use-workshop';
 
 type ServiceFormSheetProps = {
   visible: boolean;
@@ -119,9 +121,11 @@ function ServiceForm({ service, onClose }: Omit<ServiceFormSheetProps, 'visible'
 // Add or edit something the stringer charges for.
 export default function ServiceFormSheet({ visible, onClose, ...rest }: ServiceFormSheetProps) {
   const { t } = useI18n();
+  // The price list is the owner's.
+  const { canEditCatalog } = useWorkshop();
   return (
-    <Sheet visible={visible} onClose={onClose} form title={rest.service ? t('edit_service') : t('add_service')}>
-      <ServiceForm onClose={onClose} {...rest} />
+    <Sheet visible={visible} onClose={onClose} form={canEditCatalog} title={rest.service ? t('edit_service') : t('add_service')}>
+      {canEditCatalog ? <ServiceForm onClose={onClose} {...rest} /> : <NoRightsNote />}
     </Sheet>
   );
 }

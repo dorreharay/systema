@@ -6,7 +6,7 @@ import { StackNavBar } from '@/components/app-tab-bar';
 import { Library, Tags } from '@/components/icons';
 import PlusIcon from '@/components/icons/plus-icon';
 import RacketFormSheet from '@/components/racket-form-sheet';
-import { StockBadge, StockSheet, sortByStock } from '@/components/stock';
+import { StockBadge, StockLastUsed, StockSheet, sortByStock } from '@/components/stock';
 import StringFormSheet from '@/components/string-form-sheet';
 import { Badge } from '@/components/ui/badge';
 import Card from '@/components/ui/card';
@@ -27,6 +27,7 @@ import { stringLabel } from '@/lib/order-draft';
 import { useRackets, useStrings } from '@/lib/queries';
 import { usePullRefresh } from '@/lib/use-pull-refresh';
 import { useSearch } from '@/lib/use-search';
+import { useWorkshop } from '@/lib/use-workshop';
 import type { CatalogString, Racket } from '@/lib/types';
 
 type Tab = 'rackets' | 'strings';
@@ -117,6 +118,8 @@ const RacketCard = memo(function RacketCard({ racket, fill }: { racket: Racket; 
         <StockBadge kind="racket" item={racket} onPress={() => sheets.stock({ kind: 'racket', item: racket })} />
         <Text className="text-[14.3px] text-muted">{t('orders_count', { count: racket.orders_count })}</Text>
       </View>
+      {/* (In a workshop with a team: who took it from the stock last.) */}
+      <StockLastUsed item={racket} />
     </Card>
   );
 });
@@ -125,11 +128,13 @@ const StringCard = memo(function StringCard({ string, fill }: { string: CatalogS
   const { user } = useAuth();
   const { t, language } = useI18n();
   const sheets = useSheets();
+  // The catalog is the owner's: for anyone else a string is read, not opened for editing.
+  const { canEditCatalog } = useWorkshop();
 
   return (
     <Card
       nested
-      onPress={() => sheets.editString(string)}
+      onPress={canEditCatalog ? () => sheets.editString(string) : undefined}
       accessibilityLabel={stringLabel(string)}
       className={`gap-1.5 ${fill ? 'flex-1' : ''}`}>
       <View className="flex-row items-center justify-between gap-3">
@@ -144,6 +149,7 @@ const StringCard = memo(function StringCard({ string, fill }: { string: CatalogS
         <Badge label={t(`string_type_${string.type}`)} />
         <StockBadge kind="string" item={string} onPress={() => sheets.stock({ kind: 'string', item: string })} />
       </View>
+      <StockLastUsed item={string} />
     </Card>
   );
 });
@@ -159,6 +165,8 @@ export default function Catalog() {
 function CatalogPage() {
   const { t } = useI18n();
   const sheets = useSheets();
+  // Adding to the catalog is the owner's; everyone else reads the catalog and its counts.
+  const { canEditCatalog } = useWorkshop();
   const [tab, setTab] = useState<Tab>('rackets');
   // Each tab is searched on its own: the words are cleared when the tab is changed.
   const search = useSearch();
@@ -212,14 +220,16 @@ function CatalogPage() {
       flush
       width="wide"
       dock={
-        <Shortcut
-          icon={PlusIcon}
-          label={racketsTab ? t('add_racket') : t('add_string')}
-          color={colors.catalog}
-          contentColor="#000000"
-          className="px-5 py-5 w-full"
-          onPress={racketsTab ? sheets.addRacket : sheets.addString}
-        />
+        canEditCatalog ? (
+          <Shortcut
+            icon={PlusIcon}
+            label={racketsTab ? t('add_racket') : t('add_string')}
+            color={colors.catalog}
+            contentColor="#000000"
+            className="px-5 py-5 w-full"
+            onPress={racketsTab ? sheets.addRacket : sheets.addString}
+          />
+        ) : undefined
       }
       footer={<StackNavBar />}>
       <DetailHeader floating topLevel title={t('tab_catalog')} />

@@ -61,6 +61,10 @@ export function describeOp(op: Op, tables: Tables, t: Translate): string {
     }
     case 'order.delete':
       return t('op_order_delete', { order: order(op.subject, op.label) });
+    case 'order.assign':
+      return op.assignee
+        ? t('op_order_assign', { order: order(op.subject), name: op.assignee.name })
+        : t('op_order_unassign', { order: order(op.subject) });
     case 'photo.delete':
       return t('op_photo_delete', { order: order(op.orderId) });
   }

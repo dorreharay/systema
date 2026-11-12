@@ -9,9 +9,10 @@ import { idConflict } from '../utils/clientIds.js';
 import { notFound, rejectMalformedIds } from '../utils/http.js';
 import { toNumber } from '../utils/orders.js';
 import { money, requiredText, uuid } from '../utils/validators.js';
+import { OWNER, workshopRoles, writableWorkshop } from '../utils/workshop.js';
 
 const router = express.Router();
-router.use(requireAuth);
+router.use(requireAuth, writableWorkshop);
 rejectMalformedIds(router);
 
 const serviceSchema = z.object({
@@ -47,7 +48,7 @@ router.get('/', async (req, res) => {
   const rows = await db
     .select()
     .from(services)
-    .where(eq(services.user_id, req.user.id))
+    .where(eq(services.user_id, req.workshop.ownerId))
     .orderBy(
       sql`${services.active} desc`,
       sql`(${services.kind} = 'labor') desc`,
@@ -58,27 +59,27 @@ router.get('/', async (req, res) => {
 
 // POST /api/services: a service with the `id` that this stringer already has is not made again; it is answered with 200 and the
 // service as it is. The id of another stringer's service is a 409.
-router.post('/', validateBody(newServiceSchema), async (req, res) => {
+router.post('/', workshopRoles(OWNER), validateBody(newServiceSchema), async (req, res) => {
   const { id, ...fields } = req.body;
   const [row] = await db
     .insert(services)
-    .values({ ...fields, ...(id && { id }), user_id: req.user.id })
+    .values({ ...fields, ...(id && { id }), user_id: req.workshop.ownerId })
     .onConflictDoNothing({ target: services.id })
     .returning();
   if (row) return res.status(201).json(serialize(row));
 
   const [existing] = await db.select().from(services).where(eq(services.id, id)).limit(1);
-  if (!existing || existing.user_id !== req.user.id) throw idConflict();
+  if (!existing || existing.user_id !== req.workshop.ownerId) throw idConflict();
   res.status(200).json(serialize(existing));
 });
 
 // PATCH /api/services/:id: also how a service is archived (`active: false`) and brought back
-router.patch('/:id', validateBody(serviceSchema.partial()), async (req, res) => {
-  await findService(req.params.id, req.user.id);
+router.patch('/:id', workshopRoles(OWNER), validateBody(serviceSchema.partial()), async (req, res) => {
+  await findService(req.params.id, req.workshop.ownerId);
   const [row] = await db
     .update(services)
     .set(req.body)
-    .where(owned(req.params.id, req.user.id))
+    .where(owned(req.params.id, req.workshop.ownerId))
     .returning();
   res.json(serialize(row));
 });

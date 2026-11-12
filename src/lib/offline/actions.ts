@@ -11,7 +11,8 @@ import { ApiError } from '../api-error';
 import { orderNumber } from '../format';
 import { phoneKey } from '../phone';
 import { assertOrderAllowed, type OrderCap } from '../subscription';
-import type { CatalogString, Client, OrderDetail, OrderInput, Racket, Service } from '../types';
+import type { CatalogString, Client, OrderDetail, OrderInput, Person, Racket, Service } from '../types';
+import type { WorkshopRole } from '../workshop';
 import { newId } from './ids';
 import type { ClientInput, RacketInput, ServiceInput, StringInput } from './inputs';
 import { discardSet, inOrder, opMeta } from './outbox';
@@ -56,12 +57,16 @@ export function createActions(
     firstTryMs = FIRST_TRY_MS,
     orderCap = () => null,
     stockOn = () => true,
+    self = () => null,
   }: {
     firstTryMs?: number;
     // The limit of new orders in a month that the plan of the account sets, asked each time an order is made; none: no limit.
     orderCap?: () => OrderCap | null;
     // Whether the plan counts the stock. Where it does not (Free) an order is never refused for what is not in the stock.
     stockOn?: () => boolean;
+    // Who is working and in what role, asked each time an order is made: a master's own order is theirs, a receptionist's goes to the queue
+    // (the server decides the same; the phone shows it at once).
+    self?: () => { person: Person | null; role: WorkshopRole } | null;
   } = {}
 ) {
   const tables = () => store.getSnapshot().tables;
@@ -414,7 +419,9 @@ export function createActions(
     }
   }
 
-  async function createOrder(input: OrderInput): Promise<OrderDetail> {
+  async function createOrder(given: OrderInput & { assignee?: Person | null }): Promise<OrderDetail> {
+    const { assignee: chosen, ...input } = given;
+    delete input.assignee_id;
     const t = tables();
     if (!input.client_id) throw invalid('client_id', 'Choose a client');
     if (!input.racket_id && !input.new_racket) throw invalid('racket_id', 'Choose a racket');
@@ -433,12 +440,18 @@ export function createActions(
       ...(input.new_racket && { new_racket: { ...input.new_racket, id: input.new_racket.id ?? newId() } }),
     };
     delete create.status;
+    // Who takes it in is the person at the phone; who strings it depends on the role. Without a team there is no assignee at all: the
+    // field is left out, and the server leaves it empty too.
+    const me = self();
+    const assignee = me?.role === 'master' ? me.person : me?.role === 'owner' ? (chosen ?? null) : null;
     const op: OpOf<'order.create'> = {
       ...stamp(),
       type: 'order.create',
       subject: id,
       input: create,
       snapshot: snapshotOf(t, input.client_id, input.racket_id),
+      ...(me && { by: me.person }),
+      ...(assignee && { assignee }),
     };
     if (stockOn()) assertStock(t, applyOp(t, op), id);
 
@@ -518,6 +531,28 @@ export function createActions(
     return { ok: true as const };
   }
 
+  /**
+   * Gives the order to a person, or back to the queue (null). The server may say no (someone took it first: 409 `order_taken`; a role that
+   * does not allow it: 403): such a change is not left in the queue to be played again on the screen, it is taken out and the refusal is thrown.
+   */
+  async function assignOrder(id: string, assignee: Person | null): Promise<OrderDetail> {
+    const current = tables().orders[id];
+    if (!current) throw new ApiError(404, 'Not found');
+    if ((current.assignee?.id ?? null) === (assignee?.id ?? null)) return current;
+    const op: OpOf<'order.assign'> = { ...stamp(), type: 'order.assign', subject: id, assignee };
+    await send(op);
+    const taken = await engine.waitFor(op.id, firstTryMs);
+    if (!taken) {
+      const left = store.getSnapshot().outbox.find((candidate) => candidate.id === op.id);
+      if (left?.failure) {
+        await store.discard(op.id);
+        engine.kick();
+        throw new ApiError(left.failure.status, left.failure.message, left.failure.code);
+      }
+    }
+    return tables().orders[id] ?? current;
+  }
+
   async function deletePhoto(photoId: string) {
     const order = Object.values(tables().orders).find((candidate) => candidate.photos.some((photo) => photo.id === photoId));
     if (!order) return { ok: true as const };
@@ -540,6 +575,7 @@ export function createActions(
     createOrder,
     updateOrder,
     deleteOrder,
+    assignOrder,
     deletePhoto,
   };
 }

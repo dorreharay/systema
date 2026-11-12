@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { View } from 'react-native';
 
 import { Check } from '@/components/icons';
+import NoRightsNote from '@/components/no-rights-note';
 import PlusIcon from '@/components/icons/plus-icon';
 import { colors } from '@/components/ui/colors';
 import EnterSubmits from '@/components/ui/enter-submits';
@@ -14,6 +15,7 @@ import { clientFromSearch, optionalLabel } from '@/lib/format';
 import { useI18n, type Translate } from '@/lib/i18n';
 import { useCreateClient, useUpdateClient } from '@/lib/queries';
 import type { Client } from '@/lib/types';
+import { useWorkshop } from '@/lib/use-workshop';
 
 type ClientFormSheetProps = {
   visible: boolean;
@@ -159,13 +161,15 @@ function ClientForm({ client, search, onClose, onSaved }: Omit<ClientFormSheetPr
 // Add or edit a client. The name and the phone are needed: the rest can be filled in when it comes up.
 export default function ClientFormSheet({ visible, onClose, ...rest }: ClientFormSheetProps) {
   const { t } = useI18n();
+  // (Everyone who takes orders in makes clients; only a paused workshop does not.)
+  const { canWrite } = useWorkshop();
   return (
     <Sheet
       visible={visible}
       onClose={onClose}
-      form
+      form={canWrite}
       title={rest.client ? t('edit_client') : t('add_client')}>
-      <ClientForm onClose={onClose} {...rest} />
+      {canWrite ? <ClientForm onClose={onClose} {...rest} /> : <NoRightsNote />}
     </Sheet>
   );
 }

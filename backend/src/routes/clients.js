@@ -12,9 +12,10 @@ import { phoneKey } from '../utils/phone.js';
 import {
   matchesWords, optionalEmail, optionalText, requiredText, searchQuery, uuid,
 } from '../utils/validators.js';
+import { visibleOrders, writableWorkshop } from '../utils/workshop.js';
 
 const router = express.Router();
-router.use(requireAuth);
+router.use(requireAuth, writableWorkshop);
 rejectMalformedIds(router);
 
 const clientSchema = z.object({
@@ -112,7 +113,7 @@ router.get('/', async (req, res) => {
     .from(clients)
     .where(
       and(
-        eq(clients.user_id, req.user.id),
+        eq(clients.user_id, req.workshop.ownerId),
         isNull(clients.deleted_at),
         q && matchesWords(sql`${clients.name} || ' ' || coalesce(${clients.phone}, '')`, q)
       )
@@ -129,16 +130,16 @@ router.post('/', validateBody(newClientSchema), async (req, res) => {
   let result;
   try {
     result = await db.transaction(async (tx) => {
-      await lockClients(tx, req.user.id);
+      await lockClients(tx, req.workshop.ownerId);
       if (id) {
         const [existing] = await tx.select({ client: clients, ...stats }).from(clients).where(eq(clients.id, id)).limit(1);
-        if (existing && existing.client.user_id !== req.user.id) throw idConflict();
+        if (existing && existing.client.user_id !== req.workshop.ownerId) throw idConflict();
         if (existing) return { found: existing };
       }
-      await rejectTakenPhone(tx, req.user.id, fields.phone);
+      await rejectTakenPhone(tx, req.workshop.ownerId, fields.phone);
       const [created] = await tx
         .insert(clients)
-        .values({ ...fields, ...(id && { id }), user_id: req.user.id })
+        .values({ ...fields, ...(id && { id }), user_id: req.workshop.ownerId })
         .returning();
       return { created };
     });
@@ -153,7 +154,7 @@ router.post('/', validateBody(newClientSchema), async (req, res) => {
 
 // GET /api/clients/:id: the client with their rackets and order history
 router.get('/:id', async (req, res) => {
-  const found = await findClient(req.params.id, req.user.id);
+  const found = await findClient(req.params.id, req.workshop.ownerId);
 
   const clientRackets = await db
     .select({
@@ -168,7 +169,7 @@ router.get('/:id', async (req, res) => {
     .orderBy(sql`lower(${rackets.brand})`, sql`lower(${rackets.model})`);
 
   const history = await withOrderJoins(db.select(orderColumns).from(orders))
-    .where(and(eq(orders.client_id, found.client.id), eq(orders.user_id, req.user.id)))
+    .where(and(eq(orders.client_id, found.client.id), eq(orders.user_id, req.workshop.ownerId), visibleOrders(req.workshop, req.user.id)))
     .orderBy(desc(orders.number))
     .limit(100);
 
@@ -177,25 +178,25 @@ router.get('/:id', async (req, res) => {
 
 // PATCH /api/clients/:id: a new phone number that another client has is a 409 too
 router.patch('/:id', validateBody(clientSchema.partial()), async (req, res) => {
-  const { client } = await findClient(req.params.id, req.user.id);
+  const { client } = await findClient(req.params.id, req.workshop.ownerId);
   // Only a number that changes is looked up: a client who shares theirs with another (made before this check) can still be edited.
   const newNumber = req.body.phone !== undefined && phoneKey(req.body.phone) !== phoneKey(client.phone);
   await db.transaction(async (tx) => {
     if (newNumber) {
-      await lockClients(tx, req.user.id);
-      await rejectTakenPhone(tx, req.user.id, req.body.phone, client.id);
+      await lockClients(tx, req.workshop.ownerId);
+      await rejectTakenPhone(tx, req.workshop.ownerId, req.body.phone, client.id);
     }
-    await tx.update(clients).set(req.body).where(owned(req.params.id, req.user.id));
+    await tx.update(clients).set(req.body).where(owned(req.params.id, req.workshop.ownerId));
   });
-  res.json(serialize(await findClient(req.params.id, req.user.id)));
+  res.json(serialize(await findClient(req.params.id, req.workshop.ownerId)));
 });
 
 // DELETE /api/clients/:id: hides the client and their rackets; their orders stay in the history
 router.delete('/:id', async (req, res) => {
-  await findClient(req.params.id, req.user.id);
+  await findClient(req.params.id, req.workshop.ownerId);
   const now = new Date();
   await db.transaction(async (tx) => {
-    await tx.update(clients).set({ deleted_at: now }).where(owned(req.params.id, req.user.id));
+    await tx.update(clients).set({ deleted_at: now }).where(owned(req.params.id, req.workshop.ownerId));
     await tx
       .update(rackets)
       .set({ deleted_at: now })

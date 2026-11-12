@@ -11,7 +11,7 @@ import { api } from '@/lib/api';
 import { ApiError } from '@/lib/api-error';
 import type { User } from '@/lib/auth-api';
 import { openUrl } from '@/lib/contact';
-import { buyPackage, restoreStore, storeAvailable, storePackages } from '@/lib/store';
+import { buyPackage, restoreStore, storeAvailable, storePackages, type StorePlan } from '@/lib/store';
 import { PurchaseNotSyncedError, StoreUnavailableError } from '@/lib/store-errors';
 import type { Period } from '@/lib/subscription';
 
@@ -40,6 +40,9 @@ export const LIST_PRICES = {
 /** How much cheaper a year of Pro is than twelve months of it, in whole percent. */
 export const YEAR_SAVING = Math.round((1 - LIST_PRICES.pro.year / (LIST_PRICES.pro.month * 12)) * 100);
 
+/** The same for Studio. */
+export const STUDIO_YEAR_SAVING = Math.round((1 - LIST_PRICES.studio.year / (LIST_PRICES.studio.month * 12)) * 100);
+
 /** Where a person turns a subscription off or changes it: Apple's page for it, which only they can open (the app cannot cancel for them). */
 export const MANAGE_SUBSCRIPTIONS_URL = 'https://apps.apple.com/account/subscriptions';
 
@@ -59,12 +62,12 @@ async function readStore(token: string): Promise<User> {
 }
 
 /**
- * Buys Pro (with its free days for a first subscription) and answers with the profile as the server now has it. `userId` is the account's
- * id, which is the customer's id in the store.
+ * Buys a plan, Pro or Studio (with its free days for a first subscription), and answers with the profile as the server now has it. `userId`
+ * is the account's id, which is the customer's id in the store. Studio is sold from its own offering in the store (see store.ts).
  */
-export async function purchasePro(token: string, period: Period, userId: string): Promise<User> {
+export async function purchasePlan(token: string, plan: StorePlan, period: Period, userId: string): Promise<User> {
   if (storeAvailable()) {
-    const item = (await storePackages())[period];
+    const item = (await storePackages(plan))[period];
     // The store has no such product (it is not set up there yet).
     if (!item) throw new StoreUnavailableError();
     await buyPackage(item, userId);
@@ -75,11 +78,14 @@ export async function purchasePro(token: string, period: Period, userId: string)
     return api<User>('/api/billing/dev-grant', {
       method: 'POST',
       token,
-      body: { plan: 'pro', period, trial: true, renews: true },
+      body: { plan, period, trial: true, renews: true },
     });
   }
   throw new StoreUnavailableError();
 }
+
+/** Buys Pro: `purchasePlan` for the plan the app has sold from the first. */
+export const purchasePro = (token: string, period: Period, userId: string) => purchasePlan(token, 'pro', period, userId);
 
 /** Asks the store for what the person has bought before (a new phone, a reinstalled app), and answers with the profile the server then has. */
 export async function restorePurchases(token: string, userId: string): Promise<User> {

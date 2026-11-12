@@ -2,6 +2,7 @@ import { useLocalSearchParams } from 'expo-router';
 import { View } from 'react-native';
 
 import OrderForm from '@/components/order-form';
+import { ReadOnlyPage } from '@/components/workshop-paused-banner';
 import { DetailHeader, Screen } from '@/components/ui/screen';
 import { BlockSkeleton } from '@/components/ui/skeleton';
 import { ErrorState } from '@/components/ui/states';
@@ -9,12 +10,21 @@ import { useAuth } from '@/lib/auth';
 import { useI18n } from '@/lib/i18n';
 import { draftFromOrder } from '@/lib/order-draft';
 import { useOrder } from '@/lib/queries';
+import { useSelf, useWorkshop } from '@/lib/use-workshop';
 
 export default function EditOrder() {
   const { t } = useI18n();
   const { user } = useAuth();
   const { id } = useLocalSearchParams<{ id: string }>();
   const order = useOrder(id);
+  const { canWrite, role } = useWorkshop();
+  const self = useSelf();
+
+  // A paused workshop is read; and a master changes only the orders that are theirs.
+  if (!canWrite) return <ReadOnlyPage title={t('edit_order')} />;
+  if (role === 'master' && order.data && order.data.assignee?.id !== self?.id) {
+    return <ReadOnlyPage title={t('edit_order')} message={t('queue_error_role')} />;
+  }
 
   if (!order.data) {
     return (

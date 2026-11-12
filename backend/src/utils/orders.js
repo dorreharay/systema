@@ -3,10 +3,16 @@
  * orders, and they must answer in the same shape.
  */
 import { eq } from 'drizzle-orm';
-import { clients, orders, rackets } from '../db/schema.js';
+import { alias } from 'drizzle-orm/pg-core';
+import { clients, orders, rackets, users } from '../db/schema.js';
 
 /** A numeric column comes from the driver as text. */
 export const toNumber = (value) => (value === null || value === undefined ? null : Number(value));
+
+// The two people of an order: who took it in and who strings it (see the columns of `orders`).
+const assignee = alias(users, 'assignee');
+const acceptedBy = alias(users, 'accepted_by');
+const personColumns = (table) => ({ id: table.id, full_name: table.full_name, email: table.email });
 
 /** The columns and joins every order query uses. */
 export const orderColumns = {
@@ -14,12 +20,19 @@ export const orderColumns = {
   client: { id: clients.id, name: clients.name, phone: clients.phone, email: clients.email },
   // `client_id` is empty for a catalog racket: one the stringer keeps in stock, which goes with any client.
   racket: { id: rackets.id, brand: rackets.brand, model: rackets.model, client_id: rackets.client_id },
+  assignee: personColumns(assignee),
+  accepted_by: personColumns(acceptedBy),
 };
 
 export const withOrderJoins = (query) =>
   query
     .innerJoin(clients, eq(orders.client_id, clients.id))
-    .innerJoin(rackets, eq(orders.racket_id, rackets.id));
+    .innerJoin(rackets, eq(orders.racket_id, rackets.id))
+    .leftJoin(assignee, eq(orders.assignee_id, assignee.id))
+    .leftJoin(acceptedBy, eq(orders.accepted_by_id, acceptedBy.id));
+
+/** A person of an order as the API shows them: an id and a name, never an address. Nobody: null. */
+const person = (row) => (row?.id ? { id: row.id, name: row.full_name?.trim() || row.email.split('@')[0] } : null);
 
 /** What describes how a racket was strung: copied into a new order by "Repeat last setup". */
 export function setupOf(order) {
@@ -38,7 +51,7 @@ export function setupOf(order) {
 }
 
 /** A row of `orderColumns` as the API shows an order in a list. */
-export function serializeOrder({ order, client, racket }) {
+export function serializeOrder({ order, client, racket, assignee: performer, accepted_by: acceptedBy }) {
   return {
     id: order.id,
     number: order.number,
@@ -58,6 +71,10 @@ export function serializeOrder({ order, client, racket }) {
     started_at: order.started_at,
     ready_at: order.ready_at,
     completed_at: order.completed_at,
+    // Who took it in and who strings it (null: nobody has it yet: it is in the queue). Only a workshop with a team has the second.
+    accepted_by: person(acceptedBy),
+    assignee: person(performer),
+    assigned_at: order.assigned_at,
     created_at: order.created_at,
     updated_at: order.updated_at,
   };

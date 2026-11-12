@@ -17,7 +17,8 @@ export default function PlanStrip({ framed }: { framed?: boolean }) {
   const plan = useSubscription();
   const resetDate = useResetDate();
   const usage = plan.usage;
-  if (!usage) return null;
+  // The plan of a person who works in someone else's workshop is the workshop's: nothing in it is theirs to buy.
+  if (!usage || plan.member) return null;
 
   const strip = (
     <Pressable

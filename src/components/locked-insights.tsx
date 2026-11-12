@@ -9,6 +9,7 @@ import { Text } from '@/components/ui/text';
 import { SELLS_PLANS } from '@/lib/billing';
 import { useI18n } from '@/lib/i18n';
 import { useIsWide } from '@/lib/layout';
+import { useSubscription } from '@/lib/use-subscription';
 
 // A stand-in for the charts, grey: a month of bars, nothing of the stringer's own.
 const BARS = [34, 58, 22, 80, 46, 64, 30];
@@ -21,6 +22,9 @@ export default function LockedInsights() {
   const { t } = useI18n();
   const router = useRouter();
   const wide = useIsWide();
+  const plan = useSubscription();
+  // A person who works in someone else's workshop has no plan of their own to upgrade (and no month overview either).
+  if (plan.member) return null;
 
   return (
     <Pressable

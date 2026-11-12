@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 
 import { Check, ChevronRight, Lock } from '@/components/icons';
+import NoRightsNote from '@/components/no-rights-note';
 import { Badge } from '@/components/ui/badge';
 import { colors } from '@/components/ui/colors';
 import EnterSubmits from '@/components/ui/enter-submits';
@@ -17,7 +18,9 @@ import { describeError } from '@/lib/errors';
 import { formatNumber, parseDecimal } from '@/lib/format';
 import { useI18n, type TKey, type Translate } from '@/lib/i18n';
 import { useUpdateRacket, useUpdateString } from '@/lib/queries';
-import { useEntitlements } from '@/lib/use-subscription';
+import type { LastUsed } from '@/lib/types';
+import { useEntitlements, useSubscription } from '@/lib/use-subscription';
+import { useWorkshop } from '@/lib/use-workshop';
 
 // The stock of the catalog is in the same few places: a switch and a count in the form of an item, a badge in a list,
 // and a small sheet to change the count without opening the item.
@@ -34,6 +37,9 @@ export const useStockOn = () => useEntitlements().stock;
 export function StockLocked({ onClose }: { onClose?: () => void }) {
   const { t } = useI18n();
   const router = useRouter();
+  const plan = useSubscription();
+  // Whoever works in someone else's workshop has no plan of their own to upgrade.
+  if (plan.member) return null;
   return (
     <Pressable
       accessibilityRole="button"
@@ -125,11 +131,13 @@ type StockBadgeProps = {
 export function StockBadge({ kind, item, onPress }: StockBadgeProps) {
   const { t } = useI18n();
   const on = useStockOn();
+  // Everyone sees the counts; only the owner changes them (so for anyone else the badge is not a button).
+  const { canEditCatalog } = useWorkshop();
   if (!item.track_stock || !on) return null;
 
   const label = stockLabel(t, kind, item.stock);
   const badge = <Badge label={label} tone={item.stock > 0 ? 'success' : 'danger'} />;
-  if (!onPress) return badge;
+  if (!onPress || !canEditCatalog) return badge;
 
   return (
     <Pressable
@@ -152,6 +160,22 @@ export function StockLine({ kind, item }: { kind: StockKind; item: Counted }) {
   return (
     <Text className={`text-[14.3px] ${item.stock > 0 ? 'text-muted' : 'text-danger'}`}>
       {stockLabel(t, kind, item.stock)}
+    </Text>
+  );
+}
+
+/**
+ * In a workshop with a team: who took this from the stock last and for which order, as a small muted line under the item ("Last: Olena,
+ * order 14"). Nothing where the server does not say (a workshop of one) or no order has used it.
+ */
+export function StockLastUsed({ item }: { item: { last_used?: LastUsed | null } }) {
+  const { t } = useI18n();
+  const last = item.last_used;
+  if (!last) return null;
+  const name = last.by?.name;
+  return (
+    <Text className="text-[14.3px] text-muted" numberOfLines={1}>
+      {name ? t('stock_last_used', { name, number: last.order_number }) : t('stock_last_used_order', { number: last.order_number })}
     </Text>
   );
 }
@@ -237,9 +261,10 @@ function StockForm({ kind, item, onClose }: Omit<StockSheetProps, 'visible' | 'i
 /** A sheet to set how many of an item there are, for the list and for choosing something that has run out. */
 export function StockSheet({ visible, onClose, item, ...rest }: StockSheetProps) {
   const { t } = useI18n();
+  const { canEditCatalog } = useWorkshop();
   return (
     <Sheet visible={visible} onClose={onClose} title={item ? `${item.brand} ${item.model}` : t('stock_edit_title')}>
-      {item ? <StockForm key={item.id} item={item} onClose={onClose} {...rest} /> : null}
+      {item ? canEditCatalog ? <StockForm key={item.id} item={item} onClose={onClose} {...rest} /> : <NoRightsNote /> : null}
     </Sheet>
   );
 }

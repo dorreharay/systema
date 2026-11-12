@@ -4,6 +4,7 @@ import { users } from '../db/schema.js';
 import { needsConfirmation } from '../utils/emailVerified.js';
 import { HttpError, isUuid } from '../utils/http.js';
 import { SESSION_COOKIE, verifyToken } from '../utils/session.js';
+import { loadWorkshop } from '../utils/workshop.js';
 
 /** The cookie a browser sends, or `Authorization: Bearer <token>`, which is what a native app sends. */
 export function readToken(req) {
@@ -23,6 +24,9 @@ export const allowUnverified = (req, res, next) => {
 /**
  * Sets `req.user` to the signed-in user, or answers 401. Where the email address has to be confirmed (config.emailVerification) an account
  * that has not confirmed it is answered 403 `email_not_verified`, unless the route allows it (see `allowUnverified`).
+ *
+ * Sets `req.workshop` too: whose data the person works in and what their role there is (see utils/workshop.js). A route that reads or writes
+ * the data of the workshop filters by `req.workshop.ownerId`, never by `req.user.id`.
  */
 export async function requireAuth(req, res, next) {
   const token = readToken(req);
@@ -53,6 +57,7 @@ export async function requireAuth(req, res, next) {
   }
 
   req.user = user;
+  req.workshop = await loadWorkshop(user);
   next();
 }
 

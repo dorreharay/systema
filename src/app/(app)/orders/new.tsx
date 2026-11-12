@@ -2,6 +2,7 @@ import { useLocalSearchParams } from 'expo-router';
 import { View } from 'react-native';
 
 import OrderForm from '@/components/order-form';
+import { ReadOnlyPage } from '@/components/workshop-paused-banner';
 import { DetailHeader, Screen } from '@/components/ui/screen';
 import { BlockSkeleton } from '@/components/ui/skeleton';
 import { ErrorState } from '@/components/ui/states';
@@ -10,6 +11,7 @@ import { todayIso } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import { applySetup, emptyDraft, lastSetupOf, orderRacketChoice, withRacket, type Draft } from '@/lib/order-draft';
 import { useOrder, useRacket, useRackets } from '@/lib/queries';
+import { useWorkshop } from '@/lib/use-workshop';
 
 /**
  * A new order. It can start from nothing, from a customer (their only racket is chosen), from a racket
@@ -19,6 +21,7 @@ import { useOrder, useRacket, useRackets } from '@/lib/queries';
 export default function NewOrder() {
   const { t } = useI18n();
   const { user } = useAuth();
+  const { canWrite } = useWorkshop();
   const params = useLocalSearchParams<{ clientId?: string; racketId?: string; from?: string }>();
   const racket = useRacket(params.racketId);
   const source = useOrder(params.from);
@@ -31,6 +34,9 @@ export default function NewOrder() {
   ].filter((item) => !!item);
   const failed = needed.find((item) => item.isError);
   const loading = needed.some((item) => item.isPending);
+
+  // A member of a paused workshop reads and does not write: there is no new order to make.
+  if (!canWrite) return <ReadOnlyPage title={t('new_order_title')} />;
 
   if (failed || loading) {
     return (

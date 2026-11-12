@@ -29,6 +29,7 @@ import { describeError } from '@/lib/errors';
 import { racketName } from '@/lib/format';
 import { useI18n } from '@/lib/i18n';
 import { useClient, useDeleteClient } from '@/lib/queries';
+import { useWorkshop } from '@/lib/use-workshop';
 
 export default function ClientDetails() {
   const { t } = useI18n();
@@ -39,6 +40,8 @@ export default function ClientDetails() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const query = useClient(id);
   const remove = useDeleteClient();
+  // A member of a paused workshop reads and does not write: no new order, no changes to the client.
+  const { canWrite } = useWorkshop();
   const [editing, setEditing] = useState(false);
   // A racket is added from the reference list; one that is not in it is typed in, in a form that comes after.
   const [pickingRacket, setPickingRacket] = useState(false);
@@ -86,23 +89,25 @@ export default function ClientDetails() {
       flush
       width="medium"
       dock={
-        <Shortcut
-          icon={PlusIcon}
-          label={t('new_order')}
-          color={colors.newOrder}
-          contentColor={colors.ink}
-          className="px-5 py-5 w-full"
-          onPress={() => router.push({ pathname: '/orders/new', params: { clientId: client.id } })}
-        />
+        canWrite ? (
+          <Shortcut
+            icon={PlusIcon}
+            label={t('new_order')}
+            color={colors.newOrder}
+            contentColor={colors.ink}
+            className="px-5 py-5 w-full"
+            onPress={() => router.push({ pathname: '/orders/new', params: { clientId: client.id } })}
+          />
+        ) : undefined
       }
-      footer={<View style={{ height: Math.max(insets.bottom, 12) + 24 }} />}>
+      footer={canWrite ? <View style={{ height: Math.max(insets.bottom, 12) + 24 }} /> : undefined}>
       <DetailHeader
         floating
         title={client.name}
         right={
           <>
             {client.phone ? <CallButton phone={client.phone} /> : null}
-            <IconButton icon={MoreHorizontal} label={t('more_actions')} onPress={() => setMenu(true)} />
+            {canWrite ? <IconButton icon={MoreHorizontal} label={t('more_actions')} onPress={() => setMenu(true)} /> : null}
           </>
         }
       />
@@ -129,19 +134,21 @@ export default function ClientDetails() {
           </Card>
         ) : null}
 
-        <Section title={t('section_rackets')} actionLabel={t('add')} onAction={() => setPickingRacket(true)}>
+        <Section title={t('section_rackets')} actionLabel={canWrite ? t('add') : undefined} onAction={() => setPickingRacket(true)}>
           {client.rackets.length === 0 ? (
             <Card className="items-center gap-3 py-6">
               <Text className="text-center text-[16.5px] text-muted">{t('client_no_rackets')}</Text>
-              <Shortcut
-                compact
-                className="self-stretch"
-                icon={PlusIcon}
-                label={t('add_racket')}
-                color={colors.catalog}
-                contentColor={colors.ink}
-                onPress={() => setPickingRacket(true)}
-              />
+              {canWrite ? (
+                <Shortcut
+                  compact
+                  className="self-stretch"
+                  icon={PlusIcon}
+                  label={t('add_racket')}
+                  color={colors.catalog}
+                  contentColor={colors.ink}
+                  onPress={() => setPickingRacket(true)}
+                />
+              ) : null}
             </Card>
           ) : (
             <View className="gap-3">

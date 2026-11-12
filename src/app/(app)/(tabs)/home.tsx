@@ -8,6 +8,8 @@ import CatalogIcon from '@/components/icons/catalog-icon';
 import PlusIcon from '@/components/icons/plus-icon';
 import PlanStrip from '@/components/plan-strip';
 import SyncPill from '@/components/sync-pill';
+import { MasterToday, TeamToday } from '@/components/team-today';
+import WorkshopPausedBanner from '@/components/workshop-paused-banner';
 import UserIcon from '@/components/icons/user-icon';
 import { colors } from '@/components/ui/colors';
 import { PAGE_CONTENT } from '@/components/ui/page';
@@ -22,6 +24,7 @@ import { useI18n, type TKey } from '@/lib/i18n';
 import { useIsWide } from '@/lib/layout';
 import { useDashboard } from '@/lib/queries';
 import { useSubscription } from '@/lib/use-subscription';
+import { useWorkshop } from '@/lib/use-workshop';
 
 /** The hour where the stringer is, so the greeting matches their morning and not the server's. */
 function hourIn(timeZone: string | undefined) {
@@ -103,6 +106,7 @@ export default function Home() {
   const insets = useSafeAreaInsets();
   const dashboard = useDashboard();
   const plan = useSubscription();
+  const { canSeeMoney, canWrite, role, team } = useWorkshop();
   const data = dashboard.data;
 
   const firstName = user?.full_name?.trim().split(/\s+/)[0];
@@ -129,6 +133,8 @@ export default function Home() {
             <ErrorState error={dashboard.error} onRetry={() => dashboard.refetch()} />
           ) : (
             <>
+              {/* A member of a paused workshop reads and does not write. */}
+              <WorkshopPausedBanner />
               {/* Where the plan limits the orders: how much of the month is used. */}
               <PlanStrip framed />
               <View className="flex-row gap-4">
@@ -144,8 +150,19 @@ export default function Home() {
                   </View>
                 ))}
               </View>
-              {/* The charts of the month are Pro's: Free has a place for them that says so. */}
-              {plan.entitlements.month_overview ? <HomeInsights /> : <LockedInsights />}
+              {/* The owner of a team: who has how much in hand, and what waits. */}
+              <TeamToday framed />
+              {/* The charts of the month are Pro's: Free has a place for them that says so. Only the owner sees the money of the month:
+                  a master has their own orders and the queue in its place, a receptionist nothing. */}
+              {canSeeMoney ? (
+                plan.entitlements.month_overview ? (
+                  <HomeInsights />
+                ) : (
+                  <LockedInsights />
+                )
+              ) : role === 'master' && team ? (
+                <MasterToday framed />
+              ) : null}
             </>
           )}
         </ScrollView>
@@ -159,14 +176,17 @@ export default function Home() {
       // Set apart from the orders, in a container of its own: they scroll above it, it is always there.
       dock={
         <View className="flex-row flex-wrap gap-1">
-          <Shortcut
-            icon={PlusIcon}
-            label={t('new_order')}
-            color={colors.newOrder}
-            contentColor="#000000"
-            className="px-5 py-5 w-full"
-            onPress={() => router.push('/orders/new')}
-          />
+          {/* (A member of a paused workshop reads and does not write: no new order.) */}
+          {canWrite ? (
+            <Shortcut
+              icon={PlusIcon}
+              label={t('new_order')}
+              color={colors.newOrder}
+              contentColor="#000000"
+              className="px-5 py-5 w-full"
+              onPress={() => router.push('/orders/new')}
+            />
+          ) : null}
           <View className="flex-row gap-1 w-full">
             <Shortcut
               icon={UserIcon}
@@ -203,18 +223,30 @@ export default function Home() {
           showsVerticalScrollIndicator={false}
           // (With the strip of the plan at the top of the block, it is the block's own top and the page's gap is not added above it.)
           contentContainerClassName={plan.usage ? 'grow pb-page' : 'grow py-page'}>
+          {/* A member of a paused workshop reads and does not write. */}
+          <WorkshopPausedBanner className="mx-4 mb-3" />
           {/* Where the plan limits the orders: how much of the month is used, at the top of the block. */}
           <PlanStrip />
+          {/* The owner of a team: who has how much in hand, and what waits. */}
+          <TeamToday />
           {/* When the numbers cannot be loaded, the retry takes the place of the insights: both need the same connection. */}
           {dashboard.isError && !data ? (
             <View className="flex-1 justify-center">
               <ErrorState error={dashboard.error} onRetry={() => dashboard.refetch()} />
             </View>
-          ) : plan.entitlements.month_overview ? (
-            <HomeInsights />
+          ) : canSeeMoney ? (
+            plan.entitlements.month_overview ? (
+              <HomeInsights />
+            ) : (
+              // The charts of the month are Pro's: Free has a place for them that says so.
+              <LockedInsights />
+            )
+          ) : role === 'master' && team ? (
+            // Not the money of the month (a master does not see it): their orders and the queue.
+            <MasterToday />
           ) : (
-            // The charts of the month are Pro's: Free has a place for them that says so.
-            <LockedInsights />
+            // A receptionist has the usual numbers and nothing above them.
+            <View className="flex-1" />
           )}
 
           {/* The three thirds are equal. */}

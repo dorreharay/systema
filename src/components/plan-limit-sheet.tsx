@@ -41,8 +41,9 @@ export default function PlanLimitSheet({ visible, onClose, onDecline, used: know
   const decline = onDecline ?? onClose;
 
   return (
-    <Sheet visible={visible} onClose={onClose}>
-      {limit === undefined ? null : (
+    // (A person who works in someone else's workshop has no plan of their own: the sheet never opens for them.)
+    <Sheet visible={visible && !plan.member} onClose={onClose}>
+      {limit === undefined || plan.member ? null : (
         <View className="gap-3.5 pb-2">
           <View className="flex-row items-center gap-3.5">
             <View className="size-[52px] items-center justify-center rounded-2xl" style={{ backgroundColor: colors.clients }}>

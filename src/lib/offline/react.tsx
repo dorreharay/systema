@@ -5,7 +5,7 @@ import { useAuth } from '@/lib/auth';
 import { emailConfirmed } from '@/lib/auth-api';
 import { orderCapOf, stockOnOf } from '@/lib/subscription';
 
-import { bindPlan, bindSession, engine, offlineStore } from './app';
+import { bindPlan, bindSelf, bindSession, engine, offlineStore } from './app';
 import type { Snapshot } from './store';
 import type { Mark } from './types';
 
@@ -78,6 +78,28 @@ export function OfflineProvider({ children }: { children: ReactNode }) {
     });
     return () => bindPlan(null);
   }, [subscription, timeZone]);
+
+  // Who is working and in what role: a master's order is theirs, a receptionist's goes to the queue (see lib/workshop.ts). Only in a workshop
+  // that has a team do the orders have a performer at all.
+  const workshop = status === 'signedIn' ? user?.workshop : undefined;
+  const me = status === 'signedIn' && user ? { id: user.id, name: user.full_name?.trim() || user.email.split('@')[0] } : null;
+  const meId = me?.id;
+  const meName = me?.name;
+  const role = workshop?.role;
+  const teamed = workshop?.team === true;
+  useEffect(() => {
+    bindSelf(teamed && role && meId && meName ? { person: { id: meId, name: meName }, role } : null);
+    return () => bindSelf(null);
+  }, [teamed, role, meId, meName]);
+
+  // What the screens see is a workshop's data, and which workshop it is changes when the person joins one or leaves it: the data is read again.
+  const ownerId = workshop?.owner_id;
+  const lastOwner = useRef(ownerId);
+  useEffect(() => {
+    if (lastOwner.current === ownerId) return;
+    lastOwner.current = ownerId;
+    if (userId) void engine.syncNow({ pull: true });
+  }, [ownerId, userId]);
 
   // The server shows the catalog as counted or not by the plan (backend `stockTracked`), so when the plan changes the data is read again: the
   // stock comes back (or goes) at once, and not at the next read in five minutes.

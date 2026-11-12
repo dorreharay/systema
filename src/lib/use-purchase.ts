@@ -3,9 +3,10 @@ import { useState } from 'react';
 import { ApiError } from '@/lib/api-error';
 import { useAuth } from '@/lib/auth';
 import type { User } from '@/lib/auth-api';
-import { purchasePro, restorePurchases, StoreUnavailableError } from '@/lib/billing';
+import { purchasePlan, restorePurchases, StoreUnavailableError } from '@/lib/billing';
 import { describeError } from '@/lib/errors';
 import { useI18n } from '@/lib/i18n';
+import type { StorePlan } from '@/lib/store';
 import { PurchaseCancelledError, PurchaseNotSyncedError, PurchasePendingError } from '@/lib/store-errors';
 import type { Period } from '@/lib/subscription';
 
@@ -13,7 +14,7 @@ import type { Period } from '@/lib/subscription';
 const REREAD_MS = 6000;
 
 /**
- * Buying Pro and restoring what was bought, with the words for what goes wrong. The words are returned and not shown: a sheet hides
+ * Buying Pro or Studio and restoring what was bought, with the words for what goes wrong. The words are returned and not shown: a sheet hides
  * a toast behind it, so whoever asked shows them where the person is looking.
  */
 export function usePurchase() {
@@ -56,10 +57,13 @@ export function usePurchase() {
     busy,
     error,
     clearError: () => setError(undefined),
-    /** Buys Pro for the period (its free days come with a first subscription). True once the account holds a paid plan. */
-    buy: async (period: Period) => {
-      const user = await run('buy', (current, id) => purchasePro(current, period, id));
-      return !!user && user.subscription?.plan !== 'free';
+    /**
+     * Buys Pro (or, when asked, Studio) for the period (its free days come with a first subscription). True once the account holds a paid
+     * plan, and, for Studio, the Studio plan itself (an account that held Pro already is a paid one before it buys).
+     */
+    buy: async (period: Period, plan: StorePlan = 'pro') => {
+      const user = await run('buy', (current, id) => purchasePlan(current, plan, period, id));
+      return !!user && (plan === 'studio' ? user.subscription?.plan === 'studio' : user.subscription?.plan !== 'free');
     },
     /** Asks the store for earlier purchases. The profile as the server then has it, or `null` when that could not be done. */
     restore: () => run('restore', restorePurchases),

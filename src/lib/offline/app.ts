@@ -5,6 +5,8 @@
  */
 import { api } from '@/lib/api';
 import type { OrderCap } from '@/lib/subscription';
+import type { Person } from '@/lib/types';
+import type { WorkshopRole } from '@/lib/workshop';
 
 import { createActions } from './actions';
 import { FileStorage } from './file-storage';
@@ -39,4 +41,18 @@ export function bindPlan(rules: { orderCap: () => OrderCap | null; stockOn: () =
   stockOn = rules?.stockOn ?? (() => true);
 }
 
-export const offlineActions = createActions(offlineStore, engine, { orderCap: () => orderCap(), stockOn: () => stockOn() });
+let selfOf: () => { person: Person | null; role: WorkshopRole } | null = () => null;
+
+/**
+ * Who is working and in what role (see lib/workshop.ts), asked each time an order is made: the person who takes it in, and whether it is
+ * theirs to string (a master's own) or goes to the queue (a receptionist's). `null`: a workshop of one, where nothing is assigned.
+ */
+export function bindSelf(self: { person: Person | null; role: WorkshopRole } | null) {
+  selfOf = () => self;
+}
+
+export const offlineActions = createActions(offlineStore, engine, {
+  orderCap: () => orderCap(),
+  stockOn: () => stockOn(),
+  self: () => selfOf(),
+});

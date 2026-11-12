@@ -46,6 +46,14 @@ export function activePlan(user, now = new Date(), billing = config.billing) {
 }
 
 /**
+ * Whether this account runs a team: the server has Studio on (`config.billing.studioEnabled`, which needs the plans to be on) and the
+ * account holds the Studio plan, its days of grace included. A workshop whose owner no longer does is paused for the people who work in it
+ * (see utils/workshop.js); the owner keeps all the data and falls back to the plan they have.
+ */
+export const teamAllowed = (user, now = new Date(), billing = config.billing) =>
+  Boolean(billing.enabled && billing.studioEnabled) && activePlan(user, now, billing) === 'studio';
+
+/**
  * Whether the stock of this account's catalog is counted. On Free it is paused and not taken away: the counts stay as they were, an
  * order takes nothing from them and is never refused for what is not there, the lists show every item as available, and nothing a request
  * says about counting is written (a form that was made for a plan with the stock would otherwise switch it off). Back on Pro, the
@@ -78,6 +86,11 @@ export function subscriptionOf(user, now = new Date(), billing = config.billing)
     free: entitlementsOf('free', billing),
     // The person asked to be told when Studio is there (POST /api/billing/studio-waitlist).
     studio_waitlist: Boolean(user.studio_waitlist_at),
+    // Whether Studio is a plan that can be held at this server. False: it is only a waiting list, and the app says so.
+    studio_available: Boolean(billing.enabled && billing.studioEnabled),
+    // Whether this account runs a team now (it holds Studio), and how many people a workshop of its plan holds, the owner included.
+    team: teamAllowed(user, now, billing),
+    seats: billing.enabled && billing.studioEnabled && plan === 'studio' ? billing.studioSeats : 1,
   };
 }
 

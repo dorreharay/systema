@@ -73,11 +73,17 @@ export function requestFor(op: Op): Request {
     case 'service.update':
       return { method: 'PATCH', path: `/api/services/${op.subject}`, body: op.patch };
     case 'order.create':
-      return { method: 'POST', path: '/api/orders', body: { id: op.subject, ...op.input, at: op.at } };
+      return {
+        method: 'POST',
+        path: '/api/orders',
+        body: { id: op.subject, ...op.input, ...(op.assignee !== undefined && { assignee_id: op.assignee?.id ?? null }), at: op.at },
+      };
     case 'order.update':
       return { method: 'PATCH', path: `/api/orders/${op.subject}`, body: { ...op.patch, at: op.at } };
     case 'order.delete':
       return { method: 'DELETE', path: `/api/orders/${op.subject}` };
+    case 'order.assign':
+      return { method: 'POST', path: `/api/orders/${op.subject}/assign`, body: { assignee_id: op.assignee?.id ?? null, at: op.at } };
     case 'photo.delete':
       return { method: 'DELETE', path: `/api/photos/${op.subject}` };
   }

@@ -38,6 +38,13 @@ export type Subscription = {
   free: Entitlements;
   // The person asked to be told when Studio is there (the server before this was added does not say: not on the list).
   studio_waitlist?: boolean;
+  // Whether Studio is a plan that can be held at this server, or only a waiting list; whether this account runs a team now; how many people a
+  // workshop of its plan holds, the owner included; and, for someone who works in another's workshop, that this is that workshop's plan and
+  // not theirs. (A server before Studio does not say: not available, no team, one seat.)
+  studio_available?: boolean;
+  team?: boolean;
+  seats?: number;
+  member?: boolean;
 };
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -76,6 +83,14 @@ export type PlanState = {
   usage: Usage | null;
   /** On the list of those who want to hear when Studio is there. */
   studioWaitlist: boolean;
+  /** Studio really exists at this server (and is not only a list). */
+  studioAvailable: boolean;
+  /** The account runs a team (it holds Studio, or it is a workshop that does). */
+  team: boolean;
+  /** How many people the workshop holds, the owner included. */
+  seats: number;
+  /** The plan is a workshop's, the owner pays for it: nothing here is bought or asked for. */
+  member: boolean;
 };
 
 const OFF: PlanState = {
@@ -90,6 +105,10 @@ const OFF: PlanState = {
   expired: false,
   usage: null,
   studioWaitlist: false,
+  studioAvailable: false,
+  team: false,
+  seats: 1,
+  member: false,
 };
 
 /**
@@ -148,6 +167,10 @@ export function planStateOf(
     expired: sub.expired || (!trusted && sub.plan !== 'free'),
     usage: limit === null ? null : usageOf(orders, limit, timeZone, now),
     studioWaitlist: sub.studio_waitlist === true,
+    studioAvailable: sub.studio_available === true,
+    team: trusted && sub.team === true,
+    seats: sub.seats ?? 1,
+    member: sub.member === true,
   };
 }
 

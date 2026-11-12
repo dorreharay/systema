@@ -3,7 +3,7 @@ import express from 'express';
 import { z } from 'zod';
 import { db } from '../db/index.js';
 import {
-  ORDER_STATUSES, catalogStrings, clients, orderPhotos, orderServices, orders, rackets, services, users,
+  ORDER_STATUSES, catalogStrings, clients, orderPhotos, orderServices, orders, rackets, services, users, workshopMembers,
 } from '../db/schema.js';
 import { requireAuth } from '../middleware/auth.js';
 import { parseQuery, validateBody } from '../middleware/validate.js';
@@ -20,9 +20,10 @@ import { giveBackStock, stockWanted, takeStock } from '../utils/stock.js';
 import {
   flagQuery, isoDate, matchesWords, momentAt, money, optionalText, requiredText, searchText, tensionKg, timeOfDay, uuid,
 } from '../utils/validators.js';
+import { MASTER, OWNER, RECEPTIONIST, assertRole, visibleOrders, writableWorkshop } from '../utils/workshop.js';
 
 const router = express.Router();
-router.use(requireAuth);
+router.use(requireAuth, writableWorkshop);
 rejectMalformedIds(router);
 
 const MAX_PHOTOS = 10;
@@ -72,8 +73,10 @@ const orderFields = z.object({
 
 const bothRackets = { error: 'Send either racket_id or new_racket', path: ['racket_id'] };
 
-// A new order may bring the id the phone made up for it, and the moment it was made (see utils/clientIds.js, utils/dates.js).
-const newOrderFields = orderFields.extend({ id: uuid.optional(), at: momentAt });
+// A new order may bring the id the phone made up for it, and the moment it was made (see utils/clientIds.js, utils/dates.js). In a
+// workshop with a team the owner may also give it to someone straight away (`assignee_id`); a master's own order is theirs, and the
+// receptionist leaves it for the queue.
+const newOrderFields = orderFields.extend({ id: uuid.optional(), at: momentAt, assignee_id: uuid.nullish() });
 
 // An order is for one racket, pointed at or named.
 const orderSchema = newOrderFields
@@ -91,6 +94,8 @@ const listQuery = z.object({
   q: searchText,
   client_id: uuid.optional(),
   racket_id: uuid.optional(),
+  // Whose: your own (`me`), the queue (`none`), or a person's.
+  assignee: z.union([z.literal('me'), z.literal('none'), uuid]).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(30),
   offset: z.coerce.number().int().min(0).default(0),
   // Each order with its service lines and its photos, as GET /api/orders/:id has them.
@@ -102,13 +107,35 @@ const fieldError = (field, message) =>
 
 const ownedOrder = (id, userId) => and(eq(orders.id, id), eq(orders.user_id, userId));
 
-// (`executor` is the transaction when the order is read inside one: see `lockOrder`.)
-async function loadOrder(id, userId, executor = db) {
+// (`executor` is the transaction when the order is read inside one: see `lockOrder`. `visible` is the condition of who may see it: a
+// master does not see the orders of the others, and for them they do not exist.)
+async function loadOrder(id, userId, executor = db, visible = undefined) {
   const [row] = await withOrderJoins(executor.select(orderColumns).from(orders))
-    .where(ownedOrder(id, userId))
+    .where(and(ownedOrder(id, userId), visible))
     .limit(1);
   if (!row) throw notFound();
   return row;
+}
+
+/** Whether this person may change this order: the owner and the receptionist any, a master only the ones that are theirs. */
+function assertCanChange(req, order) {
+  if (req.workshop.role === MASTER && order.assignee_id !== req.user.id) {
+    throw new HttpError(403, 'A master changes only the orders that are theirs', { code: 'forbidden_role' });
+  }
+}
+
+/**
+ * Who an order may be given to: the owner, or a master of the workshop (a receptionist takes orders in, and does not string them).
+ * Throws the 400 of the field when it is someone else.
+ */
+async function assertWorker(executor, ownerId, personId) {
+  if (personId === ownerId) return;
+  const [member] = await executor
+    .select({ id: workshopMembers.id })
+    .from(workshopMembers)
+    .where(and(eq(workshopMembers.owner_id, ownerId), eq(workshopMembers.user_id, personId), eq(workshopMembers.role, MASTER)))
+    .limit(1);
+  if (!member) throw fieldError('assignee_id', 'Unknown person');
 }
 
 /**
@@ -138,8 +165,8 @@ const photoColumns = {
 };
 
 /** An order with its service lines and the list of its photos (not the photos themselves). */
-async function orderDetail(id, userId) {
-  const row = await loadOrder(id, userId);
+async function orderDetail(id, userId, visible = undefined) {
+  const row = await loadOrder(id, userId, db, visible);
   const [lines, photos] = await Promise.all([
     loadLines(id),
     db.select(photoColumns).from(orderPhotos).where(eq(orderPhotos.order_id, id)).orderBy(asc(orderPhotos.created_at)),
@@ -369,7 +396,11 @@ router.get('/', async (req, res) => {
   const number = query.q?.match(/^#?(\d{1,9})$/)?.[1];
 
   const where = and(
-    eq(orders.user_id, req.user.id),
+    eq(orders.user_id, req.workshop.ownerId),
+    visibleOrders(req.workshop, req.user.id),
+    query.assignee === 'me' ? eq(orders.assignee_id, req.user.id) : undefined,
+    query.assignee === 'none' ? isNull(orders.assignee_id) : undefined,
+    query.assignee && query.assignee !== 'me' && query.assignee !== 'none' ? eq(orders.assignee_id, query.assignee) : undefined,
     query.status === 'active' ? inArray(orders.status, ACTIVE) : undefined,
     query.status && query.status !== 'active' ? eq(orders.status, query.status) : undefined,
     query.client_id && eq(orders.client_id, query.client_id),
@@ -412,16 +443,27 @@ router.get('/', async (req, res) => {
 // POST /api/orders. An order with the `id` that this stringer already has is not made again: it is answered with 200 and the order
 // as it is, and nothing is looked at, taken from the stock or numbered. `at` is the moment the order was made on the phone.
 router.post('/', validateBody(orderSchema), async (req, res) => {
-  const { id, at, ...body } = req.body;
+  const { id, at, assignee_id: requestedAssignee, ...body } = req.body;
 
-  if (id && (await hasOrderWithId(db, id, req.user.id))) {
-    return res.status(200).json(await orderDetail(id, req.user.id));
+  if (id && (await hasOrderWithId(db, id, req.workshop.ownerId))) {
+    return res.status(200).json(await orderDetail(id, req.workshop.ownerId, visibleOrders(req.workshop, req.user.id)));
   }
+
+  // Who strings it. A master's own order is theirs; the receptionist leaves it for the queue; the owner may give it to someone.
+  const { role } = req.workshop;
+  if (role === MASTER && requestedAssignee && requestedAssignee !== req.user.id) {
+    throw new HttpError(403, 'A master cannot give an order to someone else', { code: 'forbidden_role' });
+  }
+  if (role === RECEPTIONIST && requestedAssignee) {
+    throw new HttpError(403, 'A receptionist cannot give an order to someone', { code: 'forbidden_role' });
+  }
+  const assignee = role === MASTER ? req.user.id : (requestedAssignee ?? null);
+  if (assignee) await assertWorker(db, req.workshop.ownerId, assignee);
 
   const next = {
     customer_strings: false,
     hybrid: false,
-    received_date: todayIn(req.user.timezone),
+    received_date: todayIn(req.workshop.owner.timezone),
     due_date: null,
     due_time: null,
     main_string_id: null,
@@ -438,7 +480,7 @@ router.post('/', validateBody(orderSchema), async (req, res) => {
     services: [],
     ...Object.fromEntries(Object.entries(body).filter(([, value]) => value !== undefined)),
   };
-  const { values, wanted, make } = await prepare(req.user.id, next, undefined);
+  const { values, wanted, make } = await prepare(req.workshop.ownerId, next, undefined);
 
   let repeated = false;
   let orderId;
@@ -446,8 +488,8 @@ router.post('/', validateBody(orderSchema), async (req, res) => {
     orderId = await db.transaction(async (tx) => {
       if (id) {
         // Two copies of one request at the same moment: the second waits here for the first, and finds its order.
-        await lockId(tx, 'orders', req.user.id, id);
-        if (await hasOrderWithId(tx, id, req.user.id)) {
+        await lockId(tx, 'orders', req.workshop.ownerId, id);
+        if (await hasOrderWithId(tx, id, req.workshop.ownerId)) {
           repeated = true;
           return id;
         }
@@ -458,19 +500,19 @@ router.post('/', validateBody(orderSchema), async (req, res) => {
       const [{ order_counter }] = await tx
         .update(users)
         .set({ order_counter: sql`${users.order_counter} + 1` })
-        .where(eq(users.id, req.user.id))
+        .where(eq(users.id, req.workshop.ownerId))
         .returning({ order_counter: users.order_counter });
 
       // The update above holds this stringer's row until the transaction ends, so two orders made at once are counted one after the
       // other. An order the plan does not allow fails here, and the number it was given goes back with it.
-      await assertCanMakeOrder(tx, req.user, { at });
+      await assertCanMakeOrder(tx, req.workshop.owner, { at });
 
       // A racket that was named and is not the client's yet is made here, with the order: it only exists if the order does.
-      const racketId = make ? await makeRacket(tx, req.user.id, values.client_id, make) : values.racket_id;
+      const racketId = make ? await makeRacket(tx, req.workshop.ownerId, values.client_id, make) : values.racket_id;
 
       // An order that finds too little in the stock fails here, and the number it was given goes back with it, and so
       // does the racket that was made for it. Where the stock is not counted (Free) it takes nothing and finds nothing missing.
-      const taken = await takeStock(tx, req.user.id, stockTracked(req.user) ? wanted : []);
+      const taken = await takeStock(tx, req.workshop.ownerId, stockTracked(req.workshop.owner) ? wanted : []);
 
       const moment = eventTime(at);
       const [created] = await tx
@@ -479,9 +521,12 @@ router.post('/', validateBody(orderSchema), async (req, res) => {
           ...values,
           ...(id && { id }),
           racket_id: racketId,
-          user_id: req.user.id,
+          user_id: req.workshop.ownerId,
           number: order_counter,
           stock_used: taken,
+          accepted_by_id: req.user.id,
+          assignee_id: assignee,
+          assigned_at: assignee ? moment : null,
           created_at: moment,
           ...(body.is_paid && { is_paid: true, paid_at: moment }),
         })
@@ -495,12 +540,12 @@ router.post('/', validateBody(orderSchema), async (req, res) => {
     throw err;
   }
 
-  res.status(repeated ? 200 : 201).json(await orderDetail(orderId, req.user.id));
+  res.status(repeated ? 200 : 201).json(await orderDetail(orderId, req.workshop.ownerId, visibleOrders(req.workshop, req.user.id)));
 });
 
 // GET /api/orders/:id
 router.get('/:id', async (req, res) => {
-  res.json(await orderDetail(req.params.id, req.user.id));
+  res.json(await orderDetail(req.params.id, req.workshop.ownerId, visibleOrders(req.workshop, req.user.id)));
 });
 
 // PATCH /api/orders/:id: any of the fields above, plus `status`. `services` replaces the whole list.
@@ -512,8 +557,9 @@ router.patch('/:id', validateBody(updateSchema), async (req, res) => {
     await db.transaction(async (tx) => {
       // Everything about the order is read here, once the requests before this one have finished with it: a copy of a change that
       // is already made finds the order as that change left it, and moves nothing again.
-      await lockOrder(tx, req.params.id, req.user.id);
-      const { order: previous } = await loadOrder(req.params.id, req.user.id, tx);
+      await lockOrder(tx, req.params.id, req.workshop.ownerId);
+      const { order: previous } = await loadOrder(req.params.id, req.workshop.ownerId, tx, visibleOrders(req.workshop, req.user.id));
+      assertCanChange(req, previous);
 
       const current = {
         ...previous,
@@ -534,19 +580,19 @@ router.patch('/:id', validateBody(updateSchema), async (req, res) => {
         if (value !== undefined && key !== 'services') next[key] = value;
       }
 
-      const { values: prepared, wanted, make } = await prepare(req.user.id, next, previous, tx);
+      const { values: prepared, wanted, make } = await prepare(req.workshop.ownerId, next, previous, tx);
 
       // A racket that was named and is not the client's yet is made here, with the change: it only exists if the change does.
       const values = make
-        ? { ...prepared, racket_id: await makeRacket(tx, req.user.id, prepared.client_id, make) }
+        ? { ...prepared, racket_id: await makeRacket(tx, req.workshop.ownerId, prepared.client_id, make) }
         : prepared;
 
       // What the order took goes back and what it needs now is taken, but only when what it points at has changed:
       // an order that is only moved on, or paid, leaves the stock alone.
       const stockChange = {};
       if (STOCK_FIELDS.some((field) => previous[field] !== values[field])) {
-        await giveBackStock(tx, req.user.id, previous.stock_used);
-        stockChange.stock_used = await takeStock(tx, req.user.id, stockTracked(req.user) ? wanted : []);
+        await giveBackStock(tx, req.workshop.ownerId, previous.stock_used);
+        stockChange.stock_used = await takeStock(tx, req.workshop.ownerId, stockTracked(req.workshop.owner) ? wanted : []);
       }
 
       await tx
@@ -557,7 +603,7 @@ router.patch('/:id', validateBody(updateSchema), async (req, res) => {
           ...(body.status && statusChanges(body.status, previous, now)),
           ...paymentChanges(body.is_paid, previous, now),
         })
-        .where(ownedOrder(previous.id, req.user.id));
+        .where(ownedOrder(previous.id, req.workshop.ownerId));
 
       if (body.services) {
         await tx.delete(orderServices).where(eq(orderServices.order_id, previous.id));
@@ -570,25 +616,64 @@ router.patch('/:id', validateBody(updateSchema), async (req, res) => {
     throw err;
   }
 
-  res.json(await orderDetail(req.params.id, req.user.id));
+  res.json(await orderDetail(req.params.id, req.workshop.ownerId, visibleOrders(req.workshop, req.user.id)));
 });
 
 // DELETE /api/orders/:id: the order with its services and photos; what it took from the stock goes back
 router.delete('/:id', async (req, res) => {
+  // A master does not delete: an order is taken in, and gone, by the owner or the receptionist.
+  assertRole(req.workshop, OWNER, RECEPTIONIST);
   await db.transaction(async (tx) => {
     // What the order took is read once the requests before this one have finished with it, so that it is given back once: of two
     // copies of one delete, the second finds the order gone.
-    await lockOrder(tx, req.params.id, req.user.id);
-    const { order } = await loadOrder(req.params.id, req.user.id, tx);
-    await giveBackStock(tx, req.user.id, order.stock_used);
-    await tx.delete(orders).where(ownedOrder(req.params.id, req.user.id));
+    await lockOrder(tx, req.params.id, req.workshop.ownerId);
+    const { order } = await loadOrder(req.params.id, req.workshop.ownerId, tx);
+    await giveBackStock(tx, req.workshop.ownerId, order.stock_used);
+    await tx.delete(orders).where(ownedOrder(req.params.id, req.workshop.ownerId));
   });
   res.json({ ok: true });
 });
 
+const assignSchema = z.object({ assignee_id: uuid.nullable(), at: momentAt });
+
+// POST /api/orders/:id/assign: gives the order to a person (`assignee_id`) or back to the queue (`null`). The owner gives it to themselves
+// or to a master, or takes it back. A master takes an order nobody has, or lets go of one of their own; if someone took it a moment before
+// them, it is a 409 `order_taken`. A receptionist does not give orders. Giving it to who has it already changes nothing.
+router.post('/:id/assign', validateBody(assignSchema), async (req, res) => {
+  assertRole(req.workshop, OWNER, MASTER);
+  const { assignee_id: target, at } = req.body;
+  const me = req.user.id;
+
+  await db.transaction(async (tx) => {
+    await lockOrder(tx, req.params.id, req.workshop.ownerId);
+    const { order: previous } = await loadOrder(req.params.id, req.workshop.ownerId, tx);
+    if (previous.assignee_id === target) return;
+
+    if (req.workshop.role === MASTER) {
+      const takes = target === me && previous.assignee_id === null;
+      const lets = target === null && previous.assignee_id === me;
+      if (!takes && !lets) {
+        if (previous.assignee_id !== null && previous.assignee_id !== me) {
+          throw new HttpError(409, 'Someone else has this order already', { code: 'order_taken' });
+        }
+        throw new HttpError(403, 'A master takes an order for themselves, or lets go of their own', { code: 'forbidden_role' });
+      }
+    }
+    if (target) await assertWorker(tx, req.workshop.ownerId, target);
+
+    await tx
+      .update(orders)
+      .set({ assignee_id: target, assigned_at: target ? eventTime(at) : null })
+      .where(ownedOrder(previous.id, req.workshop.ownerId));
+  });
+
+  res.json(await orderDetail(req.params.id, req.workshop.ownerId, visibleOrders(req.workshop, req.user.id)));
+});
+
 // POST /api/orders/:id/photos: the body is the image itself (JPEG, PNG, WebP or HEIC), up to 8 MB
 router.post('/:id/photos', express.raw({ type: () => true, limit: MAX_PHOTO_BYTES }), async (req, res) => {
-  await loadOrder(req.params.id, req.user.id);
+  const { order } = await loadOrder(req.params.id, req.workshop.ownerId, db, visibleOrders(req.workshop, req.user.id));
+  assertCanChange(req, order);
 
   const contentType = detectImageType(req.body);
   if (!contentType) {
@@ -606,7 +691,7 @@ router.post('/:id/photos', express.raw({ type: () => true, limit: MAX_PHOTO_BYTE
   const [photo] = await db
     .insert(orderPhotos)
     .values({
-      user_id: req.user.id,
+      user_id: req.workshop.ownerId,
       order_id: req.params.id,
       content_type: contentType,
       size: req.body.length,

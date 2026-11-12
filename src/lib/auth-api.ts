@@ -3,6 +3,7 @@ import type { AppleCredential } from '@/lib/apple-sign-in';
 import type { GoogleCredential } from '@/lib/google-sign-in';
 import type { Language } from '@/lib/i18n';
 import type { Subscription } from '@/lib/subscription';
+import type { WorkshopInfo } from '@/lib/workshop';
 import type { TensionUnit } from '@/lib/types';
 
 export type User = {
@@ -27,6 +28,9 @@ export type User = {
   // The plan the account holds and what it allows. A profile that an older version of the app saved on the device does not say, and is
   // taken to be one with no plans (see lib/subscription.ts).
   subscription?: Subscription;
+  // Whose data this person works in, and in what role. A profile that an older version of the app saved on the device does not say, and is
+  // taken to be the owner of a workshop of one (see lib/workshop.ts).
+  workshop?: WorkshopInfo;
   created_at: string;
   updated_at: string;
 };

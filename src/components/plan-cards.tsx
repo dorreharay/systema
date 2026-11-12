@@ -11,9 +11,9 @@ import { useI18n, type Language } from '@/lib/i18n';
 import type { Plan } from '@/lib/subscription';
 import { useStorePrices } from '@/lib/use-store-prices';
 
-// The three plans as the cards of the offer and of the subscription page say them. The prices of Pro are the store's own, in the money of
-// the person's country, once it has said (lib/use-store-prices.ts); until then, and where there is no store, the list prices in dollars
-// (lib/billing.ts).
+// The three plans as the cards of the offer and of the subscription page say them. The prices of Pro (and of Studio, where it is sold) are
+// the store's own, in the money of the person's country, once it has said (lib/use-store-prices.ts); until then, and where there is no
+// store, the list prices in dollars (lib/billing.ts).
 
 export type PlanCardDef = {
   plan: Plan;
@@ -39,16 +39,21 @@ function dollars(amount: number, language: Language) {
   }
 }
 
-/** The prices as text: the store's for Pro ("₴249,99", as it writes it), the list's in dollars for the rest ("$9.99"). */
+/**
+ * The prices as text: the store's for Pro and, where Studio is sold, for Studio too ("₴249,99", as it writes it), the list's in dollars for
+ * the rest ("$9.99").
+ */
 export function usePrices() {
   const { language } = useI18n();
+  const { user } = useAuth();
   const store = useStorePrices();
+  const studioStore = useStorePrices('studio', user?.subscription?.studio_available === true);
   const money = (amount: number) => dollars(amount, language);
   return {
     proMonth: store?.month?.text ?? money(LIST_PRICES.pro.month),
     proYear: store?.year?.text ?? money(LIST_PRICES.pro.year),
-    studioMonth: money(LIST_PRICES.studio.month),
-    studioYear: money(LIST_PRICES.studio.year),
+    studioMonth: studioStore?.month?.text ?? money(LIST_PRICES.studio.month),
+    studioYear: studioStore?.year?.text ?? money(LIST_PRICES.studio.year),
   };
 }
 

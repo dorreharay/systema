@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { Pressable, View } from 'react-native';
 
 import { Check, Trash2 } from '@/components/icons';
+import NoRightsNote from '@/components/no-rights-note';
 import PlusIcon from '@/components/icons/plus-icon';
 import { SUGGESTIONS_SHOWN, SUGGEST_DELAY_MS, Suggestions } from '@/components/reference-suggestions';
 import { StockFields, StockLocked, readStock, useStockOn } from '@/components/stock';
@@ -29,6 +30,7 @@ import {
 import { withoutOwnedStrings } from '@/lib/reference';
 import { STRING_TYPES, type CatalogString, type StringType } from '@/lib/types';
 import { useDebounced } from '@/lib/use-debounced';
+import { useWorkshop } from '@/lib/use-workshop';
 
 type StringFormSheetProps = {
   visible: boolean;
@@ -320,9 +322,11 @@ function StringForm({ string, initialModel, onClose, onSaved }: Omit<StringFormS
 // Add, edit or remove a string in the stringer's own catalog.
 export default function StringFormSheet({ visible, onClose, ...rest }: StringFormSheetProps) {
   const { t } = useI18n();
+  // The catalog is the owner's: anyone else is told so instead of being given the form.
+  const { canEditCatalog } = useWorkshop();
   return (
-    <Sheet visible={visible} onClose={onClose} form title={rest.string ? t('edit_string') : t('add_string')}>
-      <StringForm onClose={onClose} {...rest} />
+    <Sheet visible={visible} onClose={onClose} form={canEditCatalog} title={rest.string ? t('edit_string') : t('add_string')}>
+      {canEditCatalog ? <StringForm onClose={onClose} {...rest} /> : <NoRightsNote />}
     </Sheet>
   );
 }

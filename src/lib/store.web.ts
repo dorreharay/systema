@@ -6,11 +6,15 @@ import { StoreUnavailableError } from '@/lib/store-errors';
 
 export type StorePrice = { text: string; amount: number; currency: string };
 export type StorePackages = Partial<Record<'month' | 'year', never>>;
+export type StorePlan = 'pro' | 'studio';
 
 export const storeAvailable = () => false;
 export const identifyStore = async (userId: string): Promise<void> => void userId;
 export const forgetStore = async (): Promise<void> => undefined;
-export const storePackages = async (): Promise<StorePackages> => ({});
+export const storePackages = async (plan: StorePlan = 'pro'): Promise<StorePackages> => {
+  void plan;
+  return {};
+};
 export const priceOf = (item: undefined): StorePrice | undefined => item;
 export const buyPackage = async (item: never, userId: string): Promise<void> => {
   void item;

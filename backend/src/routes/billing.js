@@ -11,7 +11,7 @@ import { validateBody } from '../middleware/validate.js';
 import { HttpError, notFound } from '../utils/http.js';
 import { PERIODS, PLANS } from '../utils/plans.js';
 import { accountIdsOf, syncPlan } from '../utils/revenuecat.js';
-import { toPublicUser } from '../utils/user.js';
+import { publicUser } from '../utils/user.js';
 
 const router = express.Router();
 
@@ -20,7 +20,7 @@ const router = express.Router();
 router.post('/sync', syncLimiter, requireAuth, async (req, res) => {
   const user = await syncPlan(req.user.id);
   if (!user) throw notFound();
-  res.json(toPublicUser(user));
+  res.json(await publicUser(user, req.workshop));
 });
 
 // RevenueCat's notices (a purchase, a renewal, a cancellation, a refund) are signed with one header that is set both in its dashboard
@@ -63,13 +63,13 @@ router.post('/studio-waitlist', plansOnly, requireAuth, async (req, res) => {
     .set({ studio_waitlist_at: sql`coalesce(${users.studio_waitlist_at}, now())` })
     .where(eq(users.id, req.user.id))
     .returning();
-  res.json(toPublicUser(user));
+  res.json(await publicUser(user, req.workshop));
 });
 
 // DELETE /api/billing/studio-waitlist: takes it off the list again (nothing happens if it was not on it).
 router.delete('/studio-waitlist', plansOnly, requireAuth, async (req, res) => {
   const [user] = await db.update(users).set({ studio_waitlist_at: null }).where(eq(users.id, req.user.id)).returning();
-  res.json(toPublicUser(user));
+  res.json(await publicUser(user, req.workshop));
 });
 
 // Where the plan comes from at a real server is the store (see ../../docs/subscriptions.md). Until it is connected, and on a
@@ -107,7 +107,7 @@ router.post('/dev-grant', devOnly, requireAuth, validateBody(grantSchema), async
     })
     .where(eq(users.id, req.user.id))
     .returning();
-  res.json(toPublicUser(user));
+  res.json(await publicUser(user, req.workshop));
 });
 
 export default router;

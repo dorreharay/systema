@@ -4,9 +4,10 @@ import { db } from '../db/index.js';
 import { clients, orders } from '../db/schema.js';
 import { requireAuth } from '../middleware/auth.js';
 import { addDays, isValidTimeZone, monthOf, todayIn } from '../utils/dates.js';
+import { OWNER, workshopRoles, writableWorkshop } from '../utils/workshop.js';
 
 const router = express.Router();
-router.use(requireAuth);
+router.use(requireAuth, writableWorkshop, workshopRoles(OWNER));
 
 // Work that is still to be done. A racket that is ready is done: it waits to be picked up.
 const TO_DO = ['received', 'in_progress'];
@@ -47,8 +48,8 @@ const serializeClientTotal = (row) => ({
 //   receivables  what is still to be paid, who owes it, and who the best clients are
 // "Today" and "this month" are the stringer's, in their time zone.
 router.get('/', async (req, res) => {
-  const userId = req.user.id;
-  const timeZone = isValidTimeZone(req.user.timezone) ? req.user.timezone : 'UTC';
+  const userId = req.workshop.ownerId;
+  const timeZone = isValidTimeZone(req.workshop.owner.timezone) ? req.workshop.owner.timezone : 'UTC';
   const today = todayIn(timeZone);
 
   // Revenue is money received: an order counts on the day it was marked paid.

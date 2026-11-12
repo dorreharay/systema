@@ -12,7 +12,10 @@ import {
 } from 'react-native';
 
 import { Check, ClipboardList, Wallet, X, type IconComponent } from '@/components/icons';
+import { PerformerLine, useGiveSheet } from '@/components/performer';
+import QueueChips, { useQueueFilter } from '@/components/queue-chips';
 import ReadyMessageSheet from '@/components/ready-message-sheet';
+import { STATUS_STYLES } from '@/components/ui/badge';
 import { BUTTON_RADIUS } from '@/components/ui/button-radius';
 import { PressableBlock } from '@/components/ui/card';
 import Checkbox from '@/components/ui/checkbox';
@@ -26,16 +29,19 @@ import { StatusChip, StatusMenu, type Anchor } from '@/components/ui/status-menu
 import { EmptyState, ErrorState, NoResults } from '@/components/ui/states';
 import { Text } from '@/components/ui/text';
 import { useToast } from '@/components/ui/toast';
+import WorkshopPausedBanner from '@/components/workshop-paused-banner';
 import { useAuth } from '@/lib/auth';
 import { describeError } from '@/lib/errors';
 import { addDays, formatDate, formatMoney, formatMoneyWhole, formatTimestamp, isOverdue, racketName } from '@/lib/format';
 import { useI18n, type Language, type TKey, type Translate } from '@/lib/i18n';
 import { usePageInnerWidth } from '@/lib/layout';
 import { useMark } from '@/lib/offline/react';
+import { inQueue } from '@/lib/offline/select';
 import { describeSetup, readyMessage } from '@/lib/order-text';
 import { useAllOrders, useUpdateOrder } from '@/lib/queries';
 import type { Order, OrderStatus, TensionUnit } from '@/lib/types';
 import { useSearch } from '@/lib/use-search';
+import { useSelf, useWorkshop } from '@/lib/use-workshop';
 
 // The orders of a desktop as a table (docs/desktop-layout.md): a row to an order, the columns of what a stringer looks for, filters with
 // their counts above it, a box to tick on each row and a bar for what is done to the ticked ones, the status of a row changed from a
@@ -48,16 +54,26 @@ const FULL_MIN = 1050;
 const MID_MIN = 850;
 
 type Variant = 'full' | 'mid' | 'compact';
-type ColumnId = 'select' | 'number' | 'client' | 'racket' | 'strings' | 'due' | 'status' | 'total' | 'paid';
+type ColumnId = 'select' | 'number' | 'client' | 'racket' | 'strings' | 'performer' | 'due' | 'status' | 'total' | 'paid';
 type Filter = 'all' | 'overdue' | 'today' | 'unpaid';
 
 const ROW_HEIGHT: Record<Variant, number> = { full: 52, mid: 52, compact: 64 };
+
+// In a workshop with a team the table has who strings each order. Where there is room it is a column of its own (the table has to be this
+// much wider than for the other columns to keep theirs); where there is not, it is a line under the name of the client, and the rows are
+// that much taller.
+const PERFORMER_WIDTH = 150;
+const SUBLINE_EXTRA: Record<Variant, number> = { full: 0, mid: 6, compact: 12 };
 
 const COLUMNS: Record<Variant, ColumnId[]> = {
   full: ['select', 'number', 'client', 'racket', 'strings', 'due', 'status', 'total', 'paid'],
   mid: ['select', 'number', 'client', 'racket', 'due', 'status', 'total', 'paid'],
   compact: ['select', 'number', 'client', 'due', 'status', 'total', 'paid'],
 };
+
+/** The columns of a variant; with the column of the performers, right after the strings. */
+const columnsOf = (variant: Variant, performers: boolean): ColumnId[] =>
+  performers ? COLUMNS[variant].flatMap((id) => (id === 'strings' ? [id, 'performer' as const] : [id])) : COLUMNS[variant];
 
 // The header and every row use the same sizes, so that the columns stand under their names.
 const CELL: Record<ColumnId, ViewStyle> = {
@@ -67,6 +83,7 @@ const CELL: Record<ColumnId, ViewStyle> = {
   client: { flex: 1.15, minWidth: 0 },
   racket: { flex: 1, minWidth: 0 },
   strings: { flex: 1.35, minWidth: 0 },
+  performer: { width: PERFORMER_WIDTH },
   // The chips and the figures: the widths are of the longest thing each holds ("Сьогодні, 17:00", "В процесі", "12 400 грн", "Не сплачено"),
   // and a figure has room after it, so that it does not run into the payment.
   due: { width: 128 },
@@ -110,6 +127,12 @@ type Ctx = {
   today: string;
   timeZone: string;
   dateText: (iso: string) => string;
+  // A workshop with a team: who strings each order is shown, in a column of its own or under the name of the client.
+  team: boolean;
+  performerColumn: boolean;
+  // May the person at the phone change this order (a master changes only their own; a paused workshop nobody's).
+  canChange: (order: Order) => boolean;
+  onGive?: (order: Order) => void;
 };
 
 // --- A row -----------------------------------------------------------------------------------
@@ -145,6 +168,22 @@ function DueCell({ order, ctx }: { order: Order; ctx: Ctx }) {
   );
 }
 
+// The status of an order that the person may not change: the chip without its arrow, and not pressed.
+function StatusLabel({ status, t }: { status: OrderStatus; t: Translate }) {
+  const style = STATUS_STYLES[status];
+  return (
+    <View
+      accessible
+      accessibilityLabel={t('order_status_label', { status: t(`status_${status}`) })}
+      className={`h-[30px] flex-row items-center gap-2 self-start px-2.5 ${BUTTON_RADIUS.lg} ${style.container}`}>
+      <View className={`size-2 rounded-full ${style.dot}`} />
+      <Text className={`text-[13px] font-semibold ${style.label}`} numberOfLines={1}>
+        {t(`status_${status}`)}
+      </Text>
+    </View>
+  );
+}
+
 type RowProps = {
   order: Order;
   ctx: Ctx;
@@ -158,6 +197,7 @@ type RowProps = {
 
 const OrderRow = memo(function OrderRow({ order, ctx, variant, selected, cursor, onToggle, onOpen, onStatus }: RowProps) {
   const { t } = ctx;
+  const rowHeight = ROW_HEIGHT[variant] + (ctx.team && !ctx.performerColumn ? SUBLINE_EXTRA[variant] : 0);
   // Something that the server has not got in full yet: a dot by the name.
   const mark = useMark(order.id);
 
@@ -196,8 +236,11 @@ const OrderRow = memo(function OrderRow({ order, ctx, variant, selected, cursor,
                 {`${racketName(order.racket)}, ${describeSetup(order, ctx.unit, t)}`}
               </Text>
             ) : null}
+            {ctx.team && !ctx.performerColumn ? <PerformerLine order={order} onGive={ctx.onGive} size="cell" /> : null}
           </View>
         );
+      case 'performer':
+        return <PerformerLine order={order} onGive={ctx.onGive} size="cell" />;
       case 'racket':
         return (
           <Text className="text-[13.5px] text-muted" numberOfLines={1}>
@@ -213,8 +256,10 @@ const OrderRow = memo(function OrderRow({ order, ctx, variant, selected, cursor,
       case 'due':
         return <DueCell order={order} ctx={ctx} />;
       case 'status':
-        return (
+        return ctx.canChange(order) ? (
           <StatusChip status={order.status} orderId={order.id} onOpen={(anchor) => onStatus(order, anchor)} />
+        ) : (
+          <StatusLabel status={order.status} t={t} />
         );
       case 'total':
         return (
@@ -254,8 +299,8 @@ const OrderRow = memo(function OrderRow({ order, ctx, variant, selected, cursor,
       onPress={() => onOpen(order.id)}
       accessibilityLabel={t('order_card_label', { number: order.number ?? '-', client: order.client.name })}
       className={`flex-row items-center gap-3 border-t border-line/50 px-4 ${selected ? 'bg-[#EEF6E8]' : ''}`}
-      style={{ height: ROW_HEIGHT[variant], ...(edge ? { boxShadow: edge } : null) }}>
-      {COLUMNS[variant].map((id) => (
+      style={{ height: rowHeight, ...(edge ? { boxShadow: edge } : null) }}>
+      {columnsOf(variant, ctx.performerColumn).map((id) => (
         <View key={id} style={cellStyle(variant, id)}>
           {cell(id)}
         </View>
@@ -268,12 +313,14 @@ const OrderRow = memo(function OrderRow({ order, ctx, variant, selected, cursor,
 
 function TableHeader({
   variant,
+  performers,
   t,
   allTicked,
   someTicked,
   onToggleAll,
 }: {
   variant: Variant;
+  performers: boolean;
   t: Translate;
   allTicked: boolean;
   someTicked: boolean;
@@ -284,6 +331,7 @@ function TableHeader({
     client: t('field_client'),
     racket: t('field_racket'),
     strings: `${t('field_strings')} / ${t('field_tension')}`,
+    performer: t('queue_performer'),
     due: t('orders_col_due'),
     status: t('orders_col_status'),
     total: t('order_total'),
@@ -292,7 +340,7 @@ function TableHeader({
 
   return (
     <View className="h-11 flex-row items-center gap-3 border-b border-line/50 bg-white px-4">
-      {COLUMNS[variant].map((id) => (
+      {columnsOf(variant, performers).map((id) => (
         <View key={id} style={cellStyle(variant, id)}>
           {id === 'select' ? (
             <Checkbox
@@ -428,6 +476,12 @@ export default function OrdersTablePage() {
   const toast = useToast();
   const { user } = useAuth();
   const update = useUpdateOrder();
+  const { canWrite, role } = useWorkshop();
+  const self = useSelf();
+  // In a workshop with a team: all the orders, the person's own, or the queue (in a workshop of one: all, and nothing is read for it).
+  const queueFilter = useQueueFilter();
+  const { team, queue } = queueFilter;
+  const { give, sheet: giveSheet } = useGiveSheet();
 
   const search = useSearch();
   const { query } = search;
@@ -435,7 +489,7 @@ export default function OrdersTablePage() {
   const all = useAllOrders(query);
   const [filter, setFilter] = useState<Filter>('all');
   // What was ticked, and where the cursor is, belong to the list that is shown: another filter or other words are a list with none.
-  const listKey = `${filter}|${query}`;
+  const listKey = `${filter}|${queue}|${query}`;
   const [selected, setSelected] = useForList<ReadonlySet<string>>(listKey, NO_IDS);
   const [cursorId, setCursorId] = useForList<string | null>(listKey, null);
   const [menu, setMenu] = useState<{ order: Order; anchor: Anchor } | null>(null);
@@ -455,6 +509,19 @@ export default function OrdersTablePage() {
     return parts;
   }, [timeZone]);
 
+  const selfId = self?.id;
+  // A master changes only the orders that are theirs; nobody changes anything while the workshop is paused.
+  const canChange = useCallback(
+    (order: Order) => canWrite && (role !== 'master' || (!!selfId && order.assignee?.id === selfId)),
+    [canWrite, role, selfId]
+  );
+
+  const inner = usePageInnerWidth('wide');
+  const variant: Variant = inner >= FULL_MIN ? 'full' : inner >= MID_MIN ? 'mid' : 'compact';
+  // The performer has a column of its own only where the others keep the room they have without it.
+  const performerColumn = team && variant === 'full' && inner >= FULL_MIN + PERFORMER_WIDTH + 12;
+  const rowHeight = ROW_HEIGHT[variant] + (team && !performerColumn ? SUBLINE_EXTRA[variant] : 0);
+
   const ctx = useMemo<Ctx>(
     () => ({
       t,
@@ -465,29 +532,35 @@ export default function OrdersTablePage() {
       timeZone,
       dateText: (iso) =>
         iso === today ? t('date_today') : iso === addDays(today, 1) ? t('date_tomorrow') : formatDate(iso, language, today),
+      team,
+      performerColumn,
+      canChange,
+      onGive: give,
     }),
-    [t, language, currency, unit, today, timeZone]
+    [t, language, currency, unit, today, timeZone, team, performerColumn, canChange, give]
   );
 
+  // (The queue is read from the same list, so that the numbers beside the chips are those of the words searched for, as the other chips'.)
+  const inQueueFilter = useCallback(
+    (order: Order) => (queue === 'mine' ? !!selfId && order.assignee?.id === selfId : queue === 'none' ? inQueue(order) : true),
+    [queue, selfId]
+  );
   const orders = useMemo(
-    () => (all.data ?? []).filter((order) => matches(order, filter, today)),
-    [all.data, filter, today]
+    () => (all.data ?? []).filter((order) => matches(order, filter, today) && inQueueFilter(order)),
+    [all.data, filter, today, inQueueFilter]
   );
   const counts = useMemo(() => {
-    const items = all.data ?? [];
+    const items = (all.data ?? []).filter(inQueueFilter);
     return Object.fromEntries(
       FILTERS.map(({ key }) => [key, items.filter((order) => matches(order, key, today)).length])
     ) as Record<Filter, number>;
-  }, [all.data, today]);
-
-  const inner = usePageInnerWidth('wide');
-  const variant: Variant = inner >= FULL_MIN ? 'full' : inner >= MID_MIN ? 'mid' : 'compact';
-  const rowHeight = ROW_HEIGHT[variant];
+  }, [all.data, today, inQueueFilter]);
+  const waiting = useMemo(() => (all.data ?? []).filter(inQueue).length, [all.data]);
 
   // --- What is done to orders ---
 
   const move = async (order: Order, status: OrderStatus) => {
-    if (order.status === status) return;
+    if (order.status === status || !canChange(order)) return;
     try {
       // Handing the racket over closes the order: it is paid for, too (as on the page of the order).
       await update.mutateAsync({
@@ -504,7 +577,7 @@ export default function OrdersTablePage() {
   };
 
   const bulk = async (change: { status: OrderStatus } | { paid: true }) => {
-    const targets = orders.filter((order) => selected.has(order.id));
+    const targets = orders.filter((order) => selected.has(order.id) && canChange(order));
     try {
       for (const order of targets) {
         if ('status' in change) {
@@ -650,6 +723,8 @@ export default function OrdersTablePage() {
       />
 
       <View className={`min-h-0 flex-1 gap-4 pb-12 ${PAGE_X} ${PAGE_COLUMN}`}>
+        <WorkshopPausedBanner />
+
         <View className="flex-row flex-wrap items-center gap-2">
           {FILTERS.map(({ key, label }) => {
             const on = filter === key;
@@ -672,6 +747,12 @@ export default function OrdersTablePage() {
               </Pressable>
             );
           })}
+          {team ? (
+            <>
+              <View className="mx-1 h-6 w-px bg-line" />
+              <QueueChips wide value={queue} onChange={queueFilter.setQueue} waiting={waiting} />
+            </>
+          ) : null}
         </View>
 
         <View
@@ -684,6 +765,7 @@ export default function OrdersTablePage() {
           className={`min-h-0 flex-1 overflow-hidden rounded-[18px] bg-white ${SURFACE_EDGE}`}>
           <TableHeader
             variant={variant}
+            performers={performerColumn}
             t={t}
             allTicked={orders.length > 0 && selected.size === orders.length}
             someTicked={selected.size > 0}
@@ -722,7 +804,7 @@ export default function OrdersTablePage() {
         </View>
       </View>
 
-      {selected.size > 0 ? (
+      {selected.size > 0 && canWrite ? (
         <BulkBar
           count={selected.size}
           t={t}
@@ -742,6 +824,8 @@ export default function OrdersTablePage() {
           if (order) void move(order, status);
         }}
       />
+
+      {giveSheet}
 
       <ReadyMessageSheet
         visible={!!readyFor}

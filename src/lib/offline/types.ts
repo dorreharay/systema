@@ -15,6 +15,7 @@ import type {
   OrderDetail,
   OrderInput,
   OrderRacket,
+  Person,
   Racket,
   Service,
   StringType,
@@ -107,10 +108,13 @@ export type Op = Base &
     | { type: 'string.delete'; subject: string; label?: string }
     | { type: 'service.create'; subject: string; fields: ServiceFields }
     | { type: 'service.update'; subject: string; patch: Partial<ServiceFields>; form?: boolean }
-    | { type: 'order.create'; subject: string; input: OrderCreateInput; snapshot: OrderSnapshot }
+    // `by` is who took it in and `assignee` who strings it, as the phone knew them when it was made (the server works them out itself).
+    | { type: 'order.create'; subject: string; input: OrderCreateInput; snapshot: OrderSnapshot; by?: Person | null; assignee?: Person | null }
     // `form` marks a change made with the whole order form (it holds every field): a later one of those replaces it.
     | { type: 'order.update'; subject: string; patch: OrderInput; form?: boolean; snapshot?: OrderSnapshot }
     | { type: 'order.delete'; subject: string; label?: string }
+    // Gives the order to a person, or back to the queue (null).
+    | { type: 'order.assign'; subject: string; assignee: Person | null }
     | { type: 'photo.delete'; subject: string; orderId: string }
   );
 

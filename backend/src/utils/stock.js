@@ -6,9 +6,10 @@
  * of a hybrid; strings the customer brings take nothing. What was taken is kept on the order (`stock_used`), so that
  * deleting or changing it gives back exactly that, and an order made before the stock was counted gives back nothing.
  */
-import { and, eq, gte, sql } from 'drizzle-orm';
-import { catalogStrings, rackets } from '../db/schema.js';
+import { and, desc, eq, gte, inArray, isNotNull, sql } from 'drizzle-orm';
+import { catalogStrings, orders, rackets, users } from '../db/schema.js';
 import { HttpError } from './http.js';
+import { displayName } from './workshop.js';
 
 const tableOf = (kind) => (kind === 'racket' ? rackets : catalogStrings);
 
@@ -77,4 +78,39 @@ export async function giveBackStock(tx, userId, used) {
       .set({ stock: sql`${table.stock} + ${qty}` })
       .where(and(eq(table.id, id), eq(table.user_id, userId)));
   }
+}
+
+/**
+ * Who used each catalog item last, for a workshop with a team: the newest order that took it, and the person who strung it (or took it in,
+ * when nobody strings it yet). `columns` are the columns of the order that point at the item. Answers a Map of item id to
+ * `{ order_number, at, by }`, where `by` is `{ id, name }` or null; an item no order ever took is not in it.
+ */
+export async function lastUsedBy(executor, ownerId, columns) {
+  const newest = new Map();
+  for (const column of columns) {
+    const rows = await executor
+      .selectDistinctOn([column], {
+        item: column,
+        number: orders.number,
+        at: orders.created_at,
+        who: sql`coalesce(${orders.assignee_id}, ${orders.accepted_by_id})`,
+      })
+      .from(orders)
+      .where(and(eq(orders.user_id, ownerId), isNotNull(column)))
+      .orderBy(column, desc(orders.number));
+    for (const row of rows) {
+      const seen = newest.get(row.item);
+      if (!seen || row.number > seen.number) newest.set(row.item, row);
+    }
+  }
+
+  const ids = [...new Set([...newest.values()].map((row) => row.who).filter(Boolean))];
+  const people = ids.length > 0 ? await executor.select().from(users).where(inArray(users.id, ids)) : [];
+  const names = new Map(people.map((user) => [user.id, displayName(user)]));
+  return new Map(
+    [...newest].map(([item, row]) => [
+      item,
+      { order_number: row.number, at: row.at, by: row.who ? { id: row.who, name: names.get(row.who) ?? null } : null },
+    ])
+  );
 }

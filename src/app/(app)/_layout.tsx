@@ -68,6 +68,12 @@ export default function AppLayout() {
         <Stack.Screen name="subscription" options={{ animation: 'default', gestureEnabled: true }} />
         {/* What Studio will be, and the list to hear when it is there: opened from the card of Studio on the page of the subscription. */}
         <Stack.Screen name="studio" options={{ animation: 'default', gestureEnabled: true }} />
+        {/* The people of a Studio workshop (opened from Settings, the sidebar and the page of Studio), and the page that takes the code of an
+            invitation (Settings, or the link of the invitation). Neither exists where Studio does not. */}
+        <Stack.Screen name="team" options={{ animation: 'default', gestureEnabled: true }} />
+        <Stack.Screen name="join" options={{ animation: 'default', gestureEnabled: true }} />
+        {/* The month by person (a Studio workshop's owner, and a master's own line): opened from the home screen. */}
+        <Stack.Screen name="team-report" options={{ animation: 'default', gestureEnabled: true }} />
         {/* The changes that have not reached the server: opened from the mark in the headers and from Settings. */}
         <Stack.Screen name="sync" options={{ animation: 'default', gestureEnabled: true }} />
       </Stack.Protected>

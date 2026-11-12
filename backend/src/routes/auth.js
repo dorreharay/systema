@@ -21,7 +21,7 @@ import { optionalText } from '../utils/validators.js';
 import { hashPassword, newPasswordSchema, verifyAgainstDecoy, verifyPassword } from '../utils/password.js';
 import { clearSessionCookie, setSessionCookie, signToken } from '../utils/session.js';
 import { createToken, hashToken } from '../utils/tokens.js';
-import { toPublicUser } from '../utils/user.js';
+import { publicUser } from '../utils/user.js';
 
 const router = express.Router();
 
@@ -99,10 +99,10 @@ const resetPasswordSchema = z.object({
 const verifyEmailSchema = z.object({ code: z.string({ error: 'The code is required' }).max(32) });
 
 /** What a sign-in or sign-up answers with: the user, and the token for a client that has no cookies. */
-function signIn(res, user, status = 200) {
+async function signIn(res, user, status = 200) {
   const token = signToken(user.id);
   setSessionCookie(res, token);
-  res.status(status).json({ user: toPublicUser(user), token });
+  res.status(status).json({ user: await publicUser(user), token });
 }
 
 const emailTaken = () => new HttpError(409, 'An account with this email already exists', { code: 'email_taken' });
@@ -137,7 +137,7 @@ router.post('/register', authLimiter, validateBody(registerSchema), async (req, 
     void sendCode(user, { limits: false }).catch((error) => console.error('[email] Could not make the confirmation code:', error.message));
   }
 
-  signIn(res, user, 201);
+  await signIn(res, user, 201);
 });
 
 // POST /api/auth/login
@@ -165,7 +165,7 @@ router.post('/login', authLimiter, validateBody(loginSchema), async (req, res) =
     void ensureCode(user).catch((error) => console.error('[email] Could not make the confirmation code:', error.message));
   }
 
-  signIn(res, user);
+  await signIn(res, user);
 });
 
 /**
@@ -236,7 +236,7 @@ router.post('/google', authLimiter, validateBody(googleSchema), async (req, res)
   if (!account.user.is_active) {
     throw new HttpError(403, 'Account is inactive. Contact support.', { code: 'account_inactive' });
   }
-  signIn(res, account.user, account.created ? 201 : 200);
+  await signIn(res, account.user, account.created ? 201 : 200);
 });
 
 /**
@@ -345,7 +345,7 @@ router.post('/apple', authLimiter, validateBody(appleSchema), async (req, res) =
   if (needsConfirmation(account.user)) {
     void ensureCode(account.user).catch((error) => console.error('[email] Could not make the confirmation code:', error.message));
   }
-  signIn(res, account.user, account.created ? 201 : 200);
+  await signIn(res, account.user, account.created ? 201 : 200);
 });
 
 // POST /api/auth/logout
@@ -355,15 +355,15 @@ router.post('/logout', (req, res) => {
 });
 
 // GET /api/auth/me
-router.get('/me', allowUnverified, requireAuth, (req, res) => {
-  res.json(toPublicUser(req.user));
+router.get('/me', allowUnverified, requireAuth, async (req, res) => {
+  res.json(await publicUser(req.user, req.workshop));
 });
 
 // POST /api/auth/verify-email: the code that was sent to the address of the signed-in account. Answers with the user, whose address is
 // confirmed now. Where nothing has to be confirmed, or when it is done already, it only answers with the user.
 router.post('/verify-email', allowUnverified, requireAuth, authLimiter, validateBody(verifyEmailSchema), async (req, res) => {
-  if (!needsConfirmation(req.user)) return res.json(toPublicUser(req.user));
-  res.json(toPublicUser(await confirmCode(req.user, req.body.code)));
+  if (!needsConfirmation(req.user)) return res.json(await publicUser(req.user, req.workshop));
+  res.json(await publicUser(await confirmCode(req.user, req.body.code), req.workshop));
 });
 
 // POST /api/auth/resend-verification: sends a new code to the address of the signed-in account (the old one stops working). A code is
@@ -380,6 +380,11 @@ router.post('/resend-verification', allowUnverified, requireAuth, authLimiter, a
 // PATCH /api/auth/me
 router.patch('/me', requireAuth, validateBody(profileSchema), async (req, res) => {
   const { setup_completed, full_name, ...rest } = req.body;
+  // The currency, the time zone, the unit of tension and the name are the workshop's, not the person's: they are the owner's to change.
+  const WORKSHOP_FIELDS = ['workshop_name', 'currency', 'tension_unit', 'timezone'];
+  if (req.workshop.member && WORKSHOP_FIELDS.some((field) => rest[field] !== undefined)) {
+    throw new HttpError(403, 'Only the owner of the workshop can change this', { code: 'forbidden_role' });
+  }
   const [updated] = await db
     .update(users)
     .set({
@@ -389,7 +394,7 @@ router.patch('/me', requireAuth, validateBody(profileSchema), async (req, res) =
     })
     .where(eq(users.id, req.user.id))
     .returning();
-  res.json(toPublicUser(updated));
+  res.json(await publicUser(updated, req.workshop));
 });
 
 // POST /api/auth/delete-account

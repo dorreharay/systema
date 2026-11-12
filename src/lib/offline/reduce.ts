@@ -361,6 +361,9 @@ function createOrder(t: Tables, op: OpOf<'order.create'>): Tables {
     started_at: null,
     ready_at: null,
     completed_at: null,
+    accepted_by: op.by ?? null,
+    assignee: op.assignee ?? null,
+    assigned_at: op.assignee ? op.at : null,
     created_at: op.at,
     updated_at: op.at,
     services: lines,
@@ -450,6 +453,15 @@ function updateOrder(t: Tables, op: OpOf<'order.update'>): Tables {
     next = withRacket(next, racket.id, (r) => ({ ...r, orders_count: r.orders_count + 1 }));
   }
   return refreshStats(next, [previous.client.id, clientSummary.id], [previous.racket.id, racket.id]);
+}
+
+function assignOrder(t: Tables, op: OpOf<'order.assign'>): Tables {
+  const order = t.orders[op.subject];
+  if (!order) return t;
+  return {
+    ...t,
+    orders: put(t.orders, order.id, { ...order, assignee: op.assignee, assigned_at: op.assignee ? op.at : null }),
+  };
 }
 
 function deleteOrder(t: Tables, op: OpOf<'order.delete'>): Tables {
@@ -637,6 +649,8 @@ export function applyOp(t: Tables, op: Op): Tables {
       return updateOrder(t, op);
     case 'order.delete':
       return deleteOrder(t, op);
+    case 'order.assign':
+      return assignOrder(t, op);
     case 'photo.delete':
       return deletePhoto(t, op);
   }
@@ -667,7 +681,8 @@ export function overlay(t: Tables, op: Op, answer: unknown): Tables {
     case 'service.update':
       return { ...t, services: put(t.services, op.subject, answer as Service) };
     case 'order.create':
-    case 'order.update': {
+    case 'order.update':
+    case 'order.assign': {
       const order = answer as OrderDetail;
       return { ...t, orders: put(t.orders, op.subject, { ...order, services: order.services ?? [], photos: order.photos ?? [] }) };
     }
