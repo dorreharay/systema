@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { MoreHorizontal, Pencil, Repeat, Trash2 } from '@/components/icons';
 import { HISTORY_SHOWN } from '@/components/order-card';
+import { PerformerLine, useGiveSheet } from '@/components/performer';
 import RacketFormSheet from '@/components/racket-form-sheet';
 import { StockBadge, StockSheet, useStockOn } from '@/components/stock';
 import ActionSheet from '@/components/ui/action-sheet';
@@ -42,7 +43,9 @@ export default function RacketDetails() {
   const remove = useDeleteRacket();
   const stockOn = useStockOn();
   // A client's racket is changed by anyone who may write; a racket of the catalog is stock, and the owner's.
-  const { canWrite, canEditCatalog } = useWorkshop();
+  const { canWrite, canEditCatalog, team } = useWorkshop();
+  // In a workshop with a team each order of the history says who strung it; the owner gives one from here (the sheet is drawn once, below).
+  const { give, sheet: giveSheet } = useGiveSheet();
   const [editing, setEditing] = useState(false);
   const [stocking, setStocking] = useState(false);
   const [menu, setMenu] = useState(false);
@@ -191,6 +194,8 @@ export default function RacketDetails() {
                 <Card
                   key={order.id}
                   onPress={() => router.push({ pathname: '/orders/[id]', params: { id: order.id } })}
+                  // (With a team the card has a button of its own in it: see Card.)
+                  nested={team}
                   className="gap-1.5">
                   <View className="flex-row items-center justify-between gap-3">
                     <Text className="text-base font-semibold">
@@ -204,6 +209,7 @@ export default function RacketDetails() {
                       {[order.stringing_notes, order.notes].filter(Boolean).join(', ')}
                     </Text>
                   ) : null}
+                  <PerformerLine order={order} onGive={give} />
                 </Card>
               ))}
             </View>
@@ -215,6 +221,7 @@ export default function RacketDetails() {
       </DetailScroll>
 
 
+      {giveSheet}
       <RacketFormSheet visible={editing} onClose={() => setEditing(false)} racket={racket} />
       <StockSheet visible={stocking} onClose={() => setStocking(false)} kind="racket" item={racket} />
       <ActionSheet

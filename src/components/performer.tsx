@@ -153,6 +153,38 @@ export function PerformerLine({ order, onGive, size = 'card' }: PerformerLinePro
 
 const ROLE_LABEL: Record<string, TKey> = { owner: 'role_owner', master: 'role_master', receptionist: 'role_receptionist' };
 
+/** A row of a sheet of people: the mark (or an icon), the name, what they are in the workshop, and a tick on the one that is chosen. */
+function PersonChoice({ leading, label, hint, selected, disabled, onPress }: {
+  leading: ReactNode;
+  label: string;
+  hint?: string;
+  selected: boolean;
+  disabled?: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ selected, disabled: !!disabled }}
+      disabled={disabled}
+      onPress={onPress}
+      className={`min-h-14 flex-row items-center gap-3 ${BUTTON_RADIUS.lg} px-2 hover:bg-surface active:bg-surface`}>
+      {leading}
+      <View className="min-w-0 flex-1">
+        <Text className="text-[16.8px] font-medium" numberOfLines={1}>
+          {label}
+        </Text>
+        {hint ? (
+          <Text className="text-[13.5px] text-muted" numberOfLines={1}>
+            {hint}
+          </Text>
+        ) : null}
+      </View>
+      {selected ? <Check size={20} color={colors.primary} /> : null}
+    </Pressable>
+  );
+}
+
 type AssignSheetProps = { order: Order | null; visible: boolean; onClose: () => void };
 
 /**
@@ -189,26 +221,7 @@ export function AssignSheet({ order, visible, onClose }: AssignSheetProps) {
   };
 
   const row = (key: string, leading: ReactNode, label: string, hint: string | undefined, selected: boolean, onPress: () => void) => (
-    <Pressable
-      key={key}
-      accessibilityRole="button"
-      accessibilityState={{ selected, disabled: busy }}
-      disabled={busy}
-      onPress={onPress}
-      className={`min-h-14 flex-row items-center gap-3 ${BUTTON_RADIUS.lg} px-2 hover:bg-surface active:bg-surface`}>
-      {leading}
-      <View className="min-w-0 flex-1">
-        <Text className="text-[16.8px] font-medium" numberOfLines={1}>
-          {label}
-        </Text>
-        {hint ? (
-          <Text className="text-[13.5px] text-muted" numberOfLines={1}>
-            {hint}
-          </Text>
-        ) : null}
-      </View>
-      {selected ? <Check size={20} color={colors.primary} /> : null}
-    </Pressable>
+    <PersonChoice key={key} leading={leading} label={label} hint={hint} selected={selected} disabled={busy} onPress={onPress} />
   );
 
   return (
@@ -243,6 +256,54 @@ export function AssignSheet({ order, visible, onClose }: AssignSheetProps) {
           <FormError message={error} />
         </View>
       ) : null}
+    </Sheet>
+  );
+}
+
+type PerformerSheetProps = {
+  visible: boolean;
+  onClose: () => void;
+  /** Who is chosen; null is nobody, the order waiting in the queue. */
+  value: Person | null;
+  onChange: (person: Person | null) => void;
+};
+
+/**
+ * Who strings an order that is being made (the new order's form, for the owner of a team): nobody (the order goes to the queue), the owner
+ * or one of the masters, from the same list as "Give" (`useWorkers`). Choosing only sets the value: nothing is sent from here.
+ */
+export function PerformerSheet({ visible, onClose, value, onChange }: PerformerSheetProps) {
+  const { t } = useI18n();
+  const self = useSelf();
+  const { workers, known } = useWorkers(visible);
+
+  const choose = (person: Person | null) => {
+    onChange(person);
+    onClose();
+  };
+
+  return (
+    <Sheet visible={visible} onClose={onClose} title={t('order_performer_label')}>
+      <View className="gap-1 pt-1">
+        <PersonChoice
+          leading={<PersonBadge person={null} size={36} />}
+          label={t('order_performer_queue')}
+          hint={t('order_performer_queue_hint')}
+          selected={value === null}
+          onPress={() => choose(null)}
+        />
+        {workers.map((worker) => (
+          <PersonChoice
+            key={worker.id}
+            leading={<PersonBadge person={worker} size={36} />}
+            label={worker.id === self?.id ? `${worker.name} (${t('queue_you')})` : worker.name}
+            hint={worker.role ? t(ROLE_LABEL[worker.role]) : undefined}
+            selected={value?.id === worker.id}
+            onPress={() => choose({ id: worker.id, name: worker.name })}
+          />
+        ))}
+      </View>
+      {!known ? <Text className="px-2 pt-3 text-[13.5px] leading-[18px] text-muted">{t('order_give_known')}</Text> : null}
     </Sheet>
   );
 }

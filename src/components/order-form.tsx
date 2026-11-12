@@ -13,6 +13,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import ClientFormSheet from '@/components/client-form-sheet';
 import { Calendar, Check, ChevronDown, ChevronUp, Clock, Plus, RotateCcw } from '@/components/icons';
 import UserIcon from '@/components/icons/user-icon';
+import { PerformerSheet } from '@/components/performer';
+import { PersonBadge } from '@/components/person-badge';
 import PlanLimitSheet from '@/components/plan-limit-sheet';
 import RacketFormSheet from '@/components/racket-form-sheet';
 import { StockLine } from '@/components/stock';
@@ -81,8 +83,9 @@ import {
   useUpdateOrder,
 } from '@/lib/queries';
 import { nameKey, withoutOwnedRackets } from '@/lib/reference';
-import type { CatalogString, Client, OrderDetail, Racket, ReferenceRacket } from '@/lib/types';
+import type { CatalogString, Client, OrderDetail, Person, Racket, ReferenceRacket } from '@/lib/types';
 import { useSubscription } from '@/lib/use-subscription';
+import { useSelf, useWorkshop } from '@/lib/use-workshop';
 
 type SectionKey = 'customer' | 'strings' | 'pricing';
 
@@ -173,13 +176,21 @@ export default function OrderForm({ initial, order }: OrderFormProps) {
   const [formError, setFormError] = useState<string>();
   const [submitting, setSubmitting] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(() => usesAdvanced(initial));
-  const [picking, setPicking] = useState<'client' | 'racket' | 'main' | 'cross' | null>(null);
+  const [picking, setPicking] = useState<'client' | 'racket' | 'main' | 'cross' | 'performer' | null>(null);
   const [creating, setCreating] = useState<
     { kind: 'client' | 'racket' | 'string'; name: string; target?: 'main' | 'cross' } | null
   >(null);
   const [dateTarget, setDateTarget] = useState<'received' | 'due' | null>(null);
   const [timeOpen, setTimeOpen] = useState(false);
   const [removedPhotos, setRemovedPhotos] = useState<string[]>([]);
+
+  // Who strings a new order, chosen by the owner of a team (null: nobody, the order goes to the queue). A master's order is theirs and a
+  // receptionist's goes to the queue: the offline layer decides that by the role, so for them there is nothing to choose, and none of
+  // this is drawn. An order that is being edited is given from its page.
+  const { canAssign } = useWorkshop();
+  const self = useSelf();
+  const choosePerformer = !editing && canAssign;
+  const [performer, setPerformer] = useState<Person | null>(null);
 
   // The plan's limit of new orders in a month. A form that opens for a new order when the month is used up shows the sheet at once,
   // over the empty form; an order that the server turns away for the same reason (its count is newer than the phone's) shows it too.
@@ -357,7 +368,7 @@ export default function OrderForm({ initial, order }: OrderFormProps) {
       const input = buildInput(draft, prices);
       const saved = order
         ? await updateOrder.mutateAsync({ id: order.id, ...input })
-        : await createOrder.mutateAsync(input);
+        : await createOrder.mutateAsync(choosePerformer ? { ...input, assignee: performer } : input);
 
       // Photos taken off go after the order exists.
       for (const id of removedPhotos) await deletePhoto.mutateAsync(id).catch(() => undefined);
@@ -760,6 +771,19 @@ export default function OrderForm({ initial, order }: OrderFormProps) {
             ) : null}
           </FormSection>
 
+          {/* Who strings it: the owner of a team only */}
+          {choosePerformer ? (
+            <FormSection title={t('order_people_title')}>
+              <PickerField
+                label={t('order_performer_label')}
+                value={performer ? (performer.id === self?.id ? `${performer.name} (${t('queue_you')})` : performer.name) : t('order_performer_queue')}
+                placeholder=""
+                icon={<PersonBadge person={performer} size={24} />}
+                onPress={() => setPicking('performer')}
+              />
+            </FormSection>
+          ) : null}
+
           {/* Notes */}
           <FormSection title={t('order_notes')}>
             <Input
@@ -943,6 +967,15 @@ export default function OrderForm({ initial, order }: OrderFormProps) {
           chooseString(target, string);
         }}
       />
+
+      {choosePerformer ? (
+        <PerformerSheet
+          visible={picking === 'performer'}
+          onClose={() => setPicking(null)}
+          value={performer}
+          onChange={setPerformer}
+        />
+      ) : null}
 
       <ClientFormSheet
         visible={creating?.kind === 'client'}

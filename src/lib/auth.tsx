@@ -27,6 +27,7 @@ import { forgetGoogleAccount, requestGoogleCredential } from '@/lib/google-sign-
 import type { Language } from '@/lib/i18n';
 import { getItem, removeItem, setItem } from '@/lib/local-storage';
 import { offlineStore } from '@/lib/offline/app';
+import { pendingJoin } from '@/lib/pending-join-app';
 import { clearReminders } from '@/lib/reminders';
 import { clearToken, getToken, saveToken } from '@/lib/token-storage';
 
@@ -265,6 +266,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // The token first: it is what brings the person back in at the next start.
     await forget(clearToken);
     await forget(() => removeItem(USER_KEY));
+    // The code of an invitation link that was waiting for this person to sign in is theirs and no one else's.
+    await forget(() => pendingJoin.forget());
     // The next sign-in with Google must ask which account, not hand over this one.
     await forget(forgetGoogleAccount);
     // The reminders are about this stringer's orders: they must not go on showing up on a phone nobody is signed in on.

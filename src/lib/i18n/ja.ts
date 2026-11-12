@@ -734,4 +734,9 @@ export const ja: Record<Exclude<keyof typeof en, `${'date_in_days' | 'insights_u
   stock_last_used: "直近：{name}、注文{number}",
   stock_last_used_order: "直近：注文{number}",
   stock_owner_only: "カタログ、在庫、料金を変更できるのはオーナーだけです。",
+  // The new order's form: who strings it (the owner of a team)
+  order_performer_label: "担当者",
+  order_performer_queue: "なし、未担当のまま",
+  order_performer_queue_hint: "ストリンガーなら誰でも引き受けられます。",
+  stock_empty_member: "在庫はまだありません。工房が持つ在庫はオーナーが追加します。",
 };

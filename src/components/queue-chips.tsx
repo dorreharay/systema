@@ -21,7 +21,8 @@ export function useQueueFilter() {
   const { team, role } = useWorkshop();
   const self = useSelf();
   const asked = useLocalSearchParams<{ queue?: string }>().queue;
-  const first = VALUES.find((candidate) => candidate === asked);
+  // A receptionist strings nothing, so «Mine» is never theirs.
+  const first = VALUES.find((candidate) => candidate === asked && !(role === 'receptionist' && candidate === 'mine'));
   // What is chosen, and the word of the link it was last set from: a new word (the home screen leads here again) sets the choice anew.
   const [state, setState] = useState<{ asked: string | undefined; value: Queue }>({
     asked,
@@ -56,11 +57,14 @@ type QueueChipsProps = {
 /** "All / Mine / No performer", the last with the number of orders in the queue. */
 export default function QueueChips({ value, onChange, waiting, wide }: QueueChipsProps) {
   const { t } = useI18n();
+  const { role } = useWorkshop();
   const labels: Record<Queue, string> = { all: t('queue_all'), mine: t('queue_mine'), none: t('queue_none') };
+  // A receptionist takes orders in and hands them out and strings none: they have no «Mine».
+  const values = role === 'receptionist' ? VALUES.filter((key) => key !== 'mine') : VALUES;
 
   return (
     <View accessibilityRole="tablist" accessibilityLabel={t('queue_filter_label')} className="flex-row flex-wrap items-center gap-2">
-      {VALUES.map((key) => {
+      {values.map((key) => {
         const on = value === key;
         const count = key === 'none' ? waiting : null;
         return (

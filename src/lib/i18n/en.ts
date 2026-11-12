@@ -746,4 +746,9 @@ export const en = {
   stock_last_used_order: "Last: order {number}",
   stock_owner_only: "Only the owner changes the catalog, the stock and the prices.",
   // --- Studio team: the queue, the order's people, home, the report (the keys of the order screens go above this line) ---
+  // The new order's form: who strings it (the owner of a team)
+  order_performer_label: "Who strings it",
+  order_performer_queue: "Nobody, to the queue",
+  order_performer_queue_hint: "Any master can take it.",
+  stock_empty_member: "Nothing is in stock yet. The owner adds what the workshop keeps.",
 } as const;

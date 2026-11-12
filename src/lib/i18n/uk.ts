@@ -758,4 +758,9 @@ export const uk: Record<keyof typeof en, string> & Record<string, string> = {
   stock_last_used_order: "Останнє: замовлення {number}",
   stock_owner_only: "Каталог, склад і ціни змінює лише власник.",
   // --- Studio team: the queue, the order's people, home, the report (the keys of the order screens go above this line) ---
+  // The new order's form: who strings it (the owner of a team)
+  order_performer_label: "Хто виконає",
+  order_performer_queue: "Ніхто, у чергу",
+  order_performer_queue_hint: "Будь-який майстер зможе його взяти.",
+  stock_empty_member: "На складі ще нічого немає. Власник додає те, що тримає майстерня.",
 };

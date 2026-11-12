@@ -739,4 +739,9 @@ export const it: Record<keyof typeof en, string> & Record<string, string> = {
   stock_last_used: "Ultimo: {name}, ordine {number}",
   stock_last_used_order: "Ultimo: ordine {number}",
   stock_owner_only: "Solo il titolare modifica il catalogo, le scorte e i prezzi.",
+  // The new order's form: who strings it (the owner of a team)
+  order_performer_label: "Chi incorda",
+  order_performer_queue: "Nessuno, in coda",
+  order_performer_queue_hint: "Qualsiasi incordatore può prenderlo.",
+  stock_empty_member: "Il magazzino è ancora vuoto. Il titolare aggiunge ciò che il laboratorio tiene.",
 };

@@ -3,6 +3,7 @@ import { StatusBar } from 'expo-status-bar';
 
 import AppShell from '@/components/app-shell';
 import DueReminders from '@/components/due-reminders';
+import { JoinLinkKeeper, PendingJoinOpener } from '@/components/join-link';
 import StoreIdentity from '@/components/store-identity';
 import { colors } from '@/components/ui/colors';
 import KeyboardWarmUp from '@/components/ui/keyboard-warm-up';
@@ -30,6 +31,10 @@ export default function AppLayout() {
     !subscription.expired &&
     offer.loaded &&
     !offer.seen;
+  // Whether the pages of the app are open (the guard of most of the screens below). A link to join a workshop that was opened before they
+  // were is kept and opened once they are, after the offer is answered or known not to be due (the offer is read from the device, and
+  // until it has been the guard cannot tell).
+  const pagesOpen = setupDone && !offerNeeded;
 
   return (
     <>
@@ -39,8 +44,10 @@ export default function AppLayout() {
       <StoreIdentity />
       {setupDone ? <DueReminders /> : null}
       {setupDone ? <KeyboardWarmUp /> : null}
+      <JoinLinkKeeper turnedAway={!pagesOpen} />
+      <PendingJoinOpener ready={pagesOpen && offer.loaded} />
       {/* On a wide screen the pages stand in a pane beside the sidebar; on the phone this is nothing (see AppShell). */}
-      <AppShell sidebar={setupDone && !offerNeeded}>
+      <AppShell sidebar={pagesOpen}>
       <Stack
       screenOptions={{
         headerShown: false,
@@ -49,7 +56,7 @@ export default function AppLayout() {
         animationDuration: 120,
         contentStyle: { backgroundColor: colors.page },
       }}>
-      <Stack.Protected guard={setupDone && !offerNeeded} redirectTo={setupDone ? '/offer' : '/setup'}>
+      <Stack.Protected guard={pagesOpen} redirectTo={setupDone ? '/offer' : '/setup'}>
         {/* Dark behind the tabs: it shows around the rounded corners of the page and under the navigation. (A wide screen has the
             sidebar instead, and the pane is light all the way.) */}
         <Stack.Screen name="(tabs)" options={{ contentStyle: { backgroundColor: wide ? colors.page : colors.chrome } }} />

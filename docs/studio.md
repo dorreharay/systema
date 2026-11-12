@@ -116,20 +116,20 @@ Orders carry `accepted_by`, `assignee` (`{id, name}`, never an address) and `ass
 - **Texts**: nine languages; the seven besides Ukrainian and English are machine drafts no native has read. The names of the roles are the most
   doubtful words (Master is the stringer of the file's own word in each language).
 
-Checked on the iPhone 17 Pro simulator against a local server with Studio on (2026-11-12): the owner's home with «Команда сьогодні», the orders list with
-the chips and the performer line, the «Віддати» picker, the Team screen and the invitation sheet creating a real code. **Not looked at on a screen:**
-the Join screen, a master's and a receptionist's own views, the report, the order page's «Люди» block, the Settings rows, the Studio page,
-wide layouts. They are covered by the types, by `scripts/test-offline.mjs` and by the server tests only.
+Checked on screens (2026-11-12) against a local server with Studio on: on the iPhone 17 Pro simulator the owner's home, the orders list, the give
+picker, the Team screen and the invitation sheet; on the web build at phone width the master (home, queue and «Take», another's order read-only,
+settings, own report), the receptionist (join by code from the preview card to the home, all orders without Take or Give, the team read-only,
+the stock), the owner (report, Studio page, order page with «Give to», the new order form with «Who strings it», the history lists with «Give»),
+a paused workshop (banner, no «New order»), a Free account (the Studio page says it is bought in the iPhone app), and at desktop width the orders
+table with the performer, the team and the report. **Not looked at on a screen:** a master's and a receptionist's views on the simulator, the
+Studio purchase in the app (the store was never connected), the invitation sheet's Share and Copy on a device.
 
 ## Known gaps
 
-- The order form has no «who strings it» chooser for the owner (the offline layer already takes it): the owner gives the order after making it.
-- `https://myrestring.com/join?code=...` for someone who is signed out is sent to the front page and loses the code; universal links are not set
-  up either. The code typed by hand in Settings works.
-- «Віддати» is not on the order history lists of the client page; a master's «Взяти» is.
-- On the owner's home with the team block, the labels under the numbers of the month card looked cut by the dock in the simulator screenshot;
-  whether the page scrolls there was not checked.
+- `https://myrestring.com/join?code=...` opens in the app only when it is opened by hand: universal links are not set up. The code is kept through
+  sign-in, sign-up, email confirmation and setup for 7 days (`pending_join_code`), and the code typed in Settings works too.
 - `last_used` («Last: name, order N») is on the catalog cards only, not on the racket page.
+- The master's home has the two tiles in the middle of the white block, with empty room above and below.
 
 ## Settings of the server
 

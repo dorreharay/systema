@@ -270,9 +270,9 @@ function CatalogPage() {
               <EmptyState
                 icon={Library}
                 title={t('rackets_empty_title')}
-                message={t('rackets_empty_message')}
-                actionLabel={t('add_racket')}
-                onAction={sheets.addRacket}
+                message={canEditCatalog ? t('rackets_empty_message') : t('stock_empty_member')}
+                actionLabel={canEditCatalog ? t('add_racket') : undefined}
+                onAction={canEditCatalog ? sheets.addRacket : undefined}
               />
             )
           }
@@ -313,9 +313,9 @@ function CatalogPage() {
               <EmptyState
                 icon={Tags}
                 title={t('strings_empty_title')}
-                message={t('strings_empty_message')}
-                actionLabel={t('add_string')}
-                onAction={sheets.addString}
+                message={canEditCatalog ? t('strings_empty_message') : t('stock_empty_member')}
+                actionLabel={canEditCatalog ? t('add_string') : undefined}
+                onAction={canEditCatalog ? sheets.addString : undefined}
               />
             )
           }

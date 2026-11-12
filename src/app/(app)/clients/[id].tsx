@@ -8,6 +8,7 @@ import ClientFormSheet from '@/components/client-form-sheet';
 import { Mail, MoreHorizontal, Pencil, Trash2 } from '@/components/icons';
 import PlusIcon from '@/components/icons/plus-icon';
 import OrderCard, { HISTORY_SHOWN } from '@/components/order-card';
+import { useGiveSheet } from '@/components/performer';
 import RacketFormSheet from '@/components/racket-form-sheet';
 import ReferenceRacketPicker from '@/components/reference-racket-picker';
 import ActionSheet from '@/components/ui/action-sheet';
@@ -42,6 +43,8 @@ export default function ClientDetails() {
   const remove = useDeleteClient();
   // A member of a paused workshop reads and does not write: no new order, no changes to the client.
   const { canWrite } = useWorkshop();
+  // The owner of a team gives an order from the history to someone (the sheet is drawn once, below); a master's "Take" is on the card itself.
+  const { give, sheet: giveSheet } = useGiveSheet();
   const [editing, setEditing] = useState(false);
   // A racket is added from the reference list; one that is not in it is typed in, in a form that comes after.
   const [pickingRacket, setPickingRacket] = useState(false);
@@ -181,7 +184,7 @@ export default function ClientDetails() {
           ) : (
             <View className="gap-3">
               {(allOrders ? client.orders : client.orders.slice(0, HISTORY_SHOWN)).map((order) => (
-                <OrderCard key={order.id} order={order} />
+                <OrderCard key={order.id} order={order} onGive={give} />
               ))}
             </View>
           )}
@@ -192,6 +195,7 @@ export default function ClientDetails() {
       </DetailScroll>
 
 
+      {giveSheet}
       <ClientFormSheet visible={editing} onClose={() => setEditing(false)} client={client} />
       <ReferenceRacketPicker
         visible={pickingRacket}

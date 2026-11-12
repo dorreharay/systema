@@ -10,6 +10,7 @@ import { Image, Platform, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import AppHeader from '@/components/app-header';
+import { JoinLinkKeeper } from '@/components/join-link';
 import { ConfirmProvider } from '@/components/ui/confirm';
 import { ToastProvider } from '@/components/ui/toast';
 import { AuthProvider, useAuth } from '@/lib/auth';
@@ -97,6 +98,9 @@ function RootNavigator() {
       {/* The logo types itself out on every launch, then stays as the header over the pages (each
           page leaves room for it, see Screen) and over the photo of the sign-in screens. */}
       <AppHeader />
+      {/* The link of an invitation to a workshop (/join?code=ABCDE-FGHJK) opened before the person is in the app is turned away by the guards
+          below, and the code with it: this keeps it for after the sign-in (see components/join-link.tsx). */}
+      <JoinLinkKeeper turnedAway={!inApp} />
       <Stack
         screenOptions={{
           headerShown: false,
