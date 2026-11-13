@@ -454,9 +454,9 @@ export const fr: Record<keyof typeof en, string> & Record<string, string> = {
   setup_subtitle: "Quelques informations pour que les prix et la tension s’affichent à votre façon.",
   setup_unit_hint: "Cela ne change que l’affichage de la tension. Les commandes conservent la valeur exacte.",
   setup_hint: "Vous pourrez tout modifier plus tard dans les paramètres.",
-  reminder_title: "Échéance de la commande {number}",
   setup_service_question: "Combien facturez-vous un cordage de raquette standard ?",
   setup_service_hint: "C’est le service de base : son prix sera repris dans chaque commande.",
+  reminder_title: "Échéance de la commande {number}",
   reminder_body: "{client}, {racket}",
   // Offline mode: a copy of the data on the phone and a queue of the changes the server has not got yet (docs/offline.md).
   error_network_required: "Une connexion internet est nécessaire. Connectez-vous et réessayez.",

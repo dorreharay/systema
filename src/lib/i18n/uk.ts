@@ -464,9 +464,9 @@ export const uk: Record<keyof typeof en, string> & Record<string, string> = {
   setup_subtitle: "Кілька даних, щоб ціни й натяг показувалися так, як вам зручно.",
   setup_unit_hint: "Лише спосіб показу натягу. Замовлення зберігають точне значення.",
   setup_hint: "Усе це можна змінити пізніше в налаштуваннях.",
-  reminder_title: "Замовлення {number}: сьогодні термін",
   setup_service_question: "Скільки коштує ваша звичайна робота з\u00A0перетяжки ракетки?",
   setup_service_hint: "Це базова послуга: її ціна буде підставлятись при кожному замовленні.",
+  reminder_title: "Замовлення {number}: сьогодні термін",
   reminder_body: "{client}, {racket}",
   // Offline mode: a copy of the data on the phone and a queue of the changes the server has not got yet (docs/offline.md).
   error_network_required: "Для цього потрібен інтернет. Підключіться й спробуйте ще раз.",

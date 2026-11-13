@@ -449,9 +449,9 @@ export const ja: Record<Exclude<keyof typeof en, `${'date_in_days' | 'insights_u
   setup_subtitle: "料金とテンションが使い慣れた形で表示されるよう、いくつか設定します。",
   setup_unit_hint: "テンションの表示方法だけが変わります。注文には正確な値が保存されます。",
   setup_hint: "これらはあとから設定でいつでも変更できます。",
-  reminder_title: "注文{number}の納期です",
   setup_service_question: "ラケット1本あたりの通常のガット張り工賃はいくらですか？",
   setup_service_hint: "これは基本のサービスです。料金は注文のたびに自動で入力されます。",
+  reminder_title: "注文{number}の納期です",
   reminder_body: "{client}、{racket}",
   // Offline mode: a copy of the data on the phone and a queue of the changes the server has not got yet (docs/offline.md).
   error_network_required: "この操作にはインターネット接続が必要です。接続してからもう一度お試しください。",
