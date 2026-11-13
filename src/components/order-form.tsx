@@ -20,7 +20,7 @@ import RacketFormSheet from '@/components/racket-form-sheet';
 import { StockLine } from '@/components/stock';
 import StringFormSheet from '@/components/string-form-sheet';
 import { BUTTON_RADIUS } from '@/components/ui/button-radius';
-import { BLOCK, BLOCK_ROOM } from '@/components/ui/card';
+import { BLOCK, BLOCK_ROOM_X } from '@/components/ui/card';
 import { Segmented } from '@/components/ui/chips';
 import { colors } from '@/components/ui/colors';
 import { useConfirm } from '@/components/ui/confirm';
@@ -122,6 +122,8 @@ type RacketRow =
   | { kind: 'reference'; item: ReferenceRacket }
   | { kind: 'heading'; group: 'own' | 'reference' };
 
+// The room inside a section is the same on every side: 20 px at the sides and under the last field, and 16 above the title, where the line
+// of the title adds about 4 px of its own over its capitals, so that the title too is 20 px from the edge of the card.
 function FormSection({
   title,
   children,
@@ -132,7 +134,7 @@ function FormSection({
   onLayout?: (event: LayoutChangeEvent) => void;
 }) {
   return (
-    <View onLayout={onLayout} className={`${BLOCK} ${BLOCK_ROOM} gap-3`}>
+    <View onLayout={onLayout} className={`${BLOCK} ${BLOCK_ROOM_X} pb-5 pt-4 gap-3`}>
       <Text accessibilityRole="header" className="text-[18.7px] font-semibold">
         {title}
       </Text>
