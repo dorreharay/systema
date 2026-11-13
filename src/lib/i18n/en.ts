@@ -452,6 +452,8 @@ export const en = {
   setup_unit_hint: "Only how tension is shown. Orders keep the exact value.",
   setup_hint: "You can change all of this later in Settings.",
   reminder_title: "Order {number} is due",
+  setup_service_question: "How much does your usual racket stringing cost?",
+  setup_service_hint: "This is the base service: its price will be filled into every order.",
   reminder_body: "{client}, {racket}",
   // Offline mode: a copy of the data on the phone and a queue of the changes the server has not got yet (docs/offline.md).
   error_network_required: "This needs an internet connection. Connect and try again.",

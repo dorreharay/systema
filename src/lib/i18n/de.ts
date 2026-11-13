@@ -454,6 +454,8 @@ export const de: Record<keyof typeof en, string> & Record<string, string> = {
   setup_unit_hint: "Betrifft nur die Anzeige der Bespannhärte. Aufträge behalten den genauen Wert.",
   setup_hint: "Sie können das alles später in den Einstellungen ändern.",
   reminder_title: "Auftrag {number} ist fällig",
+  setup_service_question: "Was kostet bei Ihnen eine normale Schlägerbespannung?",
+  setup_service_hint: "Das ist die Basisleistung: Der Preis wird bei jedem Auftrag eingetragen.",
   reminder_body: "{client}, {racket}",
   // Offline mode: a copy of the data on the phone and a queue of the changes the server has not got yet (docs/offline.md).
   error_network_required: "Dafür ist eine Internetverbindung nötig. Verbinden Sie sich und versuchen Sie es erneut.",

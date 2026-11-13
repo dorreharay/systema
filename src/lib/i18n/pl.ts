@@ -464,6 +464,8 @@ export const pl: Record<keyof typeof en, string> & Record<string, string> = {
   setup_unit_hint: "Dotyczy tylko sposobu wyświetlania naciągu. Zamówienia zachowują dokładną wartość.",
   setup_hint: "Wszystko to zmienisz później w ustawieniach.",
   reminder_title: "Zamówienie {number} ma dziś termin",
+  setup_service_question: "Ile kosztuje Twoje standardowe naciąganie rakiety?",
+  setup_service_hint: "To usługa podstawowa: jej cena będzie wpisywana przy każdym zamówieniu.",
   reminder_body: "{client}, {racket}",
   // Offline mode: a copy of the data on the phone and a queue of the changes the server has not got yet (docs/offline.md).
   error_network_required: "To wymaga połączenia z internetem. Połącz się i spróbuj ponownie.",
