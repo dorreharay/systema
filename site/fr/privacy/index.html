@@ -47,7 +47,7 @@
 <main id="main" class="wrap page">
 <div class="prose">
 <h1>Politique de confidentialité</h1>
-<p class="meta">Entrée en vigueur et dernière mise à jour&nbsp;: <time datetime="2026-11-04">4&nbsp;novembre&nbsp;2026</time></p>
+<p class="meta">Entrée en vigueur et dernière mise à jour&nbsp;: <time datetime="2026-11-14">14&nbsp;novembre&nbsp;2026</time></p>
 <p>La présente politique explique quelles données l’application re:string (l’«&nbsp;application&nbsp;») et le site web tryrestring.com collectent, pourquoi, où elles sont stockées, pendant combien de temps, et comment vous pouvez les supprimer. Nous l’avons rédigée dans un langage simple.</p>
 
 <div class="sum">
@@ -141,7 +141,7 @@
 <p>Nous faisons appel à quelques services. Ils ne traitent les données que pour permettre à l’application et au site web de fonctionner&nbsp;:</p>
 <dl class="prov">
 <dt>Railway (États-Unis)</dt>
-<dd>Hébergement du serveur de l’application, de la base de données PostgreSQL et du site web tryrestring.com dans la région EU West (Amsterdam, Pays-Bas). Toutes les données des comptes y sont stockées.</dd>
+<dd>Hébergement du serveur de l’application, de la base de données PostgreSQL, du stockage privé contenant les sauvegardes de la base (section&nbsp;5) et du site web tryrestring.com dans la région EU West (Amsterdam, Pays-Bas). Toutes les données des comptes y sont stockées.</dd>
 <dt>Resend (États-Unis)</dt>
 <dd>Envoie l’e-mail de réinitialisation du mot de passe&nbsp;: reçoit votre adresse, votre nom (s’il est renseigné) et le texte de l’e-mail contenant le lien.</dd>
 <dt>Expo (États-Unis)</dt>
@@ -165,6 +165,7 @@
 <li>Clients, raquettes, cordages. «&nbsp;Supprimer&nbsp;» retire l’enregistrement de vos listes, mais l’enregistrement lui-même reste dans la base de données afin que les commandes passées conservent les noms. Il est effacé définitivement avec le compte. Si vous avez besoin qu’un enregistrement soit effacé plus tôt, écrivez-nous. Les services sont archivés, et non supprimés, et sont eux aussi effacés avec le compte.</li>
 <li>Un jeton de réinitialisation du mot de passe est valable 60&nbsp;minutes et une seule fois.</li>
 <li>Les échanges avec l’assistance sont conservés aussi longtemps que nécessaire pour vous aider.</li>
+<li>Sauvegardes. Une fois par jour, nous faisons une copie de toute la base de données afin de pouvoir rétablir le service après une panne. Les copies sont conservées environ quatre semaines (les 14 dernières quotidiennes et les 4 dernières hebdomadaires), puis supprimées automatiquement. Ce que vous supprimez, y compris un compte entier, disparaît aussi de ces copies au plus tard dans les 30 jours.</li>
 <li>Les journaux du serveur sont conservés par l’hébergeur selon ses propres règles, pendant une durée limitée.</li>
 </ul>
 
@@ -176,7 +177,7 @@
 </ol>
 <p>Votre compte, votre adresse e-mail, vos clients, raquettes, cordages, services, commandes et photos sont supprimés de la base de données en une seule opération et ne peuvent pas être restaurés. Désinstaller l’application de votre téléphone ne supprime pas le compte. Si le compte est lié à «&nbsp;Se connecter avec Apple&nbsp;» et qu’Apple a délivré un jeton d’actualisation, nous demandons à Apple de révoquer cette connexion.</p>
 <p>Vous ne pouvez pas vous connecter&nbsp;? Écrivez à <a href="mailto:support@tryrestring.com">support@tryrestring.com</a>&nbsp;: nous nous assurerons que le compte est bien le vôtre (par exemple à partir d’un message envoyé depuis l’adresse e-mail du compte&nbsp;; si vous avez masqué votre adresse e-mail chez Apple, nous trouverons un autre moyen) et nous le supprimerons dès que possible, dans un délai de 30&nbsp;jours au plus tard.</p>
-<p>Les copies techniques que l’hébergeur peut conserver pendant une courte durée (sauvegardes, journaux) sont écrasées dans le cours normal des opérations.</p>
+<p>Les copies techniques que l’hébergeur peut conserver pendant une courte durée (sauvegardes, journaux) sont écrasées dans le cours normal des opérations. Nos propres sauvegardes de la base de données (section&nbsp;5) sont supprimées automatiquement au plus tard après 30 jours, si bien que les données supprimées en disparaissent aussi.</p>
 
 <h2 id="rights">7. Vos droits</h2>
 <p>Selon votre pays (par exemple l’UE/EEE, le Royaume-Uni ou l’Ukraine), vous avez le droit de&nbsp;:</p>

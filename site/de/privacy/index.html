@@ -47,7 +47,7 @@
 <main id="main" class="wrap page">
 <div class="prose">
 <h1>Datenschutzerklärung</h1>
-<p class="meta">Gültig ab und zuletzt aktualisiert: <time datetime="2026-11-04">4.&nbsp;November&nbsp;2026</time></p>
+<p class="meta">Gültig ab und zuletzt aktualisiert: <time datetime="2026-11-14">14.&nbsp;November&nbsp;2026</time></p>
 <p>Diese Datenschutzerklärung erläutert, welche Daten die App re:string (die „App“) und die Website tryrestring.com erheben, warum, wo sie gespeichert werden, wie lange sie aufbewahrt werden und wie Sie sie löschen können. Wir haben sie in klarer und einfacher Sprache verfasst.</p>
 
 <div class="sum">
@@ -141,7 +141,7 @@
 <p>Wir nutzen einige Dienste. Sie verarbeiten Daten nur, damit die App und die Website funktionieren können:</p>
 <dl class="prov">
 <dt>Railway (USA)</dt>
-<dd>Hosting des Servers der App, der PostgreSQL-Datenbank und der Website tryrestring.com in der Region EU West (Amsterdam, Niederlande). Hier werden alle Kontodaten gespeichert.</dd>
+<dd>Hosting des Servers der App, der PostgreSQL-Datenbank, des privaten Speichers mit den Backups der Datenbank (Abschnitt 5) und der Website tryrestring.com in der Region EU West (Amsterdam, Niederlande). Hier werden alle Kontodaten gespeichert.</dd>
 <dt>Resend (USA)</dt>
 <dd>Versendet die E-Mail zum Zurücksetzen des Passworts: erhält Ihre E-Mail-Adresse, Ihren Namen (falls angegeben) und den Text der E-Mail mit dem Link.</dd>
 <dt>Expo (USA)</dt>
@@ -165,6 +165,7 @@
 <li>Kunden, Schläger, Saiten. „Löschen“ entfernt den Eintrag aus Ihren Listen, der Eintrag selbst bleibt aber in der Datenbank, damit frühere Aufträge die Namen behalten. Er wird zusammen mit dem Konto endgültig gelöscht. Wenn ein Eintrag früher gelöscht werden soll, schreiben Sie uns. Leistungen werden archiviert, nicht gelöscht, und ebenfalls mit dem Konto gelöscht.</li>
 <li>Ein Token zum Zurücksetzen des Passworts ist 60&nbsp;Minuten lang und nur einmal gültig.</li>
 <li>Der Schriftverkehr mit dem Support wird so lange aufbewahrt, wie er benötigt wird, um Ihnen zu helfen.</li>
+<li>Backups. Einmal täglich erstellen wir eine Kopie der gesamten Datenbank, um den Dienst nach einer Störung wiederherstellen zu können. Die Kopien werden etwa vier Wochen aufbewahrt (die letzten 14 täglichen und die letzten 4 wöchentlichen) und danach automatisch gelöscht. Was Sie löschen, auch ein ganzes Konto, verschwindet spätestens nach 30 Tagen auch aus diesen Kopien.</li>
 <li>Server-Protokolle bewahrt der Hosting-Anbieter nach seinen eigenen Regeln für begrenzte Zeit auf.</li>
 </ul>
 
@@ -176,7 +177,7 @@
 </ol>
 <p>Ihr Konto, Ihre E-Mail-Adresse, Kunden, Schläger, Saiten, Leistungen, Aufträge und Fotos werden mit einer einzigen Anweisung aus der Datenbank gelöscht und können nicht wiederhergestellt werden. Das Entfernen der App von Ihrem Telefon löscht das Konto nicht. Wenn das Konto mit „Mit Apple anmelden“ verknüpft ist und Apple ein Refresh-Token ausgestellt hat, bitten wir Apple, diese Anmeldung zu widerrufen.</p>
 <p>Sie können sich nicht anmelden? Schreiben Sie an <a href="mailto:support@tryrestring.com">support@tryrestring.com</a>: Wir stellen sicher, dass das Konto Ihnen gehört (zum Beispiel anhand einer Nachricht von der E-Mail-Adresse des Kontos; wenn Sie Ihre E-Mail-Adresse bei Apple verborgen haben, finden wir einen anderen Weg), und löschen es so bald wie möglich, spätestens innerhalb von 30&nbsp;Tagen.</p>
-<p>Technische Kopien, die der Hosting-Anbieter möglicherweise kurzzeitig aufbewahrt (Backups, Protokolle), werden im normalen Betriebsablauf überschrieben.</p>
+<p>Technische Kopien, die der Hosting-Anbieter möglicherweise kurzzeitig aufbewahrt (Backups, Protokolle), werden im normalen Betriebsablauf überschrieben. Unsere eigenen Backups der Datenbank (Abschnitt 5) werden spätestens nach 30 Tagen automatisch gelöscht, sodass gelöschte Daten auch daraus verschwinden.</p>
 
 <h2 id="rights">7. Ihre Rechte</h2>
 <p>Je nach Ihrem Land (zum Beispiel EU/EWR, Vereinigtes Königreich oder Ukraine) haben Sie das Recht:</p>
