@@ -73,6 +73,7 @@ export const ja: Record<Exclude<keyof typeof en, `${'date_in_days' | 'insights_u
   field_confirm_password: "パスワード（確認）",
   confirm_password_placeholder: "パスワードを再入力",
   password_placeholder_min: "{min}文字以上",
+  password_placeholder: "パスワードを入力",
   password_changed: "パスワードを変更しました。新しいパスワードでログインしてください。",
   validation_email_required: "メールアドレスを入力してください",
   validation_email_invalid: "有効なメールアドレスを入力してください",

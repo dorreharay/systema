@@ -73,6 +73,7 @@ export const it: Record<keyof typeof en, string> & Record<string, string> = {
   field_confirm_password: "Conferma password",
   confirm_password_placeholder: "Ripeti la password",
   password_placeholder_min: "Almeno {min} caratteri",
+  password_placeholder: "Inserisci la password",
   password_changed: "Password cambiata. Accedi con la nuova password.",
   validation_email_required: "Inserisci la tua email",
   validation_email_invalid: "Inserisci un’email valida",

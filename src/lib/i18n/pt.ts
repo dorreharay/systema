@@ -73,6 +73,7 @@ export const pt: Record<keyof typeof en, string> & Record<string, string> = {
   field_confirm_password: "Confirmar senha",
   confirm_password_placeholder: "Repita a senha",
   password_placeholder_min: "Pelo menos {min} caracteres",
+  password_placeholder: "Digite a senha",
   password_changed: "Senha alterada. Entre com a nova senha.",
   validation_email_required: "Digite seu e-mail",
   validation_email_invalid: "Digite um e-mail válido",

@@ -96,6 +96,7 @@ export default function Login() {
           value={password}
           onChangeText={changePassword}
           error={errors.password}
+          placeholder={t('password_placeholder')}
           secureTextEntry
           autoCapitalize="none"
           autoComplete="current-password"

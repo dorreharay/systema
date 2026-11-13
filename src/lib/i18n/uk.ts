@@ -73,6 +73,7 @@ export const uk: Record<keyof typeof en, string> & Record<string, string> = {
   field_confirm_password: "Підтвердіть пароль",
   confirm_password_placeholder: "Повторіть пароль",
   password_placeholder_min: "Мінімум {min} символів",
+  password_placeholder: "Введіть пароль",
   password_changed: "Пароль змінено. Увійдіть з новим паролем.",
   validation_email_required: "Введіть email",
   validation_email_invalid: "Некоректний email",

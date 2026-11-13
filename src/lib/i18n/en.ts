@@ -71,6 +71,7 @@ export const en = {
   field_confirm_password: "Confirm password",
   confirm_password_placeholder: "Repeat the password",
   password_placeholder_min: "At least {min} characters",
+  password_placeholder: "Enter your password",
   password_changed: "Password changed. Sign in with the new password.",
   validation_email_required: "Enter your email",
   validation_email_invalid: "Enter a valid email",
