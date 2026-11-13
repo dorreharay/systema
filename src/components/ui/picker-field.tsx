@@ -37,10 +37,10 @@ export default function PickerField({
         disabled={disabled}
         onPress={onPress}
         // On iOS the room above and below the text is 9.5 pt and the text is lifted by 2 pt of padding under it (see
-        // field-text): that keeps the field as tall as an input.
-        className={`min-h-12 flex-row items-center gap-2 rounded-lg border bg-white px-3.5 py-2.5 ios:py-[9.5px] hover:bg-surface active:bg-surface ${
-          error ? 'border-danger' : 'border-line'
-        } ${disabled ? 'opacity-50' : ''}`}>
+        // field-text): that keeps the field as tall as an input. A field with nothing chosen yet is grey, and turns white once there is.
+        className={`min-h-12 flex-row items-center gap-2 rounded-lg border px-3.5 py-2.5 ios:py-[9.5px] ${
+          value ? 'bg-white hover:bg-surface active:bg-surface' : 'bg-surface hover:bg-neutral-200 active:bg-neutral-200'
+        } ${error ? 'border-danger' : 'border-line'} ${disabled ? 'opacity-50' : ''}`}>
         {icon}
         <Text
           className={`flex-1 text-base ${FIELD_TEXT_LIFT} ${value ? 'text-ink' : 'text-neutral-400'}`}

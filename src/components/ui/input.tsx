@@ -32,9 +32,12 @@ export function Input({
   onBlur,
   editable = true,
   autoFocus,
+  value,
   ...props
 }: InputProps) {
   const [focused, setFocused] = useState(false);
+  // A field with nothing in it yet is grey, and turns white once there is something; one that cannot be edited is grey too.
+  const filled = editable && `${value ?? ''}`.length > 0;
   const inputRef = useRef<InputRef | null>(null);
   const rootRef = useRef<ComponentRef<typeof View>>(null);
   const reveal = useRevealInSheet();
@@ -63,16 +66,15 @@ export function Input({
     <View ref={rootRef} collapsable={false} className={`gap-1.5 ${className}`}>
       {label ? <Text className="text-[14.3px] font-medium text-muted">{label}</Text> : null}
       <View
-        className={`flex-row rounded-lg border bg-white px-3.5 ${
+        className={`flex-row rounded-lg border px-3.5 ${filled ? 'bg-white' : 'bg-surface'} ${
           multiline ? 'min-h-24 items-start' : 'min-h-12 items-center'
-        } ${error ? 'border-danger' : focused ? 'border-primary' : 'border-line'} ${
-          editable ? '' : 'bg-surface'
-        }`}>
+        } ${error ? 'border-danger' : focused ? 'border-primary' : 'border-line'}`}>
         {prefix ? <View className={`mr-2 ${FIELD_TEXT_LIFT}`}>{prefix}</View> : null}
         <TextInput
           ref={setRefs}
           multiline={multiline}
           editable={editable}
+          value={value}
           accessibilityLabel={label}
           placeholderTextColor={colors.placeholder}
           selectionColor={colors.primary}
