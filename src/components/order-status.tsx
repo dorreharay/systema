@@ -19,8 +19,8 @@ import { useSelf, useWorkshop } from '@/lib/use-workshop';
 // order. The button shows nothing while the change is taken (it is put in the queue of the phone and shows at once), so there is no
 // spinner to flash on it.
 
-// Where an order goes on from each status, and the words of the main button of its page that sends it there (the small button is named by
-// the status; a screen reader says the whole phrase).
+// Where an order goes on from each status, and the words of the main button of its page that sends it there: the small button has the
+// same words as that one, in every language.
 const NEXT: Partial<Record<OrderStatus, NextStatus>> = {
   received: { status: 'in_progress', label: 'action_start' },
   in_progress: { status: 'ready', label: 'action_ready' },
@@ -88,8 +88,8 @@ export function useStatusChange() {
 }
 
 /**
- * The small button at the foot of a card: the name of the next status with the two arrows of the main button of the order's page, in the
- * colour that button has there.
+ * The small button at the foot of a card: the words of the main button of the order's page ("Mark as Ready"), with its two arrows, in the
+ * colour it has there.
  */
 export function StatusButton({
   order,
@@ -104,7 +104,7 @@ export function StatusButton({
 
   return (
     <MiniButton
-      label={t(`status_${next.status}`)}
+      label={t(next.label)}
       icon={ChevronsRight}
       color={statusColors[next.status].fill}
       accessibilityLabel={`${t(next.label)}. ${t('order_number', { number: order.number ?? '-' })}`}
