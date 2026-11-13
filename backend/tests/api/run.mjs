@@ -1106,7 +1106,7 @@ test('Profile', 'rejects a bad currency, unit, time zone and language', async (c
 test('Profile', 'a new account starts with the usual services, without prices', async (ctx) => {
   const { client } = await register(ctx);
   const { data } = await client.get('/api/services');
-  assertEq(data.items.map((s) => s.name), ['Main Service', 'Grip Replacement', 'Overgrip Installation'], 'names');
+  assertEq(data.items.map((s) => s.name), ['Stringing Labor', 'Grip Replacement', 'Overgrip Installation'], 'names');
   assertEq(data.items[0].kind, 'labor', 'the first is the labor');
   assertTrue(data.items.every((s) => s.price === null && s.active), 'no prices, all active');
 });
@@ -1124,10 +1124,10 @@ test('Profile', 'the usual services of a new account are named in its language',
 
   const ukrainian = await register(ctx, newEmail(), { language: 'uk' });
   const names = (await ukrainian.client.get('/api/services')).data.items.map((s) => s.name);
-  assertEq(names.sort(), ['Заміна гріпа', 'Намотування овергріпа', 'Основна послуга'].sort(), 'the Ukrainian names');
+  assertEq(names.sort(), ['Заміна гріпа', 'Намотування овергріпа', 'Робота з перетяжки'].sort(), 'the Ukrainian names');
   // A language the server does not know is English, like the account.
   const unknown = await register(ctx, newEmail(), { language: 'xx' });
-  assertEq((await unknown.client.get('/api/services')).data.items[0].name, 'Main Service', 'English for any other');
+  assertEq((await unknown.client.get('/api/services')).data.items[0].name, 'Stringing Labor', 'English for any other');
 });
 
 // ---------------------------------------------------------------------------

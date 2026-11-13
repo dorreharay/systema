@@ -24,7 +24,7 @@ export default {
     broken: 'Ele expirou ou já foi usado. Peça um novo no app: “Esqueceu a senha?”.',
   },
   services: {
-    labor: 'Serviço principal',
+    labor: 'Encordoamento',
     grip: 'Troca de grip',
     overgrip: 'Aplicação de overgrip',
   },

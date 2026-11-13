@@ -24,7 +24,7 @@ export default {
     broken: 'Der Link ist abgelaufen oder wurde bereits verwendet. Tippen Sie in der App auf „Passwort vergessen?“, um einen neuen anzufordern.',
   },
   services: {
-    labor: 'Hauptleistung',
+    labor: 'Bespannung',
     grip: 'Griffbandwechsel',
     overgrip: 'Overgrip anbringen',
   },

@@ -92,6 +92,13 @@
       "when": 1794441737530,
       "tag": "0012_studio_team",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1794576360111,
+      "tag": "0013_restore_labor_service_name",
+      "breakpoints": true
     }
   ]
 }

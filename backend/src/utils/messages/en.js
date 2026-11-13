@@ -27,9 +27,9 @@ export default {
     broken: 'It has expired or was already used. Ask for a new one in the app: “Forgot password?”.',
   },
   services: {
-    // What a new account starts with in its list of services (see utils/defaults.js): the main service, the stringing itself, which every
+    // What a new account starts with in its list of services (see utils/defaults.js): the stringing labor, which every
     // order gets, and two extras.
-    labor: 'Main Service',
+    labor: 'Stringing Labor',
     grip: 'Grip Replacement',
     overgrip: 'Overgrip Installation',
   },

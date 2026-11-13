@@ -24,7 +24,7 @@ export default {
     broken: 'Ha caducado o ya se ha usado. Solicita uno nuevo en la aplicación: “¿Olvidaste tu contraseña?”',
   },
   services: {
-    labor: 'Servicio principal',
+    labor: 'Encordado',
     grip: 'Cambio de grip',
     overgrip: 'Colocación de overgrip',
   },

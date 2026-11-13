@@ -24,7 +24,7 @@ export default {
     broken: 'È scaduto o è già stato usato. Richiedine uno nuovo nell’app: “Password dimenticata?”.',
   },
   services: {
-    labor: 'Servizio principale',
+    labor: 'Incordatura',
     grip: 'Sostituzione del grip',
     overgrip: 'Applicazione dell’overgrip',
   },

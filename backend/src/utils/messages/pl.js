@@ -24,7 +24,7 @@ export default {
     broken: 'Wygasł lub został już użyty. Poproś o nowy w aplikacji: „Nie pamiętasz hasła?”.',
   },
   services: {
-    labor: 'Usługa podstawowa',
+    labor: 'Naciąganie',
     grip: 'Wymiana gripu',
     overgrip: 'Założenie overgripu',
   },
