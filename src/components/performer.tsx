@@ -1,5 +1,5 @@
 import { useCallback, useState, type ReactNode } from 'react';
-import { ActivityIndicator, Pressable, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
 import { Check, Undo2 } from '@/components/icons';
 import { PersonBadge } from '@/components/person-badge';
@@ -7,6 +7,7 @@ import { BUTTON_RADIUS } from '@/components/ui/button-radius';
 import Card from '@/components/ui/card';
 import { colors } from '@/components/ui/colors';
 import { FormError } from '@/components/ui/input';
+import MiniButton from '@/components/ui/mini-button';
 import Section from '@/components/ui/section';
 import Sheet, { afterSheetsClosed } from '@/components/ui/sheet';
 import Shortcut from '@/components/ui/shortcut';
@@ -62,37 +63,6 @@ export function useOrderAssign() {
 }
 
 // --- The line on a card, and the cell of the table ---------------------------------------------
-
-// A small grey button: the secondary kind, black on grey.
-function MiniButton({ label, onPress, loading, small, accessibilityLabel }: {
-  label: string;
-  onPress: () => void;
-  loading?: boolean;
-  small?: boolean;
-  accessibilityLabel?: string;
-}) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={accessibilityLabel ?? label}
-      accessibilityState={{ busy: !!loading, disabled: !!loading }}
-      disabled={loading}
-      hitSlop={6}
-      onPress={onPress}
-      style={{ backgroundColor: colors.surface }}
-      className={`flex-row items-center justify-center ${BUTTON_RADIUS.lg} hover:opacity-90 active:opacity-70 ${
-        small ? 'h-7 min-w-14 px-3' : 'h-9 min-w-16 px-4'
-      } ${loading ? 'opacity-60' : ''}`}>
-      {loading ? (
-        <ActivityIndicator size="small" color={colors.ink} />
-      ) : (
-        <Text className={`${small ? 'text-[13px]' : 'text-[14.3px]'} font-semibold`} numberOfLines={1} maxFontSizeMultiplier={1.2}>
-          {label}
-        </Text>
-      )}
-    </Pressable>
-  );
-}
 
 type PerformerLineProps = {
   order: Order;

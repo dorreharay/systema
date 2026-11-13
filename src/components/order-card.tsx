@@ -3,6 +3,7 @@ import { memo } from 'react';
 import { View } from 'react-native';
 
 import { CalendarDays, Check, Clock } from '@/components/icons';
+import { StatusButton, useNextStatus } from '@/components/order-status';
 import { PerformerLine } from '@/components/performer';
 import SyncBadge from '@/components/sync-badge';
 import { StatusBadge } from '@/components/ui/badge';
@@ -14,7 +15,7 @@ import { addDays, formatDate, formatMoney, formatTimestamp, isOverdue, racketNam
 import { useI18n } from '@/lib/i18n';
 import { useMark } from '@/lib/offline/react';
 import { describeSetup } from '@/lib/order-text';
-import type { Order } from '@/lib/types';
+import type { Order, OrderStatus } from '@/lib/types';
 import { useWorkshop } from '@/lib/use-workshop';
 
 // How many orders of a history (a client's, a racket's) its page opens with. Someone who comes often has many, and each is
@@ -41,23 +42,28 @@ export function useDueText() {
 // The line above the name says where the order stands (the status, as a badge) and when it was received. Then who it is
 // for and what it costs, and what is being strung; the numbers, the price and the number to quote, are in a column on
 // the right. The last line is the day it is to be handed over (red when it is late), or, once it has been, the day it
-// was; it is left out when there is no such day. In a workshop with a team the last line is who strings it (or "No performer" with a button
+// was; it is left out when there is no such day. In the same line, at the right, is a small button that moves the order on to the next
+// status (`onStatus`, for the person who may change the order: see order-status.tsx; going back is on the page of the order); a list that
+// does not give `onStatus` has none. In a workshop with a team the last line is who strings it (or "No performer" with a button
 // to take it or to give it: `onGive`, for the owner). A tap opens the order. A card changes only with its order, so a page
 // with many of them (a letter typed in a search, a sheet opened) does not draw them all again.
 const OrderCard = memo(function OrderCard({
   order,
   fill,
   onGive,
+  onStatus,
 }: {
   order: Order;
   fill?: boolean;
   onGive?: (order: Order) => void;
+  onStatus?: (order: Order, status: OrderStatus) => void;
 }) {
   const { user } = useAuth();
   const { team } = useWorkshop();
   const { t, language } = useI18n();
   const { dateText, today } = useDueText();
   const mark = useMark(order.id);
+  const next = useNextStatus(order, !!onStatus);
   const handover = order.completed_at
     ? {
         text: t('order_card_issued', { date: formatTimestamp(order.completed_at, language, user?.timezone) }),
@@ -77,8 +83,8 @@ const OrderCard = memo(function OrderCard({
   return (
     <Card
       onPress={() => router.push({ pathname: '/orders/[id]', params: { id: order.id } })}
-      // (With a team the card has a button of its own in it, and on the web a button cannot hold another one.)
-      nested={team}
+      // (With a team, or with the button of the status, the card has a button of its own in it, and on the web a button cannot hold another one.)
+      nested={team || !!next}
       className={`gap-1 ${fill ? 'flex-1' : ''}`}
       accessibilityLabel={t('order_card_label', { number: order.number ?? '-', client: order.client.name })}>
       <View className="flex-row items-center justify-between gap-3">
@@ -110,16 +116,22 @@ const OrderCard = memo(function OrderCard({
       <Text className="text-[15.4px] text-muted" numberOfLines={2}>
         {describeSetup(order, user?.tension_unit ?? 'kg', t)}
       </Text>
-      {handover ? (
+      {handover || next ? (
         <View className="mt-1 flex-row items-center gap-1.5">
-          {handover.issued ? (
-            <Check size={15} color={colors.muted} />
-          ) : (
-            <Clock size={15} color={handover.late ? colors.danger : colors.muted} />
-          )}
-          <Text className={`shrink text-[14.3px] ${handover.late ? 'text-danger' : 'text-muted'}`} numberOfLines={1}>
-            {handover.text}
-          </Text>
+          {handover ? (
+            <>
+              {handover.issued ? (
+                <Check size={15} color={colors.muted} />
+              ) : (
+                <Clock size={15} color={handover.late ? colors.danger : colors.muted} />
+              )}
+              <Text className={`min-w-0 shrink text-[14.3px] ${handover.late ? 'text-danger' : 'text-muted'}`} numberOfLines={1}>
+                {handover.text}
+              </Text>
+            </>
+          ) : null}
+          <View className="flex-1" />
+          {next && onStatus ? <StatusButton order={order} next={next} onStatus={onStatus} /> : null}
         </View>
       ) : null}
       <PerformerLine order={order} onGive={onGive} />

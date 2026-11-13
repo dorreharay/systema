@@ -3,6 +3,7 @@ import { ActivityIndicator, FlatList, Platform, RefreshControl, View } from 'rea
 
 import { ClipboardList, Plus } from '@/components/icons';
 import OrderCard from '@/components/order-card';
+import { useStatusChange } from '@/components/order-status';
 import OrdersTablePage from '@/components/orders-table';
 import { useGiveSheet } from '@/components/performer';
 import QueueChips, { useQueueFilter } from '@/components/queue-chips';
@@ -37,6 +38,9 @@ function OrdersList() {
     me: filter.me,
   });
   const { give, sheet: giveSheet } = useGiveSheet();
+  // The small button at the foot of a card that moves an order on; the message to the customer that follows "Ready" is one sheet for the
+  // whole list.
+  const status = useStatusChange();
   const items = orders.data?.pages.flatMap((page) => page.items) ?? [];
   const contentTop = useDetailContentTop(TAB_HEADER_DROP);
 
@@ -116,7 +120,7 @@ function OrdersList() {
         }}
         renderItem={({ item, index }) => (
           <GridItem columns={columns} index={index} count={items.length}>
-            <OrderCard order={item} fill={columns > 1} onGive={give} />
+            <OrderCard order={item} fill={columns > 1} onGive={give} onStatus={status.change} />
           </GridItem>
         )}
         ListEmptyComponent={
@@ -147,6 +151,7 @@ function OrdersList() {
         }
       />
       {giveSheet}
+      {status.sheet}
     </Screen>
   );
 }
